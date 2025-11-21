@@ -13,11 +13,19 @@ import {
   UploadedFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Express } from 'express';
 import { ImportService } from './import.service';
 import { JwtAuthGuard } from '@allegro/shared';
 import * as fs from 'fs';
 import * as path from 'path';
+
+interface MulterFile {
+  fieldname: string;
+  originalname: string;
+  encoding: string;
+  mimetype: string;
+  size: number;
+  buffer: Buffer;
+}
 
 @Controller('import')
 export class ImportController {
@@ -26,7 +34,7 @@ export class ImportController {
   @Post('csv')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('file'))
-  async uploadCsv(@UploadedFile() file: Express.Multer.File | undefined) {
+  async uploadCsv(@UploadedFile() file: MulterFile | undefined) {
     if (!file) {
       throw new Error('No file uploaded');
     }
