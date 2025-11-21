@@ -1,6 +1,6 @@
 # Allegro Integration System
 
-Fully automated NestJS microservices system for managing products on Allegro.cz marketplace.
+Fully automated NestJS microservices system for managing sales on Allegro.cz marketplace.
 
 ## Overview
 

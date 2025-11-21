@@ -28,6 +28,7 @@ WORKDIR /app
 RUN npx prisma generate --schema=./prisma/schema.prisma
 
 # Build shared module
+WORKDIR /app/shared
 RUN npm run build
 
 # Build service

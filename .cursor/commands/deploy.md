@@ -2,6 +2,9 @@
 
 ## Task: Deploy allegro on production
 
+Read ../nginx-microservice/README.md
+Start commands: cat .env && ssh statex "cd nginx-microservice ls -la scripts"
+
 ## Quick Deployment
 
 ```bash
