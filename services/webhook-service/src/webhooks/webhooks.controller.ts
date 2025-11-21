@@ -8,6 +8,7 @@ import {
   Post,
   Body,
   Query,
+  Param,
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
