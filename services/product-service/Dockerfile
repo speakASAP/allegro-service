@@ -10,7 +10,7 @@ COPY package.json package-lock.json* ./
 COPY shared/package.json shared/package-lock.json* ./shared/
 COPY services/product-service/package.json ./services/product-service/
 
-# Install dependencies
+# Install root dependencies (includes @prisma/client)
 RUN npm install
 
 # Copy source code
@@ -19,17 +19,22 @@ COPY services/product-service ./services/product-service
 COPY prisma ./prisma
 COPY tsconfig.json ./
 
-# Install shared module dependencies first
+# Generate Prisma Client in root node_modules (where @prisma/client is installed)
+RUN npx prisma generate --schema=./prisma/schema.prisma
+# Verify Prisma client was generated in root
+RUN test -d node_modules/.prisma && echo "Prisma client generated in root" || (echo "ERROR: Prisma client not found in root" && exit 1)
+
+# Install shared module dependencies
 WORKDIR /app/shared
 RUN npm install --legacy-peer-deps
 
-# Generate Prisma Client in shared module's node_modules
-# Prisma generates client where @prisma/client is installed (shared/node_modules)
-# We need to run from shared directory so Prisma finds @prisma/client there
-WORKDIR /app/shared
-RUN npx prisma generate --schema=../prisma/schema.prisma
-# Verify Prisma client was generated
-RUN test -d node_modules/.prisma && echo "Prisma client generated successfully" || (echo "ERROR: Prisma client not found" && ls -la node_modules/ && exit 1)
+# Copy generated Prisma Client to shared node_modules so shared module can use it
+WORKDIR /app
+RUN mkdir -p shared/node_modules/.prisma && \
+    cp -r node_modules/.prisma/* shared/node_modules/.prisma/ && \
+    mkdir -p shared/node_modules/@prisma && \
+    cp -r node_modules/@prisma/* shared/node_modules/@prisma/ && \
+    echo "Prisma client copied to shared/node_modules"
 
 # Build shared module
 WORKDIR /app/shared
