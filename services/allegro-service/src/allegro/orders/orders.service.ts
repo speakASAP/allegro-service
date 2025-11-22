@@ -19,7 +19,7 @@ export class OrdersService {
   /**
    * Get orders from database
    */
-  async getOrders(query: any) {
+  async getOrders(query: any): Promise<{ items: any[]; pagination: any }> {
     const page = query.page || 1;
     const limit = query.limit || 20;
     const skip = (page - 1) * limit;
@@ -64,7 +64,7 @@ export class OrdersService {
   /**
    * Get order by ID
    */
-  async getOrder(id: string) {
+  async getOrder(id: string): Promise<any> {
     const order = await this.prisma.allegroOrder.findUnique({
       where: { id },
       include: {

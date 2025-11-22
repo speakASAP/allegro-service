@@ -47,7 +47,7 @@ export class InventoryService {
   /**
    * Update stock for offer
    */
-  async updateStock(offerId: string, quantity: number) {
+  async updateStock(offerId: string, quantity: number): Promise<any> {
     const offer = await this.prisma.allegroOffer.findUnique({
       where: { id: offerId },
     });
