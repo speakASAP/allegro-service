@@ -29,13 +29,14 @@ RUN test -d node_modules/.prisma && echo "Prisma client generated in root" || (e
 WORKDIR /app/shared
 RUN npm install --legacy-peer-deps
 
-# Copy generated Prisma Client to shared node_modules so shared module can use it
-WORKDIR /app
-RUN mkdir -p shared/node_modules/.prisma && \
-    cp -r node_modules/.prisma/* shared/node_modules/.prisma/ && \
-    mkdir -p shared/node_modules/@prisma && \
-    cp -r node_modules/@prisma/* shared/node_modules/@prisma/ && \
-    echo "Prisma client copied to shared/node_modules"
+# Generate Prisma Client directly in shared node_modules where @prisma/client is installed
+# This ensures Prisma client is properly initialized in the correct location
+WORKDIR /app/shared
+RUN npx prisma generate --schema=../prisma/schema.prisma || \
+    node_modules/.bin/prisma generate --schema=../prisma/schema.prisma || \
+    ../../node_modules/.bin/prisma generate --schema=../prisma/schema.prisma
+# Verify Prisma client was generated in shared
+RUN test -d node_modules/.prisma && echo "Prisma client generated in shared" || (echo "ERROR: Prisma client not found in shared" && ls -la node_modules/ | head -20 && exit 1)
 
 # Build shared module
 WORKDIR /app/shared
