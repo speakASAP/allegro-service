@@ -15,7 +15,7 @@ This system provides complete automation for:
 
 ## Architecture
 
-The system consists of 7 microservices:
+The system consists of 9 microservices:
 
 1. **API Gateway** (Port 3411) - Request routing and authentication
 2. **Product Service** (Port 3402) - Product catalog management
@@ -24,6 +24,8 @@ The system consists of 7 microservices:
 5. **Webhook Service** (Port 3405) - Allegro webhook event handling
 6. **Import Service** (Port 3406) - CSV import and transformation
 7. **Scheduler Service** (Port 3407) - Scheduled cron jobs
+8. **Settings Service** (Port 3408) - User settings and API key management
+9. **Frontend Service** (Port 3410) - Web interface for users
 
 ## Technology Stack
 
@@ -102,6 +104,8 @@ Create a `.env` file in the root directory with the following variables:
 - `WEBHOOK_SERVICE_PORT` - Webhook Service port (3405)
 - `IMPORT_SERVICE_PORT` - Import Service port (3406)
 - `SCHEDULER_SERVICE_PORT` - Scheduler Service port (3407)
+- `ALLEGRO_SETTINGS_SERVICE_PORT` - Settings Service port (3408)
+- `ALLEGRO_FRONTEND_SERVICE_PORT` - Frontend Service port (3410)
 
 ### Allegro API Configuration
 
@@ -195,6 +199,21 @@ All requests go through API Gateway at `http://localhost:3411/api`
 - `GET /api/webhooks/events/:id` - Get webhook event details (auth required)
 - `POST /api/webhooks/events/:id/retry` - Retry processing event (auth required)
 
+### Settings Service Endpoints
+
+- `GET /api/settings` - Get current user settings (auth required)
+- `PUT /api/settings` - Update user settings (auth required)
+- `POST /api/settings/suppliers` - Add supplier configuration (auth required)
+- `PUT /api/settings/suppliers/:id` - Update supplier configuration (auth required)
+- `DELETE /api/settings/suppliers/:id` - Remove supplier configuration (auth required)
+- `POST /api/settings/validate/allegro` - Validate Allegro API keys (auth required)
+
+### Auth Endpoints (via API Gateway)
+
+- `POST /api/auth/register` - Register new user
+- `POST /api/auth/login` - Login user
+- `POST /api/auth/refresh` - Refresh access token
+
 ## Scheduled Jobs
 
 The Scheduler Service runs the following cron jobs:
@@ -215,6 +234,7 @@ The system uses a new `allegro` database on the shared database-server with the 
 - `import_jobs` - CSV import job tracking
 - `webhook_events` - Incoming webhook events log
 - `supplier_products` - Supplier API integration (placeholder)
+- `user_settings` - User settings and API keys (encrypted)
 
 ## Deployment
 
@@ -244,6 +264,8 @@ All services expose `/health` endpoints for monitoring:
 - Webhook Service: `http://localhost:3405/health`
 - Import Service: `http://localhost:3406/health`
 - Scheduler Service: `http://localhost:3407/health`
+- Settings Service: `http://localhost:3408/health`
+- Frontend Service: `http://localhost:3410/health`
 
 ### Blue/Green Deployment
 
@@ -334,6 +356,24 @@ curl -X POST http://localhost:3411/api/allegro/offers \
 - Check sync job status via `/api/sync/jobs`
 - Review conflict resolution strategy
 - Verify product data integrity
+
+## Frontend Access
+
+The web interface is available at:
+
+- **Development**: `http://localhost:3410`
+- **Production**: Configured via nginx reverse proxy
+
+### Frontend Features
+
+- **Landing Page**: Public page with features, pricing, and registration
+- **User Registration/Login**: Integrated with auth-microservice
+- **Dashboard**: Secure dashboard for authenticated users with:
+  - Settings page for managing Allegro and supplier API keys
+  - Sync status monitoring
+  - Import jobs overview
+  - Orders management
+  - Products overview
 
 ## Documentation
 

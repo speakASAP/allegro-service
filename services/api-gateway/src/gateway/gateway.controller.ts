@@ -67,6 +67,25 @@ export class GatewayController {
   }
 
   /**
+   * Route settings requests (requires auth)
+   */
+  @All('settings/*')
+  @UseGuards(JwtAuthGuard)
+  async settingsRoute(@Req() req: ExpressRequest, @Res() res: ExpressResponse) {
+    const path = req.url.replace('/api/settings', '');
+    return this.routeRequest('settings', `/settings${path}`, req, res);
+  }
+
+  /**
+   * Route auth requests (no auth required for register/login)
+   */
+  @All('auth/*')
+  async authRoute(@Req() req: ExpressRequest, @Res() res: ExpressResponse) {
+    const path = req.url.replace('/api/auth', '');
+    return this.routeRequest('auth', `/auth${path}`, req, res);
+  }
+
+  /**
    * Helper to route request
    */
   private async routeRequest(
