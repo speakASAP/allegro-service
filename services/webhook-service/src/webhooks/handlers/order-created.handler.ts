@@ -18,7 +18,7 @@ export class OrderCreatedHandler {
   /**
    * Handle order created event
    */
-  async handle(payload: any) {
+  async handle(payload: any): Promise<void> {
     this.logger.log('Handling order created event', { orderId: payload.order?.id });
 
     const order = payload.order;

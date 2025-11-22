@@ -56,14 +56,14 @@ export class ImportController {
 
   @Get('jobs')
   @UseGuards(JwtAuthGuard)
-  async listJobs(@Query() query: any) {
+  async listJobs(@Query() query: any): Promise<{ success: boolean; data: any }> {
     const result = await this.importService.listImportJobs(query);
     return { success: true, data: result };
   }
 
   @Get('jobs/:id')
   @UseGuards(JwtAuthGuard)
-  async getJob(@Param('id') id: string) {
+  async getJob(@Param('id') id: string): Promise<{ success: boolean; data: any }> {
     const job = await this.importService.getImportJob(id);
     return { success: true, data: job };
   }
