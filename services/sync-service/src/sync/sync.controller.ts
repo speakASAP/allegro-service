@@ -47,14 +47,14 @@ export class SyncController {
 
   @Get('jobs')
   @UseGuards(JwtAuthGuard)
-  async getJobs(@Query() query: any) {
+  async getJobs(@Query() query: any): Promise<{ success: boolean; data: any }> {
     const result = await this.syncService.getSyncJobs(query);
     return { success: true, data: result };
   }
 
   @Get('jobs/:id')
   @UseGuards(JwtAuthGuard)
-  async getJob(@Param('id') id: string) {
+  async getJob(@Param('id') id: string): Promise<{ success: boolean; data: any }> {
     const job = await this.syncService.getSyncJob(id);
     return { success: true, data: job };
   }

@@ -20,9 +20,10 @@ COPY prisma ./prisma
 COPY tsconfig.json ./
 
 # Generate Prisma Client in root node_modules (where @prisma/client is installed)
-RUN npx prisma generate --schema=./prisma/schema.prisma
+# Use prisma CLI directly from node_modules to avoid npx path issues
+RUN ./node_modules/.bin/prisma generate --schema=./prisma/schema.prisma || node_modules/.bin/prisma generate --schema=./prisma/schema.prisma
 # Verify Prisma client was generated in root
-RUN test -d node_modules/.prisma && echo "Prisma client generated in root" || (echo "ERROR: Prisma client not found in root" && exit 1)
+RUN test -d node_modules/.prisma && echo "Prisma client generated in root" || (echo "ERROR: Prisma client not found in root" && ls -la node_modules/ | head -20 && exit 1)
 
 # Install shared module dependencies
 WORKDIR /app/shared
