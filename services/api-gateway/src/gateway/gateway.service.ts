@@ -25,6 +25,8 @@ export class GatewayService {
       webhooks: this.configService.get<string>('WEBHOOK_SERVICE_URL') || this.throwConfigError('WEBHOOK_SERVICE_URL'),
       import: this.configService.get<string>('IMPORT_SERVICE_URL') || this.throwConfigError('IMPORT_SERVICE_URL'),
       scheduler: this.configService.get<string>('SCHEDULER_SERVICE_URL') || this.throwConfigError('SCHEDULER_SERVICE_URL'),
+      settings: this.configService.get<string>('SETTINGS_SERVICE_URL') || `http://localhost:${this.configService.get<string>('ALLEGRO_SETTINGS_SERVICE_PORT') || '3408'}`,
+      auth: this.configService.get<string>('AUTH_SERVICE_URL') || this.throwConfigError('AUTH_SERVICE_URL'),
     };
   }
 

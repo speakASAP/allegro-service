@@ -16,6 +16,7 @@ services:
       - webhook-service
       - import-service
       - scheduler-service
+      - allegro-settings-service
     volumes:
       - ./logs:/app/logs
     environment:
@@ -201,6 +202,52 @@ services:
       - nginx-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${SCHEDULER_SERVICE_PORT:-3407}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  allegro-settings-service:
+    build:
+      context: .
+      dockerfile: ./services/allegro-settings-service/Dockerfile
+    container_name: allegro-settings-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:${ALLEGRO_SETTINGS_SERVICE_PORT:-3408}:${ALLEGRO_SETTINGS_SERVICE_PORT:-3408}"
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${ALLEGRO_SETTINGS_SERVICE_PORT:-3408}
+      - DB_HOST=${DB_HOST:-db-server-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USER=${DB_USER:-dbadmin}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME:-allegro}
+    networks:
+      - default
+      - nginx-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${ALLEGRO_SETTINGS_SERVICE_PORT:-3408}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  allegro-frontend-service:
+    build:
+      context: .
+      dockerfile: ./services/allegro-frontend-service/Dockerfile
+    container_name: allegro-frontend-service
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${ALLEGRO_FRONTEND_SERVICE_PORT:-3410}:3410"
+    networks:
+      - default
+      - nginx-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3410/health"]
       interval: 30s
       timeout: 10s
       retries: 5
