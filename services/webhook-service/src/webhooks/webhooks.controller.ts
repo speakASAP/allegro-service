@@ -39,14 +39,14 @@ export class WebhooksController {
 
   @Get('events')
   @UseGuards(JwtAuthGuard)
-  async getEvents(@Query() query: any) {
+  async getEvents(@Query() query: any): Promise<{ success: boolean; data: any }> {
     const result = await this.webhooksService.getEvents(query);
     return { success: true, data: result };
   }
 
   @Get('events/:id')
   @UseGuards(JwtAuthGuard)
-  async getEvent(@Param('id') id: string) {
+  async getEvent(@Param('id') id: string): Promise<{ success: boolean; data: any }> {
     const event = await this.webhooksService.getEvent(id);
     return { success: true, data: event };
   }

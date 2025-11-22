@@ -183,7 +183,7 @@ export class ImportService {
   /**
    * Get import job status
    */
-  async getImportJob(id: string) {
+  async getImportJob(id: string): Promise<any> {
     return this.prisma.importJob.findUnique({
       where: { id },
     });
@@ -192,7 +192,7 @@ export class ImportService {
   /**
    * List import jobs
    */
-  async listImportJobs(query: any) {
+  async listImportJobs(query: any): Promise<{ items: any[]; pagination: any }> {
     const page = query.page || 1;
     const limit = query.limit || 20;
     const skip = (page - 1) * limit;

@@ -89,7 +89,7 @@ export class WebhooksService {
   /**
    * Get webhook events
    */
-  async getEvents(query: any) {
+  async getEvents(query: any): Promise<{ items: any[]; pagination: any }> {
     const page = query.page || 1;
     const limit = query.limit || 20;
     const skip = (page - 1) * limit;
@@ -126,7 +126,7 @@ export class WebhooksService {
   /**
    * Get webhook event by ID
    */
-  async getEvent(id: string) {
+  async getEvent(id: string): Promise<any> {
     return this.prisma.webhookEvent.findUnique({
       where: { id },
     });
