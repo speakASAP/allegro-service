@@ -18,14 +18,14 @@ export class OrdersController {
 
   @Get()
   @UseGuards(JwtAuthGuard)
-  async getOrders(@Query() query: any) {
+  async getOrders(@Query() query: any): Promise<{ success: boolean; data: any }> {
     const result = await this.ordersService.getOrders(query);
     return { success: true, data: result };
   }
 
   @Get(':id')
   @UseGuards(JwtAuthGuard)
-  async getOrder(@Param('id') id: string) {
+  async getOrder(@Param('id') id: string): Promise<{ success: boolean; data: any }> {
     const order = await this.ordersService.getOrder(id);
     return { success: true, data: order };
   }

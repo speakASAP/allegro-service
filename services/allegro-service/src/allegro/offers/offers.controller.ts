@@ -25,49 +25,49 @@ export class OffersController {
 
   @Get()
   @UseGuards(JwtAuthGuard)
-  async getOffers(@Query() query: OfferQueryDto) {
+  async getOffers(@Query() query: OfferQueryDto): Promise<{ success: boolean; data: any }> {
     const result = await this.offersService.getOffers(query);
     return { success: true, data: result };
   }
 
   @Get('import')
   @UseGuards(JwtAuthGuard)
-  async importOffers() {
+  async importOffers(): Promise<{ success: boolean; data: any }> {
     const result = await this.offersService.importAllOffers();
     return { success: true, data: result };
   }
 
   @Get(':id')
   @UseGuards(JwtAuthGuard)
-  async getOffer(@Param('id') id: string) {
+  async getOffer(@Param('id') id: string): Promise<{ success: boolean; data: any }> {
     const offer = await this.offersService.getOffer(id);
     return { success: true, data: offer };
   }
 
   @Post()
   @UseGuards(JwtAuthGuard)
-  async createOffer(@Body() dto: CreateOfferDto) {
+  async createOffer(@Body() dto: CreateOfferDto): Promise<{ success: boolean; data: any }> {
     const offer = await this.offersService.createOffer(dto);
     return { success: true, data: offer };
   }
 
   @Put(':id')
   @UseGuards(JwtAuthGuard)
-  async updateOffer(@Param('id') id: string, @Body() dto: UpdateOfferDto) {
+  async updateOffer(@Param('id') id: string, @Body() dto: UpdateOfferDto): Promise<{ success: boolean; data: any }> {
     const offer = await this.offersService.updateOffer(id, dto);
     return { success: true, data: offer };
   }
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
-  async deleteOffer(@Param('id') id: string) {
+  async deleteOffer(@Param('id') id: string): Promise<{ success: boolean; data: any }> {
     const result = await this.offersService.deleteOffer(id);
     return { success: true, data: result };
   }
 
   @Put(':id/stock')
   @UseGuards(JwtAuthGuard)
-  async updateStock(@Param('id') id: string, @Body() body: { quantity: number }) {
+  async updateStock(@Param('id') id: string, @Body() body: { quantity: number }): Promise<{ success: boolean; data: any }> {
     const result = await this.offersService.updateStock(id, body.quantity);
     return { success: true, data: result };
   }

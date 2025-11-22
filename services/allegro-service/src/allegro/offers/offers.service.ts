@@ -17,7 +17,7 @@ export class OffersService {
   /**
    * Get offers from database
    */
-  async getOffers(query: any) {
+  async getOffers(query: any): Promise<{ items: any[]; pagination: any }> {
     const page = query.page || 1;
     const limit = query.limit || 20;
     const skip = (page - 1) * limit;
@@ -54,7 +54,7 @@ export class OffersService {
   /**
    * Get offer by ID
    */
-  async getOffer(id: string) {
+  async getOffer(id: string): Promise<any> {
     const offer = await this.prisma.allegroOffer.findUnique({
       where: { id },
       include: {
