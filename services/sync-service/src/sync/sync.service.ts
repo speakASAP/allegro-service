@@ -210,7 +210,7 @@ export class SyncService {
   /**
    * Get sync job by ID
    */
-  async getSyncJob(id: string) {
+  async getSyncJob(id: string): Promise<any> {
     return this.prisma.syncJob.findUnique({
       where: { id },
       include: {
@@ -222,7 +222,7 @@ export class SyncService {
   /**
    * Get sync jobs
    */
-  async getSyncJobs(query: any) {
+  async getSyncJobs(query: any): Promise<any> {
     const page = query.page || 1;
     const limit = query.limit || 20;
     const skip = (page - 1) * limit;

@@ -59,6 +59,7 @@ export class AllegroToDbStrategy {
             },
             create: {
               allegroOfferId: offer.allegroOfferId,
+              categoryId: offer.categoryId || 'unknown',
               title: offer.title,
               price: offer.price,
               quantity: offer.quantity,
