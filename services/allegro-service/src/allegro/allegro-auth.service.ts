@@ -30,8 +30,9 @@ export class AllegroAuthService {
     private readonly configService: ConfigService,
     private readonly logger: LoggerService,
   ) {
-    this.clientId = this.configService.get('ALLEGRO_CLIENT_ID') || this.throwConfigError('ALLEGRO_CLIENT_ID');
-    this.clientSecret = this.configService.get('ALLEGRO_CLIENT_SECRET') || this.throwConfigError('ALLEGRO_CLIENT_SECRET');
+    // Allow service to start without credentials (will fail when actually using Allegro API)
+    this.clientId = this.configService.get('ALLEGRO_CLIENT_ID') || '';
+    this.clientSecret = this.configService.get('ALLEGRO_CLIENT_SECRET') || '';
     this.useSandbox = this.configService.get('ALLEGRO_USE_SANDBOX') === 'true';
     this.authUrl = this.useSandbox
       ? this.configService.get('ALLEGRO_AUTH_SANDBOX_URL') || this.throwConfigError('ALLEGRO_AUTH_SANDBOX_URL')

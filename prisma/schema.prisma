@@ -318,3 +318,26 @@ model SupplierProduct {
   @@index([syncStatus])
   @@map("supplier_products")
 }
+
+// User settings for API keys and configuration
+model UserSettings {
+  id                String  @id @default(uuid()) @db.Uuid
+  userId            String  @unique @db.VarChar(255) // Links to auth-microservice user ID
+
+  // Allegro API configuration
+  allegroClientId     String? @db.VarChar(255)
+  allegroClientSecret String? @db.VarChar(500) // Encrypted
+
+  // Generic supplier configurations
+  supplierConfigs Json? // Array of supplier configurations: [{ id, name, apiEndpoint, apiKey, apiConfig }]
+
+  // User preferences
+  preferences Json? // User preferences and settings
+
+  // Timestamps
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @db.Timestamp(6)
+
+  @@index([userId])
+  @@map("user_settings")
+}
