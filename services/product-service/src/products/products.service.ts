@@ -17,8 +17,8 @@ export class ProductsService {
    * Get products with pagination and filtering
    */
   async getProducts(filters: any): Promise<{ items: any[]; pagination: any }> {
-    const page = filters.page || 1;
-    const limit = filters.limit || 20;
+    const page = parseInt(String(filters.page || 1), 10);
+    const limit = parseInt(String(filters.limit || 20), 10);
     const skip = (page - 1) * limit;
 
     const where: any = {

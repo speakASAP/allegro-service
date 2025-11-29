@@ -81,3 +81,4 @@ export class ValidateAllegroKeysDto {
   @IsString()
   clientSecret: string;
 }
+

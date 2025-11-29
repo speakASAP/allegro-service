@@ -110,3 +110,4 @@ const SyncStatusPage: React.FC = () => {
 };
 
 export default SyncStatusPage;
+

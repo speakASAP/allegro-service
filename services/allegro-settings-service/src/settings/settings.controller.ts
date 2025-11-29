@@ -25,7 +25,7 @@ export class SettingsController {
   @Get()
   @UseGuards(JwtAuthGuard)
   async getSettings(@Request() req: any): Promise<{ success: boolean; data: any }> {
-    const userId = req.user.id;
+    const userId = String(req.user.id); // Convert to string as Prisma expects String
     const settings = await this.settingsService.getSettings(userId);
     return { success: true, data: settings };
   }
@@ -36,7 +36,7 @@ export class SettingsController {
     @Request() req: any,
     @Body() dto: UpdateSettingsDto,
   ): Promise<{ success: boolean; data: any }> {
-    const userId = req.user.id;
+    const userId = String(req.user.id); // Convert to string as Prisma expects String
     const settings = await this.settingsService.updateSettings(userId, dto);
     return { success: true, data: settings };
   }
@@ -47,7 +47,7 @@ export class SettingsController {
     @Request() req: any,
     @Body() dto: AddSupplierConfigDto,
   ): Promise<{ success: boolean; data: any }> {
-    const userId = req.user.id;
+    const userId = String(req.user.id); // Convert to string as Prisma expects String
     const config = await this.settingsService.addSupplierConfig(userId, dto);
     return { success: true, data: config };
   }
@@ -59,7 +59,7 @@ export class SettingsController {
     @Param('id') supplierId: string,
     @Body() dto: UpdateSupplierConfigDto,
   ): Promise<{ success: boolean; data: any }> {
-    const userId = req.user.id;
+    const userId = String(req.user.id); // Convert to string as Prisma expects String
     const config = await this.settingsService.updateSupplierConfig(userId, supplierId, dto);
     return { success: true, data: config };
   }
@@ -70,7 +70,7 @@ export class SettingsController {
     @Request() req: any,
     @Param('id') supplierId: string,
   ): Promise<{ success: boolean }> {
-    const userId = req.user.id;
+    const userId = String(req.user.id); // Convert to string as Prisma expects String
     await this.settingsService.removeSupplierConfig(userId, supplierId);
     return { success: true };
   }
@@ -81,7 +81,7 @@ export class SettingsController {
     @Request() req: any,
     @Body() dto: ValidateAllegroKeysDto,
   ): Promise<{ success: boolean; data: any }> {
-    const userId = req.user.id;
+    const userId = String(req.user.id); // Convert to string as Prisma expects String
     const result = await this.settingsService.validateAllegroKeys(userId, dto);
     return { success: true, data: result };
   }

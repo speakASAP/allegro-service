@@ -1,27 +1,10 @@
 /**
- * Auth Context
+ * Auth Context Provider
  */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { useState, useEffect, ReactNode } from 'react';
 import { authService, AuthResponse } from '../services/auth';
-
-interface User {
-  id: string;
-  email: string;
-  firstName?: string;
-  lastName?: string;
-}
-
-interface AuthContextType {
-  user: User | null;
-  loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, firstName?: string, lastName?: string) => Promise<void>;
-  logout: () => void;
-  isAuthenticated: boolean;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+import { AuthContext, User } from './authContextDefinition';
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -43,21 +26,40 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = async (email: string, password: string) => {
     const response: AuthResponse = await authService.login({ email, password });
-    if (response.success && response.data) {
-      localStorage.setItem('accessToken', response.data.accessToken);
-      localStorage.setItem('refreshToken', response.data.refreshToken);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
-      setUser(response.data.user);
+    if (response && response.accessToken && response.user) {
+      localStorage.setItem('accessToken', response.accessToken);
+      localStorage.setItem('refreshToken', response.refreshToken);
+      localStorage.setItem('user', JSON.stringify(response.user));
+      setUser({
+        id: String(response.user.id),
+        email: response.user.email,
+        firstName: response.user.firstName || undefined,
+        lastName: response.user.lastName || undefined,
+      });
     }
   };
 
   const register = async (email: string, password: string, firstName?: string, lastName?: string) => {
-    const response: AuthResponse = await authService.register({ email, password, firstName, lastName });
-    if (response.success && response.data) {
-      localStorage.setItem('accessToken', response.data.accessToken);
-      localStorage.setItem('refreshToken', response.data.refreshToken);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
-      setUser(response.data.user);
+    // Only include optional fields if they have values to avoid validation errors
+    const registerData: { email: string; password: string; firstName?: string; lastName?: string } = { email, password };
+    if (firstName && firstName.trim()) {
+      registerData.firstName = firstName.trim();
+    }
+    if (lastName && lastName.trim()) {
+      registerData.lastName = lastName.trim();
+    }
+    
+    const response: AuthResponse = await authService.register(registerData);
+    if (response && response.accessToken && response.user) {
+      localStorage.setItem('accessToken', response.accessToken);
+      localStorage.setItem('refreshToken', response.refreshToken);
+      localStorage.setItem('user', JSON.stringify(response.user));
+      setUser({
+        id: String(response.user.id),
+        email: response.user.email,
+        firstName: response.user.firstName || undefined,
+        lastName: response.user.lastName || undefined,
+      });
     }
   };
 
@@ -82,10 +84,3 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   );
 };
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};

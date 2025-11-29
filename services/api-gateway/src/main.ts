@@ -27,11 +27,30 @@ async function bootstrap() {
 
   // Enable CORS
   const corsOrigin = configService.get<string>('CORS_ORIGIN');
+  const nodeEnv = configService.get<string>('NODE_ENV') || 'development';
+  
   if (corsOrigin) {
+    // In development, allow both production and localhost origins
+    const allowedOrigins = nodeEnv === 'development' 
+      ? [corsOrigin, 'http://localhost:3410', 'http://127.0.0.1:3410']
+      : corsOrigin;
+    
     app.enableCors({
-      origin: corsOrigin,
+      origin: allowedOrigins,
       credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
     });
+  } else {
+    // If no CORS_ORIGIN is set, enable CORS for all origins in development
+    if (nodeEnv === 'development') {
+      app.enableCors({
+        origin: true,
+        credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization'],
+      });
+    }
   }
 
   const port = configService.get<string>('API_GATEWAY_PORT') || configService.get<string>('PORT') || '3411';
