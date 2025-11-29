@@ -20,10 +20,11 @@ export class GatewayController {
 
   /**
    * Route product requests
+   * Handle both /api/products and /api/products/*
    */
-  @All('products/*')
+  @All(['products', 'products/*'])
   async productsRoute(@Req() req: ExpressRequest, @Res() res: ExpressResponse) {
-    const path = req.url.replace('/api/products', '');
+    const path = req.url.replace('/api/products', '') || '';
     return this.routeRequest('products', `/products${path}`, req, res);
   }
 
@@ -68,7 +69,15 @@ export class GatewayController {
 
   /**
    * Route settings requests (requires auth)
+   * Handle both /api/settings and /api/settings/*
    */
+  @All('settings')
+  @UseGuards(JwtAuthGuard)
+  async settingsBaseRoute(@Req() req: ExpressRequest, @Res() res: ExpressResponse) {
+    const path = req.url.replace('/api/settings', '') || '';
+    return this.routeRequest('settings', `/settings${path}`, req, res);
+  }
+
   @All('settings/*')
   @UseGuards(JwtAuthGuard)
   async settingsRoute(@Req() req: ExpressRequest, @Res() res: ExpressResponse) {

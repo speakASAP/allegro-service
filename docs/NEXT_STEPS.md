@@ -148,9 +148,9 @@ For production deployment:
    - Configure domain names
    - Update `FRONTEND_API_URL` to production API URL
    - **Configure frontend service routing**:
-     
+
      Add the following to your nginx configuration file (e.g., `allegro.statex.cz.blue.conf`):
-     
+
      ```nginx
      # Add upstream block for frontend service (after api-gateway upstream)
      upstream allegro-frontend-service {
@@ -178,8 +178,9 @@ For production deployment:
          proxy_busy_buffers_size 256k;
      }
      ```
-     
+
      Then reload nginx:
+
      ```bash
      docker exec nginx-microservice nginx -t && docker exec nginx-microservice nginx -s reload
      ```

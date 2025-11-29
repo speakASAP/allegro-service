@@ -18,14 +18,28 @@ export class GatewayService {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
   ) {
+    const nodeEnv = this.configService.get<string>('NODE_ENV') || 'development';
+    const isDevelopment = nodeEnv === 'development';
+    
+    // Helper to convert Docker hostnames to localhost in development
+    const getServiceUrl = (envVar: string, defaultPort: string, serviceName?: string): string => {
+      const url = this.configService.get<string>(envVar);
+      if (url && isDevelopment && url.includes('-service')) {
+        // Replace Docker service hostname with localhost in development
+        const port = url.match(/:(\d+)/)?.[1] || defaultPort;
+        return `http://localhost:${port}`;
+      }
+      return url || (serviceName ? this.throwConfigError(envVar) : `http://localhost:${defaultPort}`);
+    };
+
     this.serviceUrls = {
-      products: this.configService.get<string>('PRODUCT_SERVICE_URL') || this.throwConfigError('PRODUCT_SERVICE_URL'),
-      allegro: this.configService.get<string>('ALLEGRO_SERVICE_URL') || this.throwConfigError('ALLEGRO_SERVICE_URL'),
-      sync: this.configService.get<string>('SYNC_SERVICE_URL') || this.throwConfigError('SYNC_SERVICE_URL'),
+      products: getServiceUrl('PRODUCT_SERVICE_URL', '3402'),
+      allegro: getServiceUrl('ALLEGRO_SERVICE_URL', '3403'),
+      sync: getServiceUrl('SYNC_SERVICE_URL', '3404'),
       webhooks: this.configService.get<string>('WEBHOOK_SERVICE_URL') || this.throwConfigError('WEBHOOK_SERVICE_URL'),
-      import: this.configService.get<string>('IMPORT_SERVICE_URL') || this.throwConfigError('IMPORT_SERVICE_URL'),
+      import: getServiceUrl('IMPORT_SERVICE_URL', '3406'),
       scheduler: this.configService.get<string>('SCHEDULER_SERVICE_URL') || this.throwConfigError('SCHEDULER_SERVICE_URL'),
-      settings: this.configService.get<string>('SETTINGS_SERVICE_URL') || `http://localhost:${this.configService.get<string>('ALLEGRO_SETTINGS_SERVICE_PORT') || '3408'}`,
+      settings: getServiceUrl('SETTINGS_SERVICE_URL', '3408'),
       auth: this.configService.get<string>('AUTH_SERVICE_URL') || this.throwConfigError('AUTH_SERVICE_URL'),
     };
   }

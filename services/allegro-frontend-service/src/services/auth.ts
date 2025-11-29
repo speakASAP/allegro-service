@@ -18,17 +18,15 @@ export interface LoginData {
 }
 
 export interface AuthResponse {
-  success: boolean;
-  data: {
-    user: {
-      id: string;
-      email: string;
-      firstName?: string;
-      lastName?: string;
-    };
-    accessToken: string;
-    refreshToken: string;
+  user: {
+    id: string | number;
+    email: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    phone?: string | null;
   };
+  accessToken: string;
+  refreshToken: string;
 }
 
 export const authService = {
@@ -61,3 +59,4 @@ export const authService = {
     return localStorage.getItem('accessToken');
   },
 };
+
