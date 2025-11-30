@@ -68,7 +68,7 @@ The system consists of 9 microservices:
 5. Build and start services:
 
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
 ## Environment Variables
@@ -244,13 +244,13 @@ All services run in Docker containers connected to `nginx-network`. To deploy:
 
 ```bash
 # Build and start all services
-docker-compose up -d
+docker compose up -d
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 
 # Stop all services
-docker-compose down
+docker compose down
 ```
 
 ### Health Checks

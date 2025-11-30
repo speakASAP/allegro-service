@@ -3,6 +3,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { AxiosError } from 'axios';
 import api from '../services/api';
 import { Card } from '../components/Card';
 
@@ -22,6 +23,7 @@ interface SyncJob {
 const SyncStatusPage: React.FC = () => {
   const [jobs, setJobs] = useState<SyncJob[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadJobs();
@@ -34,9 +36,20 @@ const SyncStatusPage: React.FC = () => {
       const response = await api.get('/sync/jobs');
       if (response.data.success) {
         setJobs(response.data.data.items || []);
+        setError(null);
       }
     } catch (err) {
       console.error('Failed to load sync jobs', err);
+      if (err instanceof AxiosError) {
+        const axiosError = err as AxiosError & { isConnectionError?: boolean; serviceErrorMessage?: string };
+        if (axiosError.isConnectionError && axiosError.serviceErrorMessage) {
+          setError(axiosError.serviceErrorMessage);
+        } else {
+          setError('Failed to load sync jobs. Please try again later.');
+        }
+      } else {
+        setError('Failed to load sync jobs. Please try again later.');
+      }
     } finally {
       setLoading(false);
     }
@@ -62,6 +75,13 @@ const SyncStatusPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">Sync Status</h2>
+
+      {error && (
+        <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded whitespace-pre-line">
+          <div className="font-semibold mb-2">Error:</div>
+          <div className="text-sm">{error}</div>
+        </div>
+      )}
 
       <Card>
         {jobs.length === 0 ? (

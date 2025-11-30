@@ -16,22 +16,31 @@ export class JwtAuthGuard implements CanActivate {
   constructor(private readonly authService: AuthService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest();
-    const token = this.extractTokenFromHeader(request);
+    try {
+      const request = context.switchToHttp().getRequest();
+      const token = this.extractTokenFromHeader(request);
 
-    if (!token) {
-      throw new UnauthorizedException('No token provided');
+      if (!token) {
+        throw new UnauthorizedException('No token provided');
+      }
+
+      const validation = await this.authService.validateToken(token);
+
+      if (!validation.valid || !validation.user) {
+        throw new UnauthorizedException('Invalid token');
+      }
+
+      // Attach user to request
+      request.user = validation.user;
+      return true;
+    } catch (error: any) {
+      // Ensure we always throw UnauthorizedException for auth failures
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      // If any other error occurs (e.g., timeout, network error), throw UnauthorizedException
+      throw new UnauthorizedException('Authentication failed');
     }
-
-    const validation = await this.authService.validateToken(token);
-
-    if (!validation.valid || !validation.user) {
-      throw new UnauthorizedException('Invalid token');
-    }
-
-    // Attach user to request
-    request.user = validation.user;
-    return true;
   }
 
   private extractTokenFromHeader(request: any): string | undefined {

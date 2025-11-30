@@ -27,11 +27,17 @@ const LoginPage: React.FC = () => {
       await login(email, password);
       navigate('/dashboard');
     } catch (err: unknown) {
-      const errorMessage =
-        err instanceof AxiosError && err.response?.data?.error?.message
-          ? err.response.data.error.message
-          : 'Failed to login. Please check your credentials.';
-      setError(errorMessage);
+      if (err instanceof AxiosError) {
+        const axiosError = err as AxiosError & { isConnectionError?: boolean; serviceErrorMessage?: string };
+        if (axiosError.isConnectionError && axiosError.serviceErrorMessage) {
+          setError(axiosError.serviceErrorMessage);
+        } else {
+          const errorMessage = err.response?.data?.error?.message || 'Failed to login. Please check your credentials.';
+          setError(errorMessage);
+        }
+      } else {
+        setError('Failed to login. Please check your credentials.');
+      }
     } finally {
       setLoading(false);
     }
@@ -53,8 +59,9 @@ const LoginPage: React.FC = () => {
         <Card>
           <form onSubmit={handleSubmit}>
             {error && (
-              <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-                {error}
+              <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded whitespace-pre-line">
+                <div className="font-semibold mb-1">Error:</div>
+                <div className="text-sm">{error}</div>
               </div>
             )}
 
