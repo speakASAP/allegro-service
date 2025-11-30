@@ -9,6 +9,7 @@ import {
   Req,
   Res,
   UseGuards,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { GatewayService } from './gateway.service';
 import { JwtAuthGuard } from '@allegro/shared';
@@ -116,11 +117,25 @@ export class GatewayController {
       );
       res.status(200).json(response);
     } catch (error: any) {
-      res.status(error.response?.status || 500).json({
+      // Handle UnauthorizedException properly
+      if (error instanceof UnauthorizedException) {
+        res.status(401).json({
+          success: false,
+          error: {
+            code: 'UNAUTHORIZED',
+            message: error.message || 'Authentication required',
+          },
+        });
+        return;
+      }
+
+      // Handle other errors
+      const statusCode = error.response?.status || error.status || 500;
+      res.status(statusCode).json({
         success: false,
         error: {
           code: error.response?.data?.error?.code || 'GATEWAY_ERROR',
-          message: error.response?.data?.error?.message || error.message,
+          message: error.response?.data?.error?.message || error.message || 'Internal server error',
         },
       });
     }

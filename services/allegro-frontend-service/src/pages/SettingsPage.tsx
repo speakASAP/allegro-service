@@ -55,7 +55,16 @@ const SettingsPage: React.FC = () => {
         setAllegroClientSecret(data.allegroClientSecret || '');
       }
     } catch (err: unknown) {
-      setError('Failed to load settings');
+      if (err instanceof AxiosError) {
+        const axiosError = err as AxiosError & { isConnectionError?: boolean; serviceErrorMessage?: string };
+        if (axiosError.isConnectionError && axiosError.serviceErrorMessage) {
+          setError(axiosError.serviceErrorMessage);
+        } else {
+          setError(err.response?.data?.error?.message || 'Failed to load settings');
+        }
+      } else {
+        setError('Failed to load settings');
+      }
     } finally {
       setLoading(false);
     }
@@ -182,8 +191,9 @@ const SettingsPage: React.FC = () => {
       <h2 className="text-2xl font-bold">Settings</h2>
 
       {error && (
-        <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded">
-          {error}
+        <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded whitespace-pre-line">
+          <div className="font-semibold mb-2">Error:</div>
+          <div className="text-sm">{error}</div>
         </div>
       )}
 

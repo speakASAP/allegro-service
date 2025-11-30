@@ -3,6 +3,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { AxiosError } from 'axios';
 import api from '../services/api';
 import { Card } from '../components/Card';
 
@@ -20,6 +21,7 @@ const ProductsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [error, setError] = useState<string | null>(null);
 
   const loadProducts = useCallback(async () => {
     try {
@@ -27,9 +29,20 @@ const ProductsPage: React.FC = () => {
       if (response.data.success) {
         setProducts(response.data.data.items || []);
         setTotalPages(response.data.data.pagination?.totalPages || 1);
+        setError(null);
       }
     } catch (err) {
       console.error('Failed to load products', err);
+      if (err instanceof AxiosError) {
+        const axiosError = err as AxiosError & { isConnectionError?: boolean; serviceErrorMessage?: string };
+        if (axiosError.isConnectionError && axiosError.serviceErrorMessage) {
+          setError(axiosError.serviceErrorMessage);
+        } else {
+          setError('Failed to load products. Please try again later.');
+        }
+      } else {
+        setError('Failed to load products. Please try again later.');
+      }
     } finally {
       setLoading(false);
     }
@@ -46,6 +59,13 @@ const ProductsPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">Products</h2>
+
+      {error && (
+        <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded whitespace-pre-line">
+          <div className="font-semibold mb-2">Error:</div>
+          <div className="text-sm">{error}</div>
+        </div>
+      )}
 
       <Card>
         {products.length === 0 ? (

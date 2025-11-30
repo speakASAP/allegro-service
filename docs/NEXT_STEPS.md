@@ -46,13 +46,13 @@ This will:
 Build and start all services including the new ones:
 
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 Or start specific services:
 
 ```bash
-docker-compose up -d allegro-settings-service allegro-frontend-service
+docker compose up -d allegro-settings-service allegro-frontend-service
 ```
 
 ## Step 4: Verify Services
@@ -60,7 +60,7 @@ docker-compose up -d allegro-settings-service allegro-frontend-service
 Check that all services are running:
 
 ```bash
-docker-compose ps
+docker compose ps
 ```
 
 Verify health endpoints:
