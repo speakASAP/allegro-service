@@ -139,7 +139,7 @@ Create a `.env` file in the root directory with the following variables:
 ### Webhook Configuration
 
 - `WEBHOOK_SECRET` - Secret for webhook verification
-- `WEBHOOK_TIMEOUT` - Webhook processing timeout in ms (30000)
+- `WEBHOOK_TIMEOUT` - Webhook processing timeout in ms (10000)
 - `WEBHOOK_MAX_RETRIES` - Maximum retry attempts (3)
 
 For a complete list of all environment variables, see the `.env.example` file in the root directory or check `docs/IMPLEMENTATION_PLAN.md` section "Environment Configuration".
