@@ -65,7 +65,7 @@ export class GatewayService {
         'Content-Type': 'application/json',
         ...headers,
       },
-      timeout: parseInt(this.configService.get<string>('GATEWAY_TIMEOUT') || this.configService.get<string>('HTTP_TIMEOUT') || '30000'),
+      timeout: parseInt(this.configService.get<string>('GATEWAY_TIMEOUT') || this.configService.get<string>('HTTP_TIMEOUT') || '10000'),
     };
 
     this.logger.debug(`Forwarding ${method} ${url}`);

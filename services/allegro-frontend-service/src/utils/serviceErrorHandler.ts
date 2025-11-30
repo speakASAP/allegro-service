@@ -67,11 +67,21 @@ const SERVICE_MAP: Record<string, ServiceErrorInfo> = {
 };
 
 /**
+ * Type guard for error objects with common error properties
+ */
+interface ErrorLike {
+  code?: string;
+  message?: string;
+  isAxiosError?: boolean;
+  response?: unknown;
+}
+
+/**
  * Detects if an error is a connection error
  */
 export function isConnectionError(error: unknown): boolean {
   if (error && typeof error === 'object') {
-    const err = error as any;
+    const err = error as ErrorLike;
     // Check for network errors
     if (err.code === 'ERR_NETWORK' || err.code === 'ECONNREFUSED' || err.message?.includes('ERR_CONNECTION_REFUSED')) {
       return true;
