@@ -65,21 +65,26 @@
 
 1. **Frontend API URL**: Frontend was built with development fallback (`http://localhost:3411/api`) instead of production URL.
 2. **Auth Service Connectivity**: API Gateway couldn't reach auth service at `https://auth.statex.cz` (timeout errors).
+3. **Nginx Routing**: Nginx `/api/` location block was using variables in `proxy_pass` which caused 404 errors, and was missing proper upstream configuration with `resolve` directive.
 
 **Fixes Applied**:
 
 1. ✅ Rebuilt frontend with correct `FRONTEND_API_URL=https://allegro.statex.cz/api`.
 2. ✅ Updated production `.env`: `AUTH_SERVICE_URL=http://auth-microservice:3370` (Docker network instead of HTTPS).
 3. ✅ Improved API Gateway error handling for timeouts, connection errors, and 409 conflicts.
+4. ✅ Fixed settings service connectivity - updated `SETTINGS_SERVICE_URL=http://allegro-settings-service:3408` (Docker network).
+4. ✅ Fixed nginx configuration:
+   - Updated `/api/` location to use upstream block directly (`proxy_pass http://allegro-api-gateway/api/;`)
+   - Added `resolve` directive to upstream blocks for runtime DNS resolution
+   - Added `zone` directive to upstream blocks (required with `resolve`)
+   - Added missing frontend upstream block and location block
 
 **Current Status**:
 
-- ✅ Login works: `ssfskype@gmail.com` / `Password123!` successfully authenticates.
-- ✅ Register works: Returns 409 Conflict when user already exists (correct behavior).
-- ✅ API Gateway connects to auth service via Docker network.
-- ✅ Frontend calls correct production API URLs.
+- ✅ **Login works**: `ssfskype@gmail.com` / `Password123!` successfully authenticates from browser at `https://allegro.statex.cz/login`.
+- ✅ **Register works**: Returns 409 Conflict when user already exists (correct behavior).
+- ✅ **API Gateway connects to auth service** via Docker network.
+- ✅ **Frontend calls correct production API URLs** (`https://allegro.statex.cz/api`).
+- ✅ **Nginx routing fixed**: `/api/` requests properly routed to API Gateway.
 
-**Next Steps** (if needed):
-
-- Test login from browser at `https://allegro.statex.cz/login` to confirm frontend is using correct API URL.
-- If frontend still shows errors, may need to hard refresh browser cache or verify nginx routing.
+**Issue Resolved**: Login and registration are now fully functional on `https://allegro.statex.cz/login`.

@@ -10,14 +10,24 @@ import {
   Res,
   UseGuards,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import { GatewayService } from './gateway.service';
-import { JwtAuthGuard } from '@allegro/shared';
+import { JwtAuthGuard, LoggerService } from '@allegro/shared';
 import { Request as ExpressRequest, Response as ExpressResponse } from 'express';
 
 @Controller('api')
 export class GatewayController {
-  constructor(private readonly gatewayService: GatewayService) {}
+  private readonly logger = new Logger(GatewayController.name);
+  private readonly sharedLogger: LoggerService;
+
+  constructor(
+    private readonly gatewayService: GatewayService,
+    loggerService: LoggerService,
+  ) {
+    this.sharedLogger = loggerService;
+    this.sharedLogger.setContext('GatewayController');
+  }
 
   /**
    * Route product requests
@@ -106,6 +116,22 @@ export class GatewayController {
   ) {
     const method = req.method;
     const body = method !== 'GET' && method !== 'DELETE' ? req.body : undefined;
+    const requestId = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const startTime = Date.now();
+
+    // Log incoming request
+    this.sharedLogger.info(`[${requestId}] Incoming API request`, {
+      serviceName,
+      method,
+      path,
+      originalUrl: req.originalUrl,
+      url: req.url,
+      ip: req.ip || req.socket.remoteAddress,
+      userAgent: req.get('user-agent'),
+      hasAuth: !!req.headers.authorization,
+      hasBody: !!body,
+    });
+    this.logger.log(`[${requestId}] ${method} ${req.originalUrl} -> ${serviceName}${path}`);
 
     try {
       const response = await this.gatewayService.forwardRequest(
@@ -115,8 +141,34 @@ export class GatewayController {
         body,
         this.getHeaders(req),
       );
+      
+      const duration = Date.now() - startTime;
+      this.sharedLogger.info(`[${requestId}] Request completed successfully`, {
+        serviceName,
+        method,
+        path,
+        statusCode: 200,
+        duration: `${duration}ms`,
+      });
+      
       res.status(200).json(response);
     } catch (error: any) {
+      const duration = Date.now() - startTime;
+      const errorDetails = {
+        serviceName,
+        method,
+        path,
+        originalUrl: req.originalUrl,
+        duration: `${duration}ms`,
+        errorType: error.constructor?.name,
+        errorMessage: error.message,
+        errorCode: error.code,
+        errorStatus: error.response?.status || error.status,
+        errorData: error.response?.data,
+      };
+
+      this.sharedLogger.error(`[${requestId}] Request failed`, errorDetails);
+      this.logger.error(`[${requestId}] ${method} ${req.originalUrl} failed: ${error.message}`, errorDetails);
       // Handle UnauthorizedException properly
       if (error instanceof UnauthorizedException) {
         res.status(401).json({
