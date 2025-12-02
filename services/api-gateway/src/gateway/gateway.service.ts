@@ -55,7 +55,8 @@ export class GatewayService {
       nodeEnv,
       isDevelopment,
     });
-    this.logger.log('Service URLs configured:', JSON.stringify(this.serviceUrls, null, 2));
+    this.logger.log('Service URLs configured:');
+    this.logger.log(JSON.stringify(this.serviceUrls, null, 2));
   }
 
   /**
