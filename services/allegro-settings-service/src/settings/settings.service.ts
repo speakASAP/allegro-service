@@ -252,22 +252,30 @@ export class SettingsService {
    * Validate Allegro API keys
    */
   async validateAllegroKeys(userId: string, dto: ValidateAllegroKeysDto): Promise<{ valid: boolean; message?: string }> {
-    this.logger.log('Validating Allegro API keys', { userId });
-
     // Always use real ALLEGRO_AUTH_URL for both environments
     const tokenUrl = this.configService.get<string>('ALLEGRO_AUTH_URL') || 'https://allegro.pl/auth/oauth/token';
+    
+    this.logger.log('Validating Allegro API keys', { 
+      userId,
+      tokenUrl,
+      clientId: dto.clientId.substring(0, 8) + '...', // Log partial ID for debugging
+    });
 
     try {
-      const credentials = Buffer.from(`${dto.clientId}:${dto.clientSecret}`).toString('base64');
-
+      // Use the same authentication method as allegro-auth.service
       const response = await firstValueFrom(
         this.httpService.post(
           tokenUrl,
-          'grant_type=client_credentials',
+          new URLSearchParams({
+            grant_type: 'client_credentials',
+          }),
           {
             headers: {
-              'Authorization': `Basic ${credentials}`,
               'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            auth: {
+              username: dto.clientId,
+              password: dto.clientSecret,
             },
             timeout: 10000,
           },
