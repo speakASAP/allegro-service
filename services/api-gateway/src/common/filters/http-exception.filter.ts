@@ -1,0 +1,80 @@
+/**
+ * Global HTTP Exception Filter
+ * Catches all exceptions and formats them properly
+ */
+
+import {
+  ExceptionFilter,
+  Catch,
+  ArgumentsHost,
+  HttpException,
+  HttpStatus,
+  Logger,
+} from '@nestjs/common';
+import { Request, Response } from 'express';
+
+@Catch()
+export class HttpExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(HttpExceptionFilter.name);
+
+  catch(exception: unknown, host: ArgumentsHost) {
+    const ctx = host.switchToHttp();
+    const response = ctx.getResponse<Response>();
+    const request = ctx.getRequest<Request>();
+
+    let status = HttpStatus.INTERNAL_SERVER_ERROR;
+    let message = 'Internal server error';
+    let code = 'INTERNAL_ERROR';
+
+    if (exception instanceof HttpException) {
+      status = exception.getStatus();
+      const exceptionResponse = exception.getResponse();
+      
+      if (typeof exceptionResponse === 'string') {
+        message = exceptionResponse;
+      } else if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
+        const responseObj = exceptionResponse as any;
+        message = responseObj.message || exception.message || message;
+        code = responseObj.code || responseObj.error || code;
+      } else {
+        message = exception.message || message;
+      }
+
+      // Set code based on status
+      if (status === 401) {
+        code = 'UNAUTHORIZED';
+      } else if (status === 403) {
+        code = 'FORBIDDEN';
+      } else if (status === 404) {
+        code = 'NOT_FOUND';
+      } else if (status === 409) {
+        code = 'CONFLICT';
+      } else if (status === 503) {
+        code = 'SERVICE_UNAVAILABLE';
+      }
+    } else if (exception instanceof Error) {
+      message = exception.message || message;
+      this.logger.error(`Unhandled exception: ${exception.message}`, exception.stack);
+    }
+
+    const errorResponse = {
+      success: false,
+      error: {
+        code,
+        message,
+        statusCode: status,
+      },
+      path: request.url,
+      timestamp: new Date().toISOString(),
+    };
+
+    // Log the error
+    this.logger.error(
+      `${request.method} ${request.url} - ${status} - ${message}`,
+      exception instanceof Error ? exception.stack : JSON.stringify(exception),
+    );
+
+    response.status(status).json(errorResponse);
+  }
+}
+
