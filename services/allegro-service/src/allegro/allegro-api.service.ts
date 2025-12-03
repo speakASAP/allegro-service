@@ -90,6 +90,36 @@ export class AllegroApiService {
   }
 
   /**
+   * Get offers with custom credentials (for user-specific API keys)
+   */
+  async getOffersWithCredentials(clientId: string, clientSecret: string, params?: any) {
+    const token = await this.authService.getAccessTokenWithCredentials(clientId, clientSecret);
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = `/sale/offers${queryString ? `?${queryString}` : ''}`;
+    const url = `${this.apiUrl}${endpoint}`;
+
+    try {
+      const config = {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/vnd.allegro.public.v1+json',
+        },
+      };
+
+      const response = await firstValueFrom(this.httpService.get(url, config));
+      return response.data;
+    } catch (error: any) {
+      this.logger.error('Allegro API request failed with custom credentials', {
+        endpoint,
+        error: error.message,
+        status: error.response?.status,
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Get offer by ID
    */
   async getOffer(offerId: string) {
