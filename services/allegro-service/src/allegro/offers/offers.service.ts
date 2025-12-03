@@ -4,15 +4,44 @@
 
 import { Injectable } from '@nestjs/common';
 import { PrismaService, LoggerService } from '@allegro/shared';
+import { ConfigService } from '@nestjs/config';
 import { AllegroApiService } from '../allegro-api.service';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class OffersService {
+  private readonly encryptionKey: string;
+  private readonly encryptionAlgorithm = 'aes-256-cbc';
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly logger: LoggerService,
     private readonly allegroApi: AllegroApiService,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    this.encryptionKey = this.configService.get<string>('ENCRYPTION_KEY') || 'default-encryption-key-change-in-production-32chars!!';
+  }
+
+  /**
+   * Decrypt sensitive data
+   */
+  private decrypt(encryptedText: string): string {
+    try {
+      const parts = encryptedText.split(':');
+      if (parts.length !== 2) {
+        throw new Error('Invalid encrypted text format');
+      }
+      const iv = Buffer.from(parts[0], 'hex');
+      const encrypted = Buffer.from(parts[1], 'hex');
+      const decipher = crypto.createDecipheriv(this.encryptionAlgorithm, Buffer.from(this.encryptionKey.substring(0, 32), 'utf8'), iv);
+      let decrypted = decipher.update(encrypted);
+      decrypted = Buffer.concat([decrypted, decipher.final()]);
+      return decrypted.toString('utf8');
+    } catch (error) {
+      this.logger.error('Failed to decrypt data', { error: error.message });
+      throw error;
+    }
+  }
 
   /**
    * Get offers from database
@@ -185,19 +214,50 @@ export class OffersService {
   /**
    * Preview offers from Allegro (without importing)
    */
-  async previewOffersFromAllegro() {
-    this.logger.log('Previewing offers from Allegro');
+  async previewOffersFromAllegro(userId: string) {
+    this.logger.log('Previewing offers from Allegro', { userId });
 
     let offset = 0;
     const limit = 100;
-    let hasMore = true;
     const previewOffers: any[] = [];
 
+    // Get user settings to check for user-specific credentials
+    let userClientId: string | null = null;
+    let userClientSecret: string | null = null;
+
+    try {
+      const settings = await this.prisma.userSettings.findUnique({
+        where: { userId },
+      });
+
+      if (settings?.allegroClientId && settings?.allegroClientSecret) {
+        userClientId = settings.allegroClientId;
+        try {
+          userClientSecret = this.decrypt(settings.allegroClientSecret);
+          this.logger.log('Using user-specific Allegro credentials', { userId });
+        } catch (error) {
+          this.logger.warn('Failed to decrypt user credentials, falling back to global credentials', { userId });
+        }
+      }
+    } catch (error) {
+      this.logger.warn('Failed to get user settings, using global credentials', { userId, error: error.message });
+    }
+
     // Get first batch for preview (limit to 100 items for preview)
-    const response = await this.allegroApi.getOffers({
-      limit,
-      offset,
-    });
+    let response;
+    if (userClientId && userClientSecret) {
+      // Use user-specific credentials
+      response = await this.allegroApi.getOffersWithCredentials(userClientId, userClientSecret, {
+        limit,
+        offset,
+      });
+    } else {
+      // Use global credentials
+      response = await this.allegroApi.getOffers({
+        limit,
+        offset,
+      });
+    }
 
     const offers = response.offers || [];
     
@@ -216,7 +276,7 @@ export class OffersService {
       });
     }
 
-    this.logger.log('Finished previewing offers', { total: previewOffers.length });
+    this.logger.log('Finished previewing offers', { total: previewOffers.length, userId });
     return { items: previewOffers, total: response.count || previewOffers.length };
   }
 

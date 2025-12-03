@@ -54,6 +54,39 @@ export class AllegroAuthService {
   }
 
   /**
+   * Get access token with custom credentials (for user-specific API keys)
+   */
+  async getAccessTokenWithCredentials(clientId: string, clientSecret: string): Promise<string> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post<TokenResponse>(
+          this.authUrl,
+          new URLSearchParams({
+            grant_type: 'client_credentials',
+          }),
+          {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            auth: {
+              username: clientId,
+              password: clientSecret,
+            },
+          },
+        ),
+      );
+
+      return response.data.access_token;
+    } catch (error: any) {
+      this.logger.error('Failed to obtain Allegro access token with custom credentials', {
+        error: error.message,
+        status: error.response?.status,
+      });
+      throw new Error(`Failed to authenticate with Allegro API: ${error.response?.data?.error_description || error.message}`);
+    }
+  }
+
+  /**
    * Request new access token using client credentials
    */
   private async requestNewToken(): Promise<void> {

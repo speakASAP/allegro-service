@@ -43,7 +43,8 @@ const ImportJobsPage: React.FC = () => {
   const [importPreviewData, setImportPreviewData] = useState<PreviewOffer[]>([]);
   const [selectedImportIds, setSelectedImportIds] = useState<Set<string>>(new Set());
   const [importSource, setImportSource] = useState<'allegro' | 'sales-center' | null>(null);
-  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [loadingImportAllegro, setLoadingImportAllegro] = useState(false);
+  const [loadingImportSalesCenter, setLoadingImportSalesCenter] = useState(false);
   const [processingImport, setProcessingImport] = useState(false);
 
   // Export preview states
@@ -51,12 +52,35 @@ const ImportJobsPage: React.FC = () => {
   const [exportPreviewData, setExportPreviewData] = useState<any[]>([]);
   const [selectedExportIds, setSelectedExportIds] = useState<Set<string>>(new Set());
   const [exportType, setExportType] = useState<'products' | 'offers' | null>(null);
+  const [loadingExportProducts, setLoadingExportProducts] = useState(false);
+  const [loadingExportOffers, setLoadingExportOffers] = useState(false);
   const [processingExport, setProcessingExport] = useState(false);
 
   useEffect(() => {
-    loadJobs();
-    const interval = setInterval(loadJobs, 30000); // Refresh every 30 seconds
-    return () => clearInterval(interval);
+    let intervalId: NodeJS.Timeout | null = null;
+    
+    const loadJobsSafely = async () => {
+      try {
+        await loadJobs();
+      } catch (err) {
+        // If we get a 401, stop the interval to prevent infinite loops
+        if (err instanceof AxiosError && err.response?.status === 401) {
+          if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+          }
+        }
+      }
+    };
+    
+    loadJobsSafely();
+    intervalId = setInterval(loadJobsSafely, 30000); // Refresh every 30 seconds
+    
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
   }, []);
 
   const loadJobs = async () => {
@@ -69,6 +93,10 @@ const ImportJobsPage: React.FC = () => {
     } catch (err) {
       console.error('Failed to load import jobs', err);
       if (err instanceof AxiosError) {
+        // Don't set error or try to handle 401 - the interceptor will handle redirect
+        if (err.response?.status === 401) {
+          return; // Let the interceptor handle the redirect
+        }
         const axiosError = err as AxiosError & { isConnectionError?: boolean; serviceErrorMessage?: string };
         if (axiosError.isConnectionError && axiosError.serviceErrorMessage) {
           setError(axiosError.serviceErrorMessage);
@@ -84,7 +112,11 @@ const ImportJobsPage: React.FC = () => {
   };
 
   const handlePreviewImport = async (source: 'allegro' | 'sales-center') => {
-    setLoadingPreview(true);
+    if (source === 'allegro') {
+      setLoadingImportAllegro(true);
+    } else {
+      setLoadingImportSalesCenter(true);
+    }
     setError(null);
     setImportSource(source);
 
@@ -102,6 +134,10 @@ const ImportJobsPage: React.FC = () => {
     } catch (err) {
       console.error('Failed to preview import', err);
       if (err instanceof AxiosError) {
+        // Don't set error if it's a 401 - the interceptor will handle redirect
+        if (err.response?.status === 401) {
+          return; // Let the interceptor handle the redirect
+        }
         const axiosError = err as AxiosError & { isConnectionError?: boolean; serviceErrorMessage?: string };
         if (axiosError.isConnectionError && axiosError.serviceErrorMessage) {
           setError(axiosError.serviceErrorMessage);
@@ -112,7 +148,11 @@ const ImportJobsPage: React.FC = () => {
         setError('Failed to preview import');
       }
     } finally {
-      setLoadingPreview(false);
+      if (source === 'allegro') {
+        setLoadingImportAllegro(false);
+      } else {
+        setLoadingImportSalesCenter(false);
+      }
     }
   };
 
@@ -154,7 +194,11 @@ const ImportJobsPage: React.FC = () => {
   };
 
   const handlePreviewExport = async (type: 'products' | 'offers') => {
-    setLoadingPreview(true);
+    if (type === 'products') {
+      setLoadingExportProducts(true);
+    } else {
+      setLoadingExportOffers(true);
+    }
     setError(null);
     setExportType(type);
 
@@ -171,12 +215,20 @@ const ImportJobsPage: React.FC = () => {
     } catch (err) {
       console.error('Failed to preview export', err);
       if (err instanceof AxiosError) {
+        // Don't set error if it's a 401 - the interceptor will handle redirect
+        if (err.response?.status === 401) {
+          return; // Let the interceptor handle the redirect
+        }
         setError(err.response?.data?.error?.message || 'Failed to preview export');
       } else {
         setError('Failed to preview export');
       }
     } finally {
-      setLoadingPreview(false);
+      if (type === 'products') {
+        setLoadingExportProducts(false);
+      } else {
+        setLoadingExportOffers(false);
+      }
     }
   };
 
@@ -287,37 +339,37 @@ const ImportJobsPage: React.FC = () => {
           <div className="flex space-x-2 border-r pr-2 mr-2">
             <Button
               onClick={() => handlePreviewImport('allegro')}
-              disabled={loadingPreview || processingImport}
+              disabled={loadingImportAllegro || loadingImportSalesCenter || processingImport}
               variant="secondary"
               size="small"
             >
-              {loadingPreview ? 'Loading...' : '📥 Import from Allegro API'}
+              {loadingImportAllegro ? 'Loading...' : '📥 Import from Allegro API'}
             </Button>
             <Button
               onClick={() => handlePreviewImport('sales-center')}
-              disabled={loadingPreview || processingImport}
+              disabled={loadingImportAllegro || loadingImportSalesCenter || processingImport}
               variant="secondary"
               size="small"
             >
-              {loadingPreview ? 'Loading...' : '📥 Import from Sales Center'}
+              {loadingImportSalesCenter ? 'Loading...' : '📥 Import from Sales Center'}
             </Button>
           </div>
           <div className="flex space-x-2">
             <Button
               onClick={() => handlePreviewExport('products')}
-              disabled={loadingPreview || processingExport}
+              disabled={loadingExportProducts || loadingExportOffers || processingExport}
               variant="secondary"
               size="small"
             >
-              {loadingPreview ? 'Loading...' : '📤 Export Products'}
+              {loadingExportProducts ? 'Loading...' : '📤 Export Products'}
             </Button>
             <Button
               onClick={() => handlePreviewExport('offers')}
-              disabled={loadingPreview || processingExport}
+              disabled={loadingExportProducts || loadingExportOffers || processingExport}
               variant="secondary"
               size="small"
             >
-              {loadingPreview ? 'Loading...' : '📤 Export Offers'}
+              {loadingExportOffers ? 'Loading...' : '📤 Export Offers'}
             </Button>
           </div>
         </div>

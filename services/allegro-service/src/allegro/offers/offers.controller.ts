@@ -13,17 +13,28 @@ import {
   Body,
   UseGuards,
   Res,
+  Request,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { OffersService } from './offers.service';
-import { JwtAuthGuard } from '@allegro/shared';
+import { JwtAuthGuard, LoggerService } from '@allegro/shared';
 import { CreateOfferDto } from '../dto/create-offer.dto';
 import { UpdateOfferDto } from '../dto/update-offer.dto';
 import { OfferQueryDto } from '../dto/offer-query.dto';
 
 @Controller('allegro/offers')
 export class OffersController {
-  constructor(private readonly offersService: OffersService) {}
+  private readonly logger: LoggerService;
+
+  constructor(
+    private readonly offersService: OffersService,
+    loggerService: LoggerService,
+  ) {
+    this.logger = loggerService;
+    this.logger.setContext('OffersController');
+  }
 
   @Get()
   @UseGuards(JwtAuthGuard)
@@ -34,9 +45,29 @@ export class OffersController {
 
   @Get('import/preview')
   @UseGuards(JwtAuthGuard)
-  async previewOffers(): Promise<{ success: boolean; data: any }> {
-    const result = await this.offersService.previewOffersFromAllegro();
-    return { success: true, data: result };
+  async previewOffers(@Request() req: any): Promise<{ success: boolean; data: any }> {
+    try {
+      const userId = String(req.user.id);
+      const result = await this.offersService.previewOffersFromAllegro(userId);
+      return { success: true, data: result };
+    } catch (error: any) {
+      this.logger.error('Failed to preview offers', {
+        error: error.message,
+        status: error.response?.status,
+        userId: req.user?.id,
+      });
+      throw new HttpException(
+        {
+          success: false,
+          error: {
+            code: 'PREVIEW_ERROR',
+            message: error.response?.data?.error_description || error.response?.data?.error || error.message || 'Failed to preview offers from Allegro API',
+            status: error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
+          },
+        },
+        error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Post('import/approve')
