@@ -35,8 +35,10 @@ async function bootstrap() {
   
   if (corsOrigin) {
     // In development, allow both production and localhost origins
+    // Port configured in allegro/.env: ALLEGRO_FRONTEND_SERVICE_PORT (default: 3410)
+    const frontendPort = process.env.ALLEGRO_FRONTEND_SERVICE_PORT || '3410';
     const allowedOrigins = nodeEnv === 'development' 
-      ? [corsOrigin, 'http://localhost:3410', 'http://127.0.0.1:3410']
+      ? [corsOrigin, `http://localhost:${frontendPort}`, `http://127.0.0.1:${frontendPort}`]
       : corsOrigin;
     
     app.enableCors({
@@ -57,6 +59,7 @@ async function bootstrap() {
     }
   }
 
+  // Port configured in allegro/.env: API_GATEWAY_PORT (default: 3411)
   const port = configService.get<string>('API_GATEWAY_PORT') || configService.get<string>('PORT') || '3411';
   await app.listen(parseInt(port));
   console.log(`API Gateway is running on: http://localhost:${port}`);

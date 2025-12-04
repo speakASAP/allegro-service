@@ -30,14 +30,14 @@ Added comprehensive logging to API Gateway:
 
 Created script to fix all service URLs to use Docker network service names:
 
-- `PRODUCT_SERVICE_URL=http://product-service:3402`
-- `ALLEGRO_SERVICE_URL=http://allegro-service:3403`
-- `SYNC_SERVICE_URL=http://sync-service:3404`
-- `WEBHOOK_SERVICE_URL=http://webhook-service:3405`
-- `IMPORT_SERVICE_URL=http://import-service:3406`
-- `SCHEDULER_SERVICE_URL=http://scheduler-service:3407`
-- `SETTINGS_SERVICE_URL=http://allegro-settings-service:3408`
-- `AUTH_SERVICE_URL=http://auth-microservice:3370`
+- `PRODUCT_SERVICE_URL=http://product-service:${PRODUCT_SERVICE_PORT:-3402}` (configured in `allegro/.env`)
+- `ALLEGRO_SERVICE_URL=http://allegro-service:${ALLEGRO_SERVICE_PORT:-3403}` (configured in `allegro/.env`)
+- `SYNC_SERVICE_URL=http://sync-service:${SYNC_SERVICE_PORT:-3404}` (configured in `allegro/.env`)
+- `WEBHOOK_SERVICE_URL=http://webhook-service:${WEBHOOK_SERVICE_PORT:-3405}` (configured in `allegro/.env`)
+- `IMPORT_SERVICE_URL=http://import-service:${IMPORT_SERVICE_PORT:-3406}` (configured in `allegro/.env`)
+- `SCHEDULER_SERVICE_URL=http://scheduler-service:${SCHEDULER_SERVICE_PORT:-3407}` (configured in `allegro/.env`)
+- `SETTINGS_SERVICE_URL=http://allegro-settings-service:${ALLEGRO_SETTINGS_SERVICE_PORT:-3408}` (configured in `allegro/.env`)
+- `AUTH_SERVICE_URL=http://auth-microservice:${PORT:-3370}` (configured in `auth-microservice/.env`)
 
 ## Implementation Checklist
 
@@ -77,11 +77,11 @@ bash scripts/fix_all_service_urls.sh
 docker compose -f docker-compose.green.yml restart api-gateway
 
 # 3. Verify connectivity to all services
-docker exec allegro-api-gateway-green curl -f http://product-service:3402/health
-docker exec allegro-api-gateway-green curl -f http://allegro-service:3403/health
-docker exec allegro-api-gateway-green curl -f http://sync-service:3404/health
-docker exec allegro-api-gateway-green curl -f http://import-service:3406/health
-docker exec allegro-api-gateway-green curl -f http://allegro-settings-service:3408/health
+docker exec allegro-api-gateway-green curl -f http://product-service:${PRODUCT_SERVICE_PORT:-3402}/health  # Port configured in allegro/.env
+docker exec allegro-api-gateway-green curl -f http://allegro-service:${ALLEGRO_SERVICE_PORT:-3403}/health  # Port configured in allegro/.env
+docker exec allegro-api-gateway-green curl -f http://sync-service:${SYNC_SERVICE_PORT:-3404}/health  # Port configured in allegro/.env
+docker exec allegro-api-gateway-green curl -f http://import-service:${IMPORT_SERVICE_PORT:-3406}/health  # Port configured in allegro/.env
+docker exec allegro-api-gateway-green curl -f http://allegro-settings-service:${ALLEGRO_SETTINGS_SERVICE_PORT:-3408}/health  # Port configured in allegro/.env
 
 # 4. Check API Gateway logs for service URLs
 docker logs allegro-api-gateway-green --tail 50 | grep "Service URLs configured"

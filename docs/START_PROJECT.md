@@ -135,25 +135,25 @@ You can also create a start script. Check if there's a start script in root pack
 ## Troubleshooting
 
 1. **Docker not running**: Start Docker Desktop
-2. **Port already in use**: Check what's using the port: `lsof -i :3411`
+2. **Port already in use**: Check what's using the port: `lsof -i :${API_GATEWAY_PORT:-3411}` (port configured in `allegro/.env`)
 3. **Database connection error**: Check .env file DB_* variables
 4. **Service dependencies**: Make sure shared module is built first
 5. **Environment variables**: Ensure .env file has all required variables
 
 ## Service Ports
 
-- API Gateway: 3411
-- Product Service: 3402
-- Allegro Service: 3403
-- Sync Service: 3404
-- Webhook Service: 3405
-- Import Service: 3406
-- Scheduler Service: 3407
+- API Gateway: ${API_GATEWAY_PORT:-3411} (configured in `allegro/.env`)
+- Product Service: ${PRODUCT_SERVICE_PORT:-3402} (configured in `allegro/.env`)
+- Allegro Service: ${ALLEGRO_SERVICE_PORT:-3403} (configured in `allegro/.env`)
+- Sync Service: ${SYNC_SERVICE_PORT:-3404} (configured in `allegro/.env`)
+- Webhook Service: ${WEBHOOK_SERVICE_PORT:-3405} (configured in `allegro/.env`)
+- Import Service: ${IMPORT_SERVICE_PORT:-3406} (configured in `allegro/.env`)
+- Scheduler Service: ${SCHEDULER_SERVICE_PORT:-3407} (configured in `allegro/.env`)
 
 ## Health Checks
 
 All services expose `/health` endpoint:
 
-- <http://localhost:3411/health> (API Gateway)
-- <http://localhost:3402/health> (Product Service)
+- <http://localhost:${API_GATEWAY_PORT:-3411}/health> (API Gateway, configured in `allegro/.env`)
+- <http://localhost:${PRODUCT_SERVICE_PORT:-3402}/health> (Product Service, configured in `allegro/.env`)
 - etc.

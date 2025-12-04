@@ -15,9 +15,9 @@ Use this checklist to verify the event polling implementation is working correct
 
 ## Service Health Checks
 
-- [ ] Webhook service health endpoint responds: `curl http://localhost:3405/health`
-- [ ] Allegro service health endpoint responds: `curl http://localhost:3403/health`
-- [ ] Scheduler service health endpoint responds: `curl http://localhost:3407/health`
+- [ ] Webhook service health endpoint responds: `curl http://localhost:${WEBHOOK_SERVICE_PORT:-3405}/health` (configured in allegro/.env)
+- [ ] Allegro service health endpoint responds: `curl http://localhost:${ALLEGRO_SERVICE_PORT:-3403}/health` (configured in allegro/.env)
+- [ ] Scheduler service health endpoint responds: `curl http://localhost:${SCHEDULER_SERVICE_PORT:-3407}/health` (configured in allegro/.env)
 
 ## Event Polling Endpoints
 
@@ -117,10 +117,10 @@ npm run test:event-polling
 npm run test:event-polling:bash
 
 # Manual polling
-curl -X POST http://localhost:3411/api/webhooks/poll-events
+curl -X POST http://localhost:${API_GATEWAY_PORT:-3411}/api/webhooks/poll-events  # API_GATEWAY_PORT configured in allegro/.env
 
 # Check processed events
-curl http://localhost:3411/api/webhooks/events?limit=10
+curl http://localhost:${API_GATEWAY_PORT:-3411}/api/webhooks/events?limit=10  # API_GATEWAY_PORT configured in allegro/.env
 ```
 
 ## Notes

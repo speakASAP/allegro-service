@@ -22,9 +22,10 @@ try {
 dotenv.config({ path: join(__dirname, '../.env') });
 
 // Use localhost for local testing, override with env vars if needed
-const API_BASE_URL = process.env.FRONTEND_API_URL || process.env.API_BASE_URL || 'http://localhost:3411/api';
-const ALLEGRO_SERVICE_URL = process.env.ALLEGRO_SERVICE_URL || 'http://localhost:3403';
-const WEBHOOK_SERVICE_URL = process.env.WEBHOOK_SERVICE_URL || 'http://localhost:3405';
+// Ports configured in allegro/.env: API_GATEWAY_PORT (default: 3411), ALLEGRO_SERVICE_PORT (default: 3403), WEBHOOK_SERVICE_PORT (default: 3405)
+const API_BASE_URL = process.env.FRONTEND_API_URL || process.env.API_BASE_URL || `http://localhost:${process.env.API_GATEWAY_PORT || '3411'}/api`;
+const ALLEGRO_SERVICE_URL = process.env.ALLEGRO_SERVICE_URL || `http://localhost:${process.env.ALLEGRO_SERVICE_PORT || '3403'}`;
+const WEBHOOK_SERVICE_URL = process.env.WEBHOOK_SERVICE_URL || `http://localhost:${process.env.WEBHOOK_SERVICE_PORT || '3405'}`;
 
 // Normalize URLs - remove Docker service names, use localhost for local testing
 const normalizeUrl = (url: string): string => {

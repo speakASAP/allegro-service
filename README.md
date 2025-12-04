@@ -17,15 +17,17 @@ This system provides complete automation for:
 
 The system consists of 9 microservices:
 
-1. **API Gateway** (Port 3411) - Request routing and authentication
-2. **Product Service** (Port 3402) - Product catalog management
-3. **Allegro Service** (Port 3403) - Allegro API integration
-4. **Sync Service** (Port 3404) - Bidirectional synchronization
-5. **Webhook Service** (Port 3405) - Allegro event polling and processing
-6. **Import Service** (Port 3406) - CSV import and transformation
-7. **Scheduler Service** (Port 3407) - Scheduled cron jobs
-8. **Settings Service** (Port 3408) - User settings and API key management
-9. **Frontend Service** (Port 3410) - Web interface for users
+1. **API Gateway** (Port ${API_GATEWAY_PORT:-3411}) - Request routing and authentication
+2. **Product Service** (Port ${PRODUCT_SERVICE_PORT:-3402}) - Product catalog management
+3. **Allegro Service** (Port ${ALLEGRO_SERVICE_PORT:-3403}) - Allegro API integration
+4. **Sync Service** (Port ${SYNC_SERVICE_PORT:-3404}) - Bidirectional synchronization
+5. **Webhook Service** (Port ${WEBHOOK_SERVICE_PORT:-3405}) - Allegro event polling and processing
+6. **Import Service** (Port ${IMPORT_SERVICE_PORT:-3406}) - CSV import and transformation
+7. **Scheduler Service** (Port ${SCHEDULER_SERVICE_PORT:-3407}) - Scheduled cron jobs
+8. **Settings Service** (Port ${ALLEGRO_SETTINGS_SERVICE_PORT:-3408}) - User settings and API key management
+9. **Frontend Service** (Port ${ALLEGRO_FRONTEND_SERVICE_PORT:-3410}) - Web interface for users
+
+**Note**: All ports are configured in `allegro/.env`. The values shown are defaults.
 
 ## 🔌 Port Configuration
 
@@ -33,19 +35,19 @@ The system consists of 9 microservices:
 
 All services use the same host and container ports for consistency:
 
-| Service | Host Port | Container Port | Description |
-|---------|-----------|----------------|-------------|
-| **API Gateway** | 3411 | 3411 | Request routing and authentication |
-| **Product Service** | 3402 | 3402 | Product catalog management |
-| **Allegro Service** | 3403 | 3403 | Allegro API integration |
-| **Sync Service** | 3404 | 3404 | Bidirectional synchronization |
-| **Webhook Service** | 3405 | 3405 | Allegro event polling and processing |
-| **Import Service** | 3406 | 3406 | CSV import and transformation |
-| **Scheduler Service** | 3407 | 3407 | Scheduled cron jobs |
-| **Settings Service** | 3408 | 3408 | User settings and API key management |
-| **Frontend Service** | 3410 | 3410 | Web interface for users |
+| Service | Host Port | Container Port | .env Variable | Description |
+|---------|-----------|----------------|---------------|-------------|
+| **API Gateway** | `${API_GATEWAY_PORT:-3411}` | `${API_GATEWAY_PORT:-3411}` | `API_GATEWAY_PORT` (allegro/.env) | Request routing and authentication |
+| **Product Service** | `${PRODUCT_SERVICE_PORT:-3402}` | `${PRODUCT_SERVICE_PORT:-3402}` | `PRODUCT_SERVICE_PORT` (allegro/.env) | Product catalog management |
+| **Allegro Service** | `${ALLEGRO_SERVICE_PORT:-3403}` | `${ALLEGRO_SERVICE_PORT:-3403}` | `ALLEGRO_SERVICE_PORT` (allegro/.env) | Allegro API integration |
+| **Sync Service** | `${SYNC_SERVICE_PORT:-3404}` | `${SYNC_SERVICE_PORT:-3404}` | `SYNC_SERVICE_PORT` (allegro/.env) | Bidirectional synchronization |
+| **Webhook Service** | `${WEBHOOK_SERVICE_PORT:-3405}` | `${WEBHOOK_SERVICE_PORT:-3405}` | `WEBHOOK_SERVICE_PORT` (allegro/.env) | Allegro event polling and processing |
+| **Import Service** | `${IMPORT_SERVICE_PORT:-3406}` | `${IMPORT_SERVICE_PORT:-3406}` | `IMPORT_SERVICE_PORT` (allegro/.env) | CSV import and transformation |
+| **Scheduler Service** | `${SCHEDULER_SERVICE_PORT:-3407}` | `${SCHEDULER_SERVICE_PORT:-3407}` | `SCHEDULER_SERVICE_PORT` (allegro/.env) | Scheduled cron jobs |
+| **Settings Service** | `${ALLEGRO_SETTINGS_SERVICE_PORT:-3408}` | `${ALLEGRO_SETTINGS_SERVICE_PORT:-3408}` | `ALLEGRO_SETTINGS_SERVICE_PORT` (allegro/.env) | User settings and API key management |
+| **Frontend Service** | `${ALLEGRO_FRONTEND_SERVICE_PORT:-3410}` | `${ALLEGRO_FRONTEND_SERVICE_PORT:-3410}` | `ALLEGRO_FRONTEND_SERVICE_PORT` (allegro/.env) | Web interface for users |
 
-**Note**: All ports are exposed on `127.0.0.1` only (localhost) for security. External access is provided via nginx-microservice reverse proxy.
+**Note**: All ports are configured in `allegro/.env`. The values shown are defaults. All ports are exposed on `127.0.0.1` only (localhost) for security. External access is provided via nginx-microservice reverse proxy.
 
 ## Technology Stack
 
@@ -117,15 +119,17 @@ Create a `.env` file in the root directory with the following variables:
 
 ### Service Ports
 
-- `API_GATEWAY_PORT` - API Gateway port (3411)
-- `PRODUCT_SERVICE_PORT` - Product Service port (3402)
-- `ALLEGRO_SERVICE_PORT` - Allegro Service port (3403)
-- `SYNC_SERVICE_PORT` - Sync Service port (3404)
-- `WEBHOOK_SERVICE_PORT` - Webhook Service port (3405)
-- `IMPORT_SERVICE_PORT` - Import Service port (3406)
-- `SCHEDULER_SERVICE_PORT` - Scheduler Service port (3407)
-- `ALLEGRO_SETTINGS_SERVICE_PORT` - Settings Service port (3408)
-- `ALLEGRO_FRONTEND_SERVICE_PORT` - Frontend Service port (3410)
+All ports are configured in `allegro/.env`. The values shown are defaults:
+
+- `API_GATEWAY_PORT` - API Gateway port (default: 3411)
+- `PRODUCT_SERVICE_PORT` - Product Service port (default: 3402)
+- `ALLEGRO_SERVICE_PORT` - Allegro Service port (default: 3403)
+- `SYNC_SERVICE_PORT` - Sync Service port (default: 3404)
+- `WEBHOOK_SERVICE_PORT` - Webhook Service port (default: 3405)
+- `IMPORT_SERVICE_PORT` - Import Service port (default: 3406)
+- `SCHEDULER_SERVICE_PORT` - Scheduler Service port (default: 3407)
+- `ALLEGRO_SETTINGS_SERVICE_PORT` - Settings Service port (default: 3408)
+- `ALLEGRO_FRONTEND_SERVICE_PORT` - Frontend Service port (default: 3410)
 
 ### Allegro API Configuration
 
@@ -168,7 +172,7 @@ For a complete list of all environment variables, see the `.env.example` file in
 
 ## API Endpoints
 
-All requests go through API Gateway at `http://localhost:3411/api`
+All requests go through API Gateway at `http://localhost:${API_GATEWAY_PORT:-3411}/api` (port configured in `allegro/.env`)
 
 ### Product Service Endpoints
 
@@ -276,17 +280,17 @@ docker compose down
 
 ### Health Checks
 
-All services expose `/health` endpoints for monitoring:
+All services expose `/health` endpoints for monitoring (ports configured in `allegro/.env`):
 
-- API Gateway: `http://localhost:3411/health`
-- Product Service: `http://localhost:3402/health`
-- Allegro Service: `http://localhost:3403/health`
-- Sync Service: `http://localhost:3404/health`
-- Webhook Service: `http://localhost:3405/health`
-- Import Service: `http://localhost:3406/health`
-- Scheduler Service: `http://localhost:3407/health`
-- Settings Service: `http://localhost:3408/health`
-- Frontend Service: `http://localhost:3410/health`
+- API Gateway: `http://localhost:${API_GATEWAY_PORT:-3411}/health`
+- Product Service: `http://localhost:${PRODUCT_SERVICE_PORT:-3402}/health`
+- Allegro Service: `http://localhost:${ALLEGRO_SERVICE_PORT:-3403}/health`
+- Sync Service: `http://localhost:${SYNC_SERVICE_PORT:-3404}/health`
+- Webhook Service: `http://localhost:${WEBHOOK_SERVICE_PORT:-3405}/health`
+- Import Service: `http://localhost:${IMPORT_SERVICE_PORT:-3406}/health`
+- Scheduler Service: `http://localhost:${SCHEDULER_SERVICE_PORT:-3407}/health`
+- Settings Service: `http://localhost:${ALLEGRO_SETTINGS_SERVICE_PORT:-3408}/health`
+- Frontend Service: `http://localhost:${ALLEGRO_FRONTEND_SERVICE_PORT:-3410}/health`
 
 ### Blue/Green Deployment
 
@@ -312,7 +316,8 @@ All services use centralized logging via the logging-microservice. Logs are also
 ### Import Products from CSV
 
 ```bash
-curl -X POST http://localhost:3411/api/import/csv \
+# Port configured in allegro/.env: API_GATEWAY_PORT (default: 3411)
+curl -X POST http://localhost:${API_GATEWAY_PORT:-3411}/api/import/csv \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -F "file=@products.csv"
 ```
@@ -320,14 +325,16 @@ curl -X POST http://localhost:3411/api/import/csv \
 ### Sync Database to Allegro
 
 ```bash
-curl -X POST http://localhost:3411/api/sync/db-to-allegro \
+# Port configured in allegro/.env: API_GATEWAY_PORT (default: 3411)
+curl -X POST http://localhost:${API_GATEWAY_PORT:-3411}/api/sync/db-to-allegro \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 ### Create Allegro Offer
 
 ```bash
-curl -X POST http://localhost:3411/api/allegro/offers \
+# Port configured in allegro/.env: API_GATEWAY_PORT (default: 3411)
+curl -X POST http://localhost:${API_GATEWAY_PORT:-3411}/api/allegro/offers \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -352,7 +359,8 @@ npm run test:event-polling
 npm run test:event-polling:bash
 
 # Manual test - trigger event polling
-curl -X POST http://localhost:3411/api/webhooks/poll-events
+# Port configured in allegro/.env: API_GATEWAY_PORT (default: 3411)
+curl -X POST http://localhost:${API_GATEWAY_PORT:-3411}/api/webhooks/poll-events
 ```
 
 See [TESTING_EVENT_POLLING.md](./docs/TESTING_EVENT_POLLING.md) for comprehensive testing instructions.
@@ -401,7 +409,7 @@ See [TESTING_EVENT_POLLING.md](./docs/TESTING_EVENT_POLLING.md) for comprehensiv
 
 The web interface is available at:
 
-- **Development**: `http://localhost:3410`
+- **Development**: `http://localhost:${ALLEGRO_FRONTEND_SERVICE_PORT:-3410}` (port configured in `allegro/.env`)
 - **Production**: Configured via nginx reverse proxy
 
 ### Frontend Features
