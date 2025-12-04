@@ -26,18 +26,18 @@ ssh statex "cd /home/statex/nginx-microservice && mkdir -p certificates/allegro.
 ssh statex "docker exec nginx-microservice nginx -t && docker exec nginx-microservice nginx -s reload"
 
 # 7. Verify deployment
-ssh statex "curl -s https://allegro.statex.cz/health && docker run --rm --network nginx-network alpine/curl:latest curl -s http://allegro:3268/health"
+ssh statex "curl -s https://allegro.statex.cz/health && docker run --rm --network nginx-network alpine/curl:latest curl -s http://allegro:3367/health"
 ```
 
 ## Success Criteria
 
 - Service accessible: `https://allegro.statex.cz/health` returns success
-- Internal access: `http://allegro:3268/health` returns success
+- Internal access: `http://allegro:3367/health` returns success
 - No errors in logs: `docker compose logs allegro-service | grep -i error`
 
 ## Notes
 
-- Port: 3268
+- Port: 3367
 - Internal URL: `http://allegro:3468`
 - External URL: `https://allegro.statex.cz`
 - Service registry: `/home/statex/nginx-microservice/service-registry/allegro.json`

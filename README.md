@@ -27,6 +27,26 @@ The system consists of 9 microservices:
 8. **Settings Service** (Port 3408) - User settings and API key management
 9. **Frontend Service** (Port 3410) - Web interface for users
 
+## 🔌 Port Configuration
+
+**Port Range**: 34xx (allegro application)
+
+All services use the same host and container ports for consistency:
+
+| Service | Host Port | Container Port | Description |
+|---------|-----------|----------------|-------------|
+| **API Gateway** | 3411 | 3411 | Request routing and authentication |
+| **Product Service** | 3402 | 3402 | Product catalog management |
+| **Allegro Service** | 3403 | 3403 | Allegro API integration |
+| **Sync Service** | 3404 | 3404 | Bidirectional synchronization |
+| **Webhook Service** | 3405 | 3405 | Allegro event polling and processing |
+| **Import Service** | 3406 | 3406 | CSV import and transformation |
+| **Scheduler Service** | 3407 | 3407 | Scheduled cron jobs |
+| **Settings Service** | 3408 | 3408 | User settings and API key management |
+| **Frontend Service** | 3410 | 3410 | Web interface for users |
+
+**Note**: All ports are exposed on `127.0.0.1` only (localhost) for security. External access is provided via nginx-microservice reverse proxy.
+
 ## Technology Stack
 
 - **Framework**: NestJS (TypeScript)
