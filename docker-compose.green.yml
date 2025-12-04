@@ -263,7 +263,7 @@ networks:
 
 # Note: External Shared Production Microservices (used by multiple applications):
 # - ../notifications-microservice (Port 3368, Production: https://notifications.statex.cz)
-# - ../logging-microservice (Port 3268, Production: https://logging.statex.cz)
+# - ../logging-microservice (Port 3367, Production: https://logging.statex.cz)
 # - ../auth-microservice (Port 3370, Production: https://auth.statex.cz)
 # - ../database-server (PostgreSQL + Redis, Docker network: db-server-postgres, db-server-redis)
 # - ../nginx-microservice (Reverse proxy, SSL termination, blue/green deployments)

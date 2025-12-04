@@ -39,10 +39,10 @@
    ```
 
 5. **Access services**:
-   - API Gateway: <http://localhost:3411>
-   - Health Check: <http://localhost:3411/health>
-   - Product Service: <http://localhost:3402/health>
-   - Allegro Service: <http://localhost:3403/health>
+   - API Gateway: <http://localhost:${API_GATEWAY_PORT:-3411}> (configured in `allegro/.env`)
+   - Health Check: <http://localhost:${API_GATEWAY_PORT:-3411}/health>
+   - Product Service: <http://localhost:${PRODUCT_SERVICE_PORT:-3402}/health> (configured in `allegro/.env`)
+   - Allegro Service: <http://localhost:${ALLEGRO_SERVICE_PORT:-3403}/health> (configured in `allegro/.env`)
 
 6. **Stop services**:
 
