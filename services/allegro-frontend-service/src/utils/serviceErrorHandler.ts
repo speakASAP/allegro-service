@@ -13,53 +13,56 @@ export interface ServiceErrorInfo {
 
 /**
  * Maps API endpoints to service information
+ * Port configured in allegro/.env: API_GATEWAY_PORT (default: 3411)
  */
+const API_GATEWAY_PORT = parseInt(process.env.API_GATEWAY_PORT || '3411', 10);
+
 const SERVICE_MAP: Record<string, ServiceErrorInfo> = {
   '/settings': {
     serviceName: 'API Gateway',
-    servicePort: 3411,
+    servicePort: API_GATEWAY_PORT,
     servicePath: 'services/api-gateway',
     startCommand: 'cd services/api-gateway && npm run start:dev',
     description: 'Routes requests to backend services',
   },
   '/sync/jobs': {
     serviceName: 'API Gateway',
-    servicePort: 3411,
+    servicePort: API_GATEWAY_PORT,
     servicePath: 'services/api-gateway',
     startCommand: 'cd services/api-gateway && npm run start:dev',
     description: 'Routes requests to backend services',
   },
   '/products': {
     serviceName: 'API Gateway',
-    servicePort: 3411,
+    servicePort: API_GATEWAY_PORT,
     servicePath: 'services/api-gateway',
     startCommand: 'cd services/api-gateway && npm run start:dev',
     description: 'Routes requests to backend services',
   },
   '/allegro': {
     serviceName: 'API Gateway',
-    servicePort: 3411,
+    servicePort: API_GATEWAY_PORT,
     servicePath: 'services/api-gateway',
     startCommand: 'cd services/api-gateway && npm run start:dev',
     description: 'Routes requests to backend services',
   },
   '/import': {
     serviceName: 'API Gateway',
-    servicePort: 3411,
+    servicePort: API_GATEWAY_PORT,
     servicePath: 'services/api-gateway',
     startCommand: 'cd services/api-gateway && npm run start:dev',
     description: 'Routes requests to backend services',
   },
   '/webhooks': {
     serviceName: 'API Gateway',
-    servicePort: 3411,
+    servicePort: API_GATEWAY_PORT,
     servicePath: 'services/api-gateway',
     startCommand: 'cd services/api-gateway && npm run start:dev',
     description: 'Routes requests to backend services',
   },
   '/auth': {
     serviceName: 'API Gateway',
-    servicePort: 3411,
+    servicePort: API_GATEWAY_PORT,
     servicePath: 'services/api-gateway',
     startCommand: 'cd services/api-gateway && npm run start:dev',
     description: 'Routes requests to backend services',
@@ -111,7 +114,7 @@ export function getServiceInfo(url: string): ServiceErrorInfo | null {
   // Default to API Gateway if no match
   return {
     serviceName: 'API Gateway',
-    servicePort: 3411,
+    servicePort: API_GATEWAY_PORT,
     servicePath: 'services/api-gateway',
     startCommand: 'cd services/api-gateway && npm run start:dev',
     description: 'Routes requests to backend services',

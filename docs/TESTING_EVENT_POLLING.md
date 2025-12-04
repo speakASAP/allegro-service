@@ -15,8 +15,8 @@ This document provides comprehensive testing instructions for the Allegro event 
 2. **Environment Variables**: Verify these are set in `.env`:
    - `ALLEGRO_CLIENT_ID`
    - `ALLEGRO_CLIENT_SECRET`
-   - `ALLEGRO_SERVICE_URL` (default: `http://localhost:3403`)
-   - `WEBHOOK_SERVICE_URL` (default: `http://localhost:3405`)
+   - `ALLEGRO_SERVICE_URL` (default: `http://localhost:${ALLEGRO_SERVICE_PORT:-3403}`, configured in `allegro/.env`)
+   - `WEBHOOK_SERVICE_URL` (default: `http://localhost:${WEBHOOK_SERVICE_PORT:-3405}`, configured in `allegro/.env`)
 
 3. **Allegro API Access**: Ensure you have valid Allegro API credentials
 
@@ -48,10 +48,10 @@ chmod +x scripts/test-allegro-api-events.sh
 
 ```bash
 # Webhook Service
-curl http://localhost:3405/health
+curl http://localhost:${WEBHOOK_SERVICE_PORT:-3405}/health  # WEBHOOK_SERVICE_PORT configured in allegro/.env
 
 # Allegro Service
-curl http://localhost:3403/health
+curl http://localhost:${ALLEGRO_SERVICE_PORT:-3403}/health  # ALLEGRO_SERVICE_PORT configured in allegro/.env
 ```
 
 Expected: Both should return `{"status":"ok"}` or similar.
@@ -59,7 +59,7 @@ Expected: Both should return `{"status":"ok"}` or similar.
 ### 2. Test Event Polling Endpoint
 
 ```bash
-curl -X POST http://localhost:3411/api/webhooks/poll-events
+curl -X POST http://localhost:${API_GATEWAY_PORT:-3411}/api/webhooks/poll-events  # API_GATEWAY_PORT configured in allegro/.env
 ```
 
 Expected Response:
@@ -79,7 +79,7 @@ Expected Response:
 #### Offer Events
 
 ```bash
-curl "http://localhost:3403/allegro/events/offers?limit=10"
+curl "http://localhost:${ALLEGRO_SERVICE_PORT:-3403}/allegro/events/offers?limit=10"  # ALLEGRO_SERVICE_PORT configured in allegro/.env
 ```
 
 Expected: Response from Allegro API with events array or empty if no events.
@@ -87,7 +87,7 @@ Expected: Response from Allegro API with events array or empty if no events.
 #### Order Events
 
 ```bash
-curl "http://localhost:3403/allegro/events/orders?limit=10"
+curl "http://localhost:${ALLEGRO_SERVICE_PORT:-3403}/allegro/events/orders?limit=10"  # ALLEGRO_SERVICE_PORT configured in allegro/.env
 ```
 
 Expected: Response from Allegro API or 404 if endpoint doesn't exist (this is OK).
@@ -96,10 +96,10 @@ Expected: Response from Allegro API or 404 if endpoint doesn't exist (this is OK
 
 ```bash
 # Get first batch
-curl "http://localhost:3403/allegro/events/offers?limit=10"
+curl "http://localhost:${ALLEGRO_SERVICE_PORT:-3403}/allegro/events/offers?limit=10"  # ALLEGRO_SERVICE_PORT configured in allegro/.env
 
 # Get next batch using last event ID
-curl "http://localhost:3403/allegro/events/offers?after=LAST_EVENT_ID&limit=10"
+curl "http://localhost:${ALLEGRO_SERVICE_PORT:-3403}/allegro/events/offers?after=LAST_EVENT_ID&limit=10"  # ALLEGRO_SERVICE_PORT configured in allegro/.env
 ```
 
 ### 5. Check Processed Events
@@ -107,7 +107,7 @@ curl "http://localhost:3403/allegro/events/offers?after=LAST_EVENT_ID&limit=10"
 ```bash
 # Requires authentication
 curl -H "Authorization: Bearer YOUR_TOKEN" \
-  "http://localhost:3411/api/webhooks/events?limit=10"
+  "http://localhost:${API_GATEWAY_PORT:-3411}/api/webhooks/events?limit=10"  # API_GATEWAY_PORT configured in allegro/.env
 ```
 
 ## Testing Event Format
@@ -182,7 +182,7 @@ The Allegro API should return events in this format:
 ### 1. Trigger Manual Poll
 
 ```bash
-curl -X POST http://localhost:3411/api/webhooks/poll-events
+curl -X POST http://localhost:${API_GATEWAY_PORT:-3411}/api/webhooks/poll-events  # API_GATEWAY_PORT configured in allegro/.env
 ```
 
 ### 2. Check Logs
@@ -243,7 +243,7 @@ After events are processed, verify:
 
 ```bash
 # Check if scheduler is running
-curl http://localhost:3407/health
+curl http://localhost:${SCHEDULER_SERVICE_PORT:-3407}/health  # SCHEDULER_SERVICE_PORT configured in allegro/.env
 
 # Check scheduler logs
 docker compose logs -f scheduler-service
@@ -334,7 +334,7 @@ In Allegro sandbox:
 ### 3. Poll for Events
 
 ```bash
-curl -X POST http://localhost:3411/api/webhooks/poll-events
+curl -X POST http://localhost:${API_GATEWAY_PORT:-3411}/api/webhooks/poll-events  # API_GATEWAY_PORT configured in allegro/.env
 ```
 
 ### 4. Verify Events
@@ -368,7 +368,7 @@ Check logs for:
 ```bash
 # Trigger multiple polls simultaneously
 for i in {1..5}; do
-  curl -X POST http://localhost:3411/api/webhooks/poll-events &
+  curl -X POST http://localhost:${API_GATEWAY_PORT:-3411}/api/webhooks/poll-events  # API_GATEWAY_PORT configured in allegro/.env &
 done
 wait
 ```

@@ -79,7 +79,7 @@ POST /api/webhooks/poll-events
 ### 1. Manual Test
 
 ```bash
-curl -X POST http://localhost:3411/api/webhooks/poll-events
+curl -X POST http://localhost:${API_GATEWAY_PORT:-3411}/api/webhooks/poll-events  # API_GATEWAY_PORT configured in allegro/.env
 ```
 
 ### 2. Check Logs
@@ -93,7 +93,7 @@ Monitor the webhook service logs for:
 ### 3. Verify Events
 
 ```bash
-curl http://localhost:3411/api/webhooks/events
+curl http://localhost:${API_GATEWAY_PORT:-3411}/api/webhooks/events  # API_GATEWAY_PORT configured in allegro/.env
 ```
 
 ### 4. Check Database

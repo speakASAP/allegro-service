@@ -13,15 +13,15 @@
 Add the following variables to your `.env` file:
 
 ```bash
-# New Service Ports
-ALLEGRO_SETTINGS_SERVICE_PORT=3408
-ALLEGRO_FRONTEND_SERVICE_PORT=3410
+# New Service Ports (configured in allegro/.env)
+ALLEGRO_SETTINGS_SERVICE_PORT=3408  # Default port, can be changed in .env
+ALLEGRO_FRONTEND_SERVICE_PORT=3410  # Default port, can be changed in .env
 
 # Service URLs (for API Gateway routing)
-SETTINGS_SERVICE_URL=http://localhost:3408
+SETTINGS_SERVICE_URL=http://localhost:${ALLEGRO_SETTINGS_SERVICE_PORT:-3408}
 
 # Frontend Configuration
-FRONTEND_API_URL=http://localhost:3411/api
+FRONTEND_API_URL=http://localhost:${API_GATEWAY_PORT:-3411}/api  # API_GATEWAY_PORT configured in allegro/.env
 
 # Encryption Key (for API key encryption in settings service)
 # IMPORTANT: Use a secure 32+ character key in production
@@ -65,21 +65,21 @@ docker compose ps
 
 Verify health endpoints:
 
-- Settings Service: `curl http://localhost:3408/health`
-- Frontend Service: `curl http://localhost:3410/health`
-- API Gateway: `curl http://localhost:3411/health`
+- Settings Service: `curl http://localhost:${ALLEGRO_SETTINGS_SERVICE_PORT:-3408}/health` (configured in allegro/.env)
+- Frontend Service: `curl http://localhost:${ALLEGRO_FRONTEND_SERVICE_PORT:-3410}/health` (configured in allegro/.env)
+- API Gateway: `curl http://localhost:${API_GATEWAY_PORT:-3411}/health` (configured in allegro/.env)
 
 ## Step 5: Access the Frontend
 
 Open your browser and navigate to:
 
-- **Frontend**: <http://localhost:3410>
-- **API Gateway**: <http://localhost:3411/api>
+- **Frontend**: <http://localhost:${ALLEGRO_FRONTEND_SERVICE_PORT:-3410}> (configured in allegro/.env)
+- **API Gateway**: <http://localhost:${API_GATEWAY_PORT:-3411}/api> (configured in allegro/.env)
 
 ## Step 6: Test the Application
 
 1. **Register a new user**:
-   - Go to <http://localhost:3410>
+   - Go to <http://localhost:${ALLEGRO_FRONTEND_SERVICE_PORT:-3410}> (configured in allegro/.env)
    - Click "Get Started" or "Create Your Account"
    - Fill in the registration form
 
@@ -201,4 +201,4 @@ For production deployment:
 - The frontend uses React Router for navigation
 - Authentication is handled via the external auth-microservice
 - All services follow the "allegro-" naming convention for containers
-- Services use ports 3408 (settings) and 3410 (frontend) as specified
+- Services use ports ${ALLEGRO_SETTINGS_SERVICE_PORT:-3408} (settings) and ${ALLEGRO_FRONTEND_SERVICE_PORT:-3410} (frontend) as configured in allegro/.env
