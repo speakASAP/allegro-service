@@ -352,7 +352,8 @@ Check the database and logs to ensure events were:
 
 ```bash
 # Poll with larger limit
-curl "http://localhost:3403/allegro/events/offers?limit=1000"
+# Port configured in allegro/.env: ALLEGRO_SERVICE_PORT (default: 3403)
+curl "http://localhost:${ALLEGRO_SERVICE_PORT:-3403}/allegro/events/offers?limit=1000"
 ```
 
 ### 2. Monitor Processing Time

@@ -21,7 +21,7 @@
 - In `services/allegro-frontend-service/src/services/api.ts`, the API URL resolution logic is:
   - Use `import.meta.env.VITE_API_URL` if defined at build time.
   - Else, if `window.location.origin` contains `allegro.statex.cz` or `statex.cz`, use `${origin}/api`.
-  - Else, fall back to `http://localhost:3411/api` for local development.
+  - Else, fall back to `http://localhost:${API_GATEWAY_PORT:-3411}/api` for local development (port configured in `allegro/.env`).
 - This means the production bundle was built **without a correct `VITE_API_URL`/`FRONTEND_API_URL`**, or with an outdated configuration, causing the compiled JavaScript to call `http://localhost:${API_GATEWAY_PORT:-3411}/...` from the client browser (port configured in `allegro/.env`).
 - From the browser's perspective, `localhost:${API_GATEWAY_PORT:-3411}` refers to the **user's machine**, not the production server, so the request fails with `ERR_CONNECTION_REFUSED` even though the API Gateway is healthy on the server.
 
@@ -63,7 +63,7 @@
 
 **Root Causes Found**:
 
-1. **Frontend API URL**: Frontend was built with development fallback (`http://localhost:3411/api`) instead of production URL.
+1. **Frontend API URL**: Frontend was built with development fallback (`http://localhost:${API_GATEWAY_PORT:-3411}/api`, port configured in `allegro/.env`) instead of production URL.
 2. **Auth Service Connectivity**: API Gateway couldn't reach auth service at `https://auth.statex.cz` (timeout errors).
 3. **Nginx Routing**: Nginx `/api/` location block was using variables in `proxy_pass` which caused 404 errors, and was missing proper upstream configuration with `resolve` directive.
 
