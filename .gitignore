@@ -4,6 +4,7 @@
 # Dependencies
 node_modules/
 package-lock.json
+!services/allegro-frontend-service/package-lock.json
 yarn.lock
 
 # Build outputs
