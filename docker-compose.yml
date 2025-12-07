@@ -180,7 +180,7 @@ services:
     env_file:
       - .env
     ports:
-      - ${SCHEDULER_SERVICE_PORT:-3407}:${SCHEDULER_SERVICE_PORT:-3407}"
+      - ${SCHEDULER_SERVICE_PORT:-3407}:${SCHEDULER_SERVICE_PORT:-3407}
     volumes:
       - ./logs:/app/logs
     environment:
@@ -208,7 +208,7 @@ services:
     env_file:
       - .env
     ports:
-      - ${ALLEGRO_SETTINGS_SERVICE_PORT:-3408}:${ALLEGRO_SETTINGS_SERVICE_PORT:-3408}"
+      - ${ALLEGRO_SETTINGS_SERVICE_PORT:-3408}:${ALLEGRO_SETTINGS_SERVICE_PORT:-3408}
     volumes:
       - ./logs:/app/logs
     environment:
@@ -236,12 +236,12 @@ services:
     container_name: allegro-frontend-service-blue
     restart: unless-stopped
     ports:
-      - ${ALLEGRO_FRONTEND_SERVICE_PORT:-3410}:3410"
+      - ${ALLEGRO_FRONTEND_SERVICE_PORT:-3410}:3410
     networks:
       - nginx-network
     healthcheck:
       # Port configured in allegro/.env: ALLEGRO_FRONTEND_SERVICE_PORT (default: 3410)
-      test: ["CMD", "curl", "-f", `http://localhost:${ALLEGRO_FRONTEND_SERVICE_PORT:-3410}/health`]
+      test: ["CMD", "curl", "-f", "http://localhost:${ALLEGRO_FRONTEND_SERVICE_PORT:-3410}/health"]
       interval: 10s
       timeout: 10s
       retries: 2
