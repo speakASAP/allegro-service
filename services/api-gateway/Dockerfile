@@ -33,13 +33,13 @@ WORKDIR /app
 # Copy entire shared package (needed for file: reference to work)
 COPY --from=builder /app/shared ./shared
 
-# Copy built service
-COPY --from=builder /app/services/api-gateway/dist ./dist
-COPY --from=builder /app/services/api-gateway/package*.json ./
-COPY --from=builder /app/services/api-gateway/node_modules ./node_modules
+# Copy service files maintaining directory structure for file: references
+COPY --from=builder /app/services/api-gateway ./services/api-gateway
 
 # Copy root package.json for shared dependencies
 COPY --from=builder /app/package*.json ./
+
+WORKDIR /app/services/api-gateway
 
 EXPOSE 3411
 
