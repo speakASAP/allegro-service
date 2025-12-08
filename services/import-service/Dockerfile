@@ -80,6 +80,15 @@ COPY --from=builder /app/services/import-service/dist ./dist
 COPY --from=builder /app/shared/dist ./shared/dist
 COPY --from=builder /app/shared/package.json ./shared/package.json
 
+# Install service dependencies to resolve file:../../shared reference
+WORKDIR /app/services/import-service
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --omit=dev --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000 || \
+    (sleep 10 && npm ci --omit=dev --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000) || \
+    (sleep 20 && npm ci --omit=dev --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000)
+
+WORKDIR /app
+
 # Set NODE_PATH for module resolution
 ENV NODE_PATH=/app/shared/node_modules:/app/node_modules
 
