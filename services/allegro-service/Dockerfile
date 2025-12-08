@@ -7,10 +7,10 @@ WORKDIR /app
 COPY shared/ ./shared/
 WORKDIR /app/shared
 RUN npm ci
-# Copy prisma schema and generate Prisma client into shared/node_modules/.prisma/client
+# Copy prisma schema to original location and generate Prisma client
 WORKDIR /app
-COPY prisma ./shared/prisma
-WORKDIR /app/shared/prisma
+COPY prisma ./prisma
+WORKDIR /app/prisma
 RUN npx prisma@5.7.1 generate
 WORKDIR /app/shared
 RUN npm run build
