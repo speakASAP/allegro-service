@@ -75,14 +75,14 @@ RUN --mount=type=cache,target=/root/.npm \
 # Copy Prisma client from builder
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
-# Copy compiled code from builder (NO source code, NO dev deps)
-COPY --from=builder /app/services/webhook-service/dist ./services/webhook-service/dist
+# Copy shared dist and package.json
 COPY --from=builder /app/shared/dist ./shared/dist
 COPY --from=builder /app/shared/package.json ./shared/package.json
 
 # Install service dependencies to resolve file:../../shared reference
 WORKDIR /app/services/webhook-service
 COPY --from=builder /app/services/webhook-service/package.json ./package.json
+COPY --from=builder /app/services/webhook-service/dist ./dist
 RUN --mount=type=cache,target=/root/.npm \
     npm install --omit=dev --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000 || \
     (sleep 10 && npm install --omit=dev --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000) || \
