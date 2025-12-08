@@ -300,12 +300,6 @@ services:
       retries: 2
 
 networks:
-    deploy:
-      resources:
-        limits:
-          memory: 200M
-        reservations:
-          memory: 70M
   default:
     driver: bridge
   nginx-network:
