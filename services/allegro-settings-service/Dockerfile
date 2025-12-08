@@ -33,6 +33,9 @@ WORKDIR /app
 # Copy entire shared package (needed for file: reference to work)
 COPY --from=builder /app/shared ./shared
 
+# Copy Prisma schema (needed for Prisma client initialization)
+COPY --from=builder /app/prisma ./prisma
+
 # Copy service files maintaining directory structure for file: references
 COPY --from=builder /app/services/allegro-settings-service ./services/allegro-settings-service
 
