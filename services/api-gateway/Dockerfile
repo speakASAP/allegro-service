@@ -10,8 +10,7 @@ RUN npm ci
 # Copy prisma schema to original location and generate Prisma client
 WORKDIR /app
 COPY prisma ./prisma
-WORKDIR /app/prisma
-RUN npx prisma@5.7.1 generate
+RUN npx prisma@5.7.1 generate --schema=./prisma/schema.prisma
 WORKDIR /app/shared
 RUN npm run build
 
