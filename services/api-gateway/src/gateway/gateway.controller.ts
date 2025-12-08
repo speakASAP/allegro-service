@@ -69,15 +69,9 @@ export class GatewayController {
 
   /**
    * Route auth requests (no auth required for register/login)
-   * Match both /api/auth and /api/auth/*
+   * Use a more specific pattern that matches /api/auth/login, /api/auth/register, etc.
    */
-  @All('auth')
-  async authBaseRoute(@Req() req: ExpressRequest, @Res() res: ExpressResponse) {
-    const path = req.url.replace('/api/auth', '') || '';
-    return this.routeRequest('auth', `/auth${path}`, req, res);
-  }
-
-  @All('auth/*')
+  @All('auth/:path*')
   async authRoute(@Req() req: ExpressRequest, @Res() res: ExpressResponse) {
     const path = req.url.replace('/api/auth', '');
     return this.routeRequest('auth', `/auth${path}`, req, res);
