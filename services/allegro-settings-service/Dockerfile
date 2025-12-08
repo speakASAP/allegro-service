@@ -21,7 +21,7 @@ COPY package*.json ./
 WORKDIR /app/services/allegro-settings-service
 RUN npm ci
 WORKDIR /app
-RUN npx prisma generate
+RUN npx prisma@5.7.1 generate
 WORKDIR /app/services/allegro-settings-service
 RUN npm run build
 
