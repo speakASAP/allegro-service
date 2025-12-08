@@ -33,13 +33,13 @@ WORKDIR /app
 # Copy entire shared package (needed for file: reference to work)
 COPY --from=builder /app/shared ./shared
 
-# Copy built service
-COPY --from=builder /app/services/import-service/dist ./dist
-COPY --from=builder /app/services/import-service/package*.json ./
-COPY --from=builder /app/services/import-service/node_modules ./node_modules
+# Copy service files maintaining directory structure for file: references
+COPY --from=builder /app/services/import-service ./services/import-service
 
 # Copy root package.json for shared dependencies
 COPY --from=builder /app/package*.json ./
+
+WORKDIR /app/services/import-service
 
 EXPOSE 3406
 
