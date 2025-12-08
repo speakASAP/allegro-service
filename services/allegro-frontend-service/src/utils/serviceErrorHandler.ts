@@ -14,8 +14,14 @@ export interface ServiceErrorInfo {
 /**
  * Maps API endpoints to service information
  * Port configured in allegro/.env: API_GATEWAY_PORT (default: 3411)
+ * Note: In Vite, use import.meta.env for environment variables (must be prefixed with VITE_)
  */
-const API_GATEWAY_PORT = parseInt(process.env.API_GATEWAY_PORT || '3411', 10);
+const API_GATEWAY_PORT = parseInt(
+  import.meta.env.VITE_API_GATEWAY_PORT || 
+  import.meta.env.API_GATEWAY_PORT || 
+  '3411', 
+  10
+);
 
 const SERVICE_MAP: Record<string, ServiceErrorInfo> = {
   '/settings': {

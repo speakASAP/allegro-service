@@ -179,6 +179,7 @@ export class GatewayController {
       res.status(200).json(response);
     } catch (error: any) {
       const duration = Date.now() - startTime;
+      const errorStatus = error.response?.status || error.status;
       const errorDetails = {
         serviceName,
         method,
@@ -188,12 +189,32 @@ export class GatewayController {
         errorType: error.constructor?.name,
         errorMessage: error.message,
         errorCode: error.code,
-        errorStatus: error.response?.status || error.status,
+        errorStatus,
         errorData: error.response?.data,
       };
 
-      this.sharedLogger.error(`[${requestId}] Request failed`, errorDetails);
-      this.logger.error(`[${requestId}] ${method} ${req.originalUrl} failed: ${error.message}`, errorDetails);
+      // Handle 401 Unauthorized - don't log as error for auth endpoints (expected response)
+      if (errorStatus === 401 && serviceName === 'auth') {
+        // Pass through the 401 response from auth service
+        const errorData = error.response?.data || { message: 'Invalid credentials', error: 'Unauthorized' };
+        this.sharedLogger.info(`[${requestId}] Authentication failed (expected)`, {
+          serviceName,
+          method,
+          path,
+          duration: `${duration}ms`,
+        });
+        this.logger.debug(`[${requestId}] ${method} ${req.originalUrl} - 401 (authentication failed)`);
+        res.status(401).json({
+          success: false,
+          error: {
+            code: 'UNAUTHORIZED',
+            message: errorData.message || 'Invalid credentials',
+            statusCode: 401,
+          },
+        });
+        return;
+      }
+
       // Handle UnauthorizedException properly
       if (error instanceof UnauthorizedException) {
         res.status(401).json({
@@ -205,6 +226,10 @@ export class GatewayController {
         });
         return;
       }
+
+      // Log other errors
+      this.sharedLogger.error(`[${requestId}] Request failed`, errorDetails);
+      this.logger.error(`[${requestId}] ${method} ${req.originalUrl} failed: ${error.message}`, errorDetails);
 
       // Handle timeout errors (auth service unreachable)
       if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {

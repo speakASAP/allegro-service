@@ -42,7 +42,15 @@ export class GatewayService {
       allegro: getServiceUrl('ALLEGRO_SERVICE_URL', process.env.ALLEGRO_SERVICE_PORT || '3403'),
       import: getServiceUrl('IMPORT_SERVICE_URL', process.env.IMPORT_SERVICE_PORT || '3406'),
       settings: getServiceUrl('SETTINGS_SERVICE_PORT', process.env.ALLEGRO_SETTINGS_SERVICE_PORT || '3408'),
-      auth: this.configService.get<string>('AUTH_SERVICE_URL') || this.throwConfigError('AUTH_SERVICE_URL'),
+      // In development, use localhost (via SSH tunnel) if AUTH_SERVICE_PORT is set or AUTH_SERVICE_URL is localhost
+      // Otherwise fallback to AUTH_SERVICE_URL (HTTPS for production)
+      auth: isDevelopment 
+        ? (this.configService.get<string>('AUTH_SERVICE_PORT') 
+            ? `http://localhost:${this.configService.get<string>('AUTH_SERVICE_PORT')}`
+            : (this.configService.get<string>('AUTH_SERVICE_URL')?.startsWith('http://localhost')
+                ? this.configService.get<string>('AUTH_SERVICE_URL')
+                : `http://localhost:3371`)) // Default to SSH tunnel port in development
+        : (this.configService.get<string>('AUTH_SERVICE_URL') || this.throwConfigError('AUTH_SERVICE_URL')),
     };
 
     // Log all service URLs at startup
