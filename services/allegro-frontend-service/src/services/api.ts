@@ -23,7 +23,11 @@ const getApiUrl = (): string => {
   }
   
   // Development fallback
-  return `http://localhost:${process.env.API_GATEWAY_PORT || '3411'}/api`;
+  // In Vite, use import.meta.env for environment variables (must be prefixed with VITE_)
+  const apiGatewayPort = import.meta.env.VITE_API_GATEWAY_PORT || 
+    import.meta.env.API_GATEWAY_PORT || 
+    '3411';
+  return `http://localhost:${apiGatewayPort}/api`;
 };
 
 const API_URL = getApiUrl();
@@ -268,10 +272,19 @@ api.interceptors.response.use(
 
 // Helper functions
 function getServiceNameFromUrl(url: string): string {
-  const apiGatewayPort = process.env.API_GATEWAY_PORT || '3411';
-  const allegroServicePort = process.env.ALLEGRO_SERVICE_PORT || '3403';
-  const importServicePort = process.env.IMPORT_SERVICE_PORT || '3406';
-  const settingsServicePort = process.env.ALLEGRO_SETTINGS_SERVICE_PORT || '3408';
+  // In Vite, use import.meta.env for environment variables (must be prefixed with VITE_)
+  const apiGatewayPort = import.meta.env.VITE_API_GATEWAY_PORT || 
+    import.meta.env.API_GATEWAY_PORT || 
+    '3411';
+  const allegroServicePort = import.meta.env.VITE_ALLEGRO_SERVICE_PORT || 
+    import.meta.env.ALLEGRO_SERVICE_PORT || 
+    '3403';
+  const importServicePort = import.meta.env.VITE_IMPORT_SERVICE_PORT || 
+    import.meta.env.IMPORT_SERVICE_PORT || 
+    '3406';
+  const settingsServicePort = import.meta.env.VITE_ALLEGRO_SETTINGS_SERVICE_PORT || 
+    import.meta.env.ALLEGRO_SETTINGS_SERVICE_PORT || 
+    '3408';
   
   if (url.includes(`:${apiGatewayPort}`)) return 'API Gateway';
   if (url.includes(`:${allegroServicePort}`)) return 'Allegro Service';
@@ -282,7 +295,10 @@ function getServiceNameFromUrl(url: string): string {
 
 function getPortFromUrl(url: string): number {
   const match = url.match(/:(\d+)/);
-  return match ? parseInt(match[1], 10) : parseInt(process.env.API_GATEWAY_PORT || '3411', 10);
+  const apiGatewayPort = import.meta.env.VITE_API_GATEWAY_PORT || 
+    import.meta.env.API_GATEWAY_PORT || 
+    '3411';
+  return match ? parseInt(match[1], 10) : parseInt(apiGatewayPort, 10);
 }
 
 export default api;
