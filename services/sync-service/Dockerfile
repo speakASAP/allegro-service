@@ -82,6 +82,8 @@ COPY --from=builder /app/shared/package.json ./shared/package.json
 
 # Install service dependencies to resolve file:../../shared reference
 WORKDIR /app/services/sync-service
+COPY --from=builder /app/services/sync-service/package.json ./package.json
+COPY --from=builder /app/services/sync-service/package-lock.json* ./package-lock.json
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --omit=dev --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000 || \
     (sleep 10 && npm ci --omit=dev --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000) || \
