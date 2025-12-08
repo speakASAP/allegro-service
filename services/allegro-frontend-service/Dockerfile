@@ -11,6 +11,7 @@ COPY services/allegro-frontend-service/tailwind.config.js ./
 COPY services/allegro-frontend-service/postcss.config.js ./
 COPY services/allegro-frontend-service/src ./src
 COPY services/allegro-frontend-service/index.html ./
+COPY services/allegro-frontend-service/public ./public
 
 # Install dependencies and build
 RUN npm ci && npm run build

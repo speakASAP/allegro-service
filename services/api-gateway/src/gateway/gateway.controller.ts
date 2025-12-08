@@ -77,6 +77,22 @@ export class GatewayController {
   }
 
   /**
+   * Catch-all for /api/ root - return helpful error
+   */
+  @All()
+  async apiRoot(@Req() req: ExpressRequest, @Res() res: ExpressResponse) {
+    res.status(404).json({
+      success: false,
+      error: {
+        code: 'NOT_FOUND',
+        message: `Cannot ${req.method} ${req.url}. Available endpoints: /api/auth/*, /api/allegro/*, /api/import/*, /api/settings/*`,
+      },
+      path: req.url,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  /**
    * Helper to route request
    */
   private async routeRequest(
