@@ -61,7 +61,7 @@ export class AllegroOAuthService {
   generateAuthorizationUrl(
     clientId: string,
     redirectUri: string,
-    scopes: string[] = ['sale:offers:read', 'sale:offers:write'],
+    scopes?: string[],
   ): { url: string; state: string; codeVerifier: string } {
     // Generate state for CSRF protection
     const state = crypto.randomBytes(16).toString('hex');
@@ -69,23 +69,36 @@ export class AllegroOAuthService {
     // Generate PKCE
     const { codeVerifier, codeChallenge } = this.generatePKCE();
 
+    // Get scopes from config or use defaults, or omit if not configured
+    let finalScopes = scopes;
+    if (!finalScopes) {
+      const scopeConfig = this.configService.get<string>('ALLEGRO_OAUTH_SCOPES');
+      if (scopeConfig) {
+        finalScopes = scopeConfig.split(',').map(s => s.trim()).filter(s => s.length > 0);
+      }
+    }
+
     // Build authorization URL
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: clientId,
       redirect_uri: redirectUri,
-      scope: scopes.join(' '),
       state: state,
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
     });
+
+    // Only add scope parameter if scopes are provided
+    if (finalScopes && finalScopes.length > 0) {
+      params.append('scope', finalScopes.join(' '));
+    }
 
     const url = `${this.authorizeUrl}?${params.toString()}`;
 
     this.logger.debug('Generated Allegro OAuth authorization URL', {
       clientId: clientId.substring(0, 8) + '...',
       redirectUri,
-      scopes,
+      scopes: finalScopes || 'none (scope parameter omitted)',
     });
 
     return { url, state, codeVerifier };
