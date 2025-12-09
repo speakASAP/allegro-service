@@ -1,4 +1,20 @@
-const { PrismaClient } = require('../shared/node_modules/.prisma/client');
+// Try to find Prisma client in common locations
+let PrismaClient;
+try {
+  PrismaClient = require('@prisma/client').PrismaClient;
+} catch (e) {
+  try {
+    PrismaClient = require('../shared/node_modules/.prisma/client').PrismaClient;
+  } catch (e2) {
+    try {
+      PrismaClient = require('./services/allegro-service/node_modules/@prisma/client').PrismaClient;
+    } catch (e3) {
+      console.error('Could not find Prisma client');
+      process.exit(1);
+    }
+  }
+}
+
 require('dotenv').config();
 
 const prisma = new PrismaClient({
