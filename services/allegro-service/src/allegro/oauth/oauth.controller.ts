@@ -103,8 +103,17 @@ export class OAuthController {
       redirectUri,
     );
 
-    // Store state and code verifier in database
-    // Clear any old OAuth state first to prevent conflicts
+    // Clear any old OAuth state first to prevent conflicts with old encrypted data
+    // Then store new state and code verifier in database
+    await this.prisma.userSettings.update({
+      where: { userId },
+      data: {
+        allegroOAuthState: null,
+        allegroOAuthCodeVerifier: null,
+      },
+    });
+
+    // Now store the new state and code verifier
     await this.prisma.userSettings.update({
       where: { userId },
       data: {
