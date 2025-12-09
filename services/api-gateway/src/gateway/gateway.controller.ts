@@ -80,17 +80,21 @@ export class GatewayController {
   /**
    * Route auth requests (no auth required for register/login)
    * Must be before catch-all to match correctly
-   * Log all incoming requests for debugging
+   * Use explicit routes for common endpoints and catch-all for others
    */
-  @All('auth')
-  async authBaseRoute(@Req() req: ExpressRequest, @Res() res: ExpressResponse) {
-    this.sharedLogger.info(`[Auth Base Route] Matched: ${req.method} ${req.originalUrl}`, {
-      url: req.url,
-      originalUrl: req.originalUrl,
-      path: req.path,
-    });
-    const path = req.url.replace('/api/auth', '') || '';
-    return this.routeRequest('auth', `/auth${path}`, req, res);
+  @All('auth/login')
+  async authLogin(@Req() req: ExpressRequest, @Res() res: ExpressResponse) {
+    return this.routeRequest('auth', '/auth/login', req, res);
+  }
+
+  @All('auth/register')
+  async authRegister(@Req() req: ExpressRequest, @Res() res: ExpressResponse) {
+    return this.routeRequest('auth', '/auth/register', req, res);
+  }
+
+  @All('auth/refresh')
+  async authRefresh(@Req() req: ExpressRequest, @Res() res: ExpressResponse) {
+    return this.routeRequest('auth', '/auth/refresh', req, res);
   }
 
   @All('auth/*')
@@ -101,6 +105,17 @@ export class GatewayController {
       path: req.path,
     });
     const path = req.url.replace('/api/auth', '');
+    return this.routeRequest('auth', `/auth${path}`, req, res);
+  }
+
+  @All('auth')
+  async authBaseRoute(@Req() req: ExpressRequest, @Res() res: ExpressResponse) {
+    this.sharedLogger.info(`[Auth Base Route] Matched: ${req.method} ${req.originalUrl}`, {
+      url: req.url,
+      originalUrl: req.originalUrl,
+      path: req.path,
+    });
+    const path = req.url.replace('/api/auth', '') || '';
     return this.routeRequest('auth', `/auth${path}`, req, res);
   }
 
