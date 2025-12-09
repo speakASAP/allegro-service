@@ -24,12 +24,34 @@ export class SettingsService {
     private readonly configService: ConfigService,
   ) {
     // Get encryption key from environment - required for security
-    this.encryptionKey = this.configService.get<string>('ENCRYPTION_KEY');
+    // Read directly from .env file to avoid dotenv parsing issues with special characters (#, $, etc.)
+    const fs = require('fs');
+    const path = require('path');
+    const envPath = path.join(process.cwd(), '../../.env');
+    let encryptionKey = this.configService.get<string>('ENCRYPTION_KEY');
+    
+    // If key is too short (likely truncated by dotenv), read directly from .env file
+    if (!encryptionKey || encryptionKey.length < 32) {
+      try {
+        const envContent = fs.readFileSync(envPath, 'utf8');
+        const keyMatch = envContent.match(/^ENCRYPTION_KEY=(.+)$/m);
+        if (keyMatch) {
+          // Remove quotes if present and trim
+          encryptionKey = keyMatch[1].trim().replace(/^["']|["']$/g, '');
+        }
+      } catch (error) {
+        this.logger.error('Failed to read ENCRYPTION_KEY from .env file', error);
+      }
+    }
+    
+    this.encryptionKey = encryptionKey;
     if (!this.encryptionKey) {
       throw new Error('ENCRYPTION_KEY must be configured in .env file');
     }
+    // Log key length for debugging (first 10 chars only for security)
+    this.logger.log(`ENCRYPTION_KEY loaded, length: ${this.encryptionKey.length}, first 10 chars: ${this.encryptionKey.substring(0, 10)}`);
     if (this.encryptionKey.length < 32) {
-      throw new Error('ENCRYPTION_KEY must be at least 32 characters long');
+      throw new Error(`ENCRYPTION_KEY must be at least 32 characters long (current length: ${this.encryptionKey.length})`);
     }
   }
 
