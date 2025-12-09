@@ -28,8 +28,15 @@ export class AllegroOAuthService {
     private readonly configService: ConfigService,
     private readonly logger: LoggerService,
   ) {
-    this.authorizeUrl = this.configService.get<string>('ALLEGRO_OAUTH_AUTHORIZE_URL') || 'https://allegro.pl/auth/oauth/authorize';
-    this.tokenUrl = this.configService.get<string>('ALLEGRO_OAUTH_TOKEN_URL') || 'https://allegro.pl/auth/oauth/token';
+    this.authorizeUrl = this.configService.get<string>('ALLEGRO_OAUTH_AUTHORIZE_URL');
+    this.tokenUrl = this.configService.get<string>('ALLEGRO_OAUTH_TOKEN_URL');
+    
+    if (!this.authorizeUrl) {
+      throw new Error('ALLEGRO_OAUTH_AUTHORIZE_URL must be configured in .env file');
+    }
+    if (!this.tokenUrl) {
+      throw new Error('ALLEGRO_OAUTH_TOKEN_URL must be configured in .env file');
+    }
   }
 
   /**
