@@ -145,7 +145,7 @@ export class OAuthController {
       return res.redirect(`${this.getFrontendUrl()}/auth/callback?error=missing_parameters`);
     }
 
-    this.logger.log('Processing OAuth callback', { state });
+    this.logger.log('Processing OAuth callback', { state, code: code.substring(0, 10) + '...' });
 
     try {
       // Find user by OAuth state
@@ -157,6 +157,8 @@ export class OAuthController {
         this.logger.error('OAuth state not found', { state });
         return res.redirect(`${this.getFrontendUrl()}/auth/callback?error=invalid_state`);
       }
+
+      this.logger.log('Found OAuth state for user', { userId: settings.userId, state });
 
       // Validate state
       if (!this.oauthService.validateState(state, settings.allegroOAuthState || '')) {
