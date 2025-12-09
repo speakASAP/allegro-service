@@ -14,9 +14,10 @@ COPY services/allegro-frontend-service/index.html ./
 COPY services/allegro-frontend-service/public ./public
 
 # Install dependencies and build
-# Set production API URL as build-time environment variable
-ARG VITE_API_URL=https://allegro.statex.cz/api
-ENV VITE_API_URL=${VITE_API_URL}
+# Set production API URL as build-time environment variable from .env
+# FRONTEND_API_URL should be set in .env (e.g., https://allegro.statex.cz/api for prod, http://localhost:3411/api for dev)
+ARG FRONTEND_API_URL
+ENV VITE_API_URL=${FRONTEND_API_URL}
 RUN npm ci && npm run build
 
 # Production stage with nginx

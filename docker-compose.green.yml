@@ -142,6 +142,8 @@ services:
     build:
       context: .
       dockerfile: services/allegro-frontend-service/Dockerfile
+      args:
+        - FRONTEND_API_URL=${FRONTEND_API_URL}
     container_name: allegro-frontend-service-green
     ports:
       - "${ALLEGRO_FRONTEND_SERVICE_PORT:-3410}:3410"

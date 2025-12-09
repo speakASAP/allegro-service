@@ -28,20 +28,40 @@ export class GatewayService {
     const isDevelopment = nodeEnv === 'development';
     
     // Helper to convert Docker hostnames to localhost in development
-    const getServiceUrl = (envVar: string, defaultPort: string, serviceName?: string): string => {
+    const getServiceUrl = (envVar: string, portEnvVar: string, serviceName?: string): string => {
       const url = this.configService.get<string>(envVar);
+      const port = this.configService.get<string>(portEnvVar);
+      
       if (url && isDevelopment && url.includes('-service')) {
         // Replace Docker service hostname with localhost in development
-        const port = url.match(/:(\d+)/)?.[1] || defaultPort;
+        const extractedPort = url.match(/:(\d+)/)?.[1] || port;
+        if (extractedPort) {
+          return `http://localhost:${extractedPort}`;
+        }
+      }
+      
+      if (url) {
+        return url;
+      }
+      
+      // If no URL but we have a port, construct localhost URL
+      if (port) {
         return `http://localhost:${port}`;
       }
-      return url || (serviceName ? this.throwConfigError(envVar) : `http://localhost:${defaultPort}`);
+      
+      // If service name provided, require configuration
+      if (serviceName) {
+        this.throwConfigError(`${envVar} or ${portEnvVar}`);
+      }
+      
+      // Fallback (should not happen if serviceName is provided)
+      return '';
     };
 
     this.serviceUrls = {
-      allegro: getServiceUrl('ALLEGRO_SERVICE_URL', process.env.ALLEGRO_SERVICE_PORT || '3403'),
-      import: getServiceUrl('IMPORT_SERVICE_URL', process.env.IMPORT_SERVICE_PORT || '3406'),
-      settings: getServiceUrl('SETTINGS_SERVICE_PORT', process.env.ALLEGRO_SETTINGS_SERVICE_PORT || '3408'),
+      allegro: getServiceUrl('ALLEGRO_SERVICE_URL', 'ALLEGRO_SERVICE_PORT', 'allegro'),
+      import: getServiceUrl('IMPORT_SERVICE_URL', 'IMPORT_SERVICE_PORT', 'import'),
+      settings: getServiceUrl('SETTINGS_SERVICE_URL', 'ALLEGRO_SETTINGS_SERVICE_PORT', 'settings'),
       // In development, use localhost (via SSH tunnel) if AUTH_SERVICE_PORT is set or AUTH_SERVICE_URL is localhost
       // Otherwise fallback to AUTH_SERVICE_URL (HTTPS for production)
       auth: isDevelopment 
@@ -49,7 +69,7 @@ export class GatewayService {
             ? `http://localhost:${this.configService.get<string>('AUTH_SERVICE_PORT')}`
             : (this.configService.get<string>('AUTH_SERVICE_URL')?.startsWith('http://localhost')
                 ? this.configService.get<string>('AUTH_SERVICE_URL')
-                : `http://localhost:3371`)) // Default to SSH tunnel port in development
+                : (this.configService.get<string>('AUTH_SERVICE_URL') || this.throwConfigError('AUTH_SERVICE_URL'))))
         : (this.configService.get<string>('AUTH_SERVICE_URL') || this.throwConfigError('AUTH_SERVICE_URL')),
     };
 
@@ -84,7 +104,15 @@ export class GatewayService {
         'Content-Type': 'application/json',
         ...headers,
       },
-      timeout: parseInt(this.configService.get<string>('GATEWAY_TIMEOUT') || this.configService.get<string>('HTTP_TIMEOUT') || '10000'),
+      timeout: (() => {
+        const gatewayTimeout = this.configService.get<string>('GATEWAY_TIMEOUT');
+        const httpTimeout = this.configService.get<string>('HTTP_TIMEOUT');
+        const timeout = gatewayTimeout || httpTimeout;
+        if (!timeout) {
+          throw new Error('GATEWAY_TIMEOUT or HTTP_TIMEOUT must be configured in .env file');
+        }
+        return parseInt(timeout);
+      })(),
     };
 
     // Log request details

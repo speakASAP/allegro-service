@@ -23,10 +23,13 @@ export class SettingsService {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
   ) {
-    // Get encryption key from environment or generate a default (should be set in production)
-    this.encryptionKey = this.configService.get<string>('ENCRYPTION_KEY') || 'default-encryption-key-change-in-production-32chars!!';
+    // Get encryption key from environment - required for security
+    this.encryptionKey = this.configService.get<string>('ENCRYPTION_KEY');
+    if (!this.encryptionKey) {
+      throw new Error('ENCRYPTION_KEY must be configured in .env file');
+    }
     if (this.encryptionKey.length < 32) {
-      this.logger.warn('ENCRYPTION_KEY is too short, using default (not secure for production)');
+      throw new Error('ENCRYPTION_KEY must be at least 32 characters long');
     }
   }
 
@@ -253,7 +256,10 @@ export class SettingsService {
    */
   async validateAllegroKeys(userId: string, dto: ValidateAllegroKeysDto): Promise<{ valid: boolean; message?: string }> {
     // Always use real ALLEGRO_AUTH_URL for both environments
-    const tokenUrl = this.configService.get<string>('ALLEGRO_AUTH_URL') || 'https://allegro.pl/auth/oauth/token';
+    const tokenUrl = this.configService.get<string>('ALLEGRO_AUTH_URL');
+    if (!tokenUrl) {
+      throw new Error('ALLEGRO_AUTH_URL must be configured in .env file');
+    }
     
     this.logger.log('Validating Allegro API keys', { 
       userId,
@@ -277,7 +283,15 @@ export class SettingsService {
               username: dto.clientId,
               password: dto.clientSecret,
             },
-            timeout: 10000,
+            timeout: (() => {
+              const authTimeout = this.configService.get<string>('AUTH_SERVICE_TIMEOUT');
+              const httpTimeout = this.configService.get<string>('HTTP_TIMEOUT');
+              const timeout = authTimeout || httpTimeout;
+              if (!timeout) {
+                throw new Error('AUTH_SERVICE_TIMEOUT or HTTP_TIMEOUT must be configured in .env file');
+              }
+              return parseInt(timeout);
+            })(),
           },
         ),
       );

@@ -289,15 +289,16 @@ export class OAuthController {
 
   /**
    * Get frontend URL for redirects
+   * Uses FRONTEND_URL from .env (e.g., https://allegro.statex.cz for prod, http://localhost:3410 for dev)
    */
   private getFrontendUrl(): string {
-    const nodeEnv = this.configService.get<string>('NODE_ENV') || 'development';
-    const frontendPort = this.configService.get<string>('ALLEGRO_FRONTEND_SERVICE_PORT') || '3410';
-    
-    if (nodeEnv === 'production') {
-      return this.configService.get<string>('FRONTEND_URL') || `https://allegro.statex.cz`;
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+    if (frontendUrl) {
+      return frontendUrl;
     }
     
+    // Fallback: construct from port (for development)
+    const frontendPort = this.configService.get<string>('ALLEGRO_FRONTEND_SERVICE_PORT') || '3410';
     return `http://localhost:${frontendPort}`;
   }
 }

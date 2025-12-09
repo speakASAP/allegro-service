@@ -36,6 +36,26 @@ DATABASE_URL=
 - `DATABASE_URL` should **NOT** include `?schema=public` query parameter (Prisma will add it automatically if needed)
 - Password in `DATABASE_URL` must be URL-encoded (already done above)
 
+### Environment-Specific Differences
+
+The codebase uses the same code for both development and production environments. Only the `.env` file values differ. The following table shows the key variables that differ between environments:
+
+| Variable | DEV Value | PROD Value | Reason |
+|----------|-----------|------------|--------|
+| `NODE_ENV` | `development` | `production` | Environment identifier |
+| `AUTH_SERVICE_URL` | `https://auth.statex.cz` | `http://auth-microservice-green:3370` | DEV uses HTTPS, PROD uses Docker network |
+| `DB_HOST` | `localhost` | `db-server-postgres` | DEV uses SSH tunnel, PROD uses Docker network |
+| `ALLEGRO_REDIRECT_URI` | `http://localhost:3410/auth/callback` | `https://allegro.statex.cz/auth/callback` | DEV uses localhost, PROD uses production domain |
+| `LOGGING_SERVICE_URL` | `http://localhost:3367` | `http://logging-microservice:3367` | DEV uses SSH tunnel, PROD uses Docker network |
+| `FRONTEND_URL` | `http://localhost:3410` | `https://allegro.statex.cz` | DEV uses localhost, PROD uses production domain |
+
+**Key Points:**
+
+- All other variables (ports, API keys, etc.) should be the same or appropriately configured for each environment
+- DEV environment uses `localhost` with SSH tunnels to connect to production services
+- PROD environment uses Docker service names for internal communication
+- The codebase contains **no hardcoded values** - everything comes from `.env` files
+
 ## Step 2: External Services Configuration
 
 For local development, you have two options:
@@ -57,7 +77,7 @@ Then configure your `.env` file:
 AUTH_SERVICE_PORT=3371
 AUTH_SERVICE_URL=https://auth.statex.cz  # Fallback if tunnel not available
 NOTIFICATION_SERVICE_URL=http://localhost:3368
-LOGGING_SERVICE_URL=http://localhost:3267
+LOGGING_SERVICE_URL=http://localhost:3367
 ```
 
 ### Option B: Use HTTPS URLs
@@ -92,12 +112,18 @@ The tunnels will:
 
 - **Database**: Forward `localhost:5432` → `statex:127.0.0.1:5432` (Required for database access)
 - **Auth Service**: Forward `localhost:3371` → `statex:127.0.0.1:3371` (Required for authentication)
-- **Logging Service**: Forward `localhost:3267` → `statex:127.0.0.1:3267` (Required - prevents "Failed to send log to logging service" errors)
+- **Logging Service**: Forward `localhost:3367` → `statex:127.0.0.1:3367` (Required - prevents "Failed to send log to logging service" errors)
 - **Notifications Service**: Forward `localhost:3368` → `statex:127.0.0.1:3368` (Optional, for notifications)
 - Run in the background
 - Store PIDs in `/tmp/allegro-tunnels/`
 
-**Note**: Make sure your `.env` file has `LOGGING_SERVICE_URL=http://localhost:3267` (not port 3367) to match the tunnel configuration.
+**Note**: Make sure your `.env` file has `LOGGING_SERVICE_URL=http://localhost:3367` to match the tunnel configuration.
+
+**Port Consistency:**
+- Both development and production now use **port 3367** for consistency
+- In production, Docker services use `http://logging-microservice:3367` (internal Docker network)
+- In development, SSH tunnels use `http://localhost:3367` (host port mapping)
+- The same port (3367) is used in both environments, only the hostname differs
 
 ### SSH Tunnel Commands
 
@@ -309,7 +335,7 @@ If you see this error in your service logs, it means the logging service tunnel 
    cat .env | grep LOGGING_SERVICE_URL
    ```
 
-   Should show: `LOGGING_SERVICE_URL=http://localhost:3267` (not 3367)
+   Should show: `LOGGING_SERVICE_URL=http://localhost:3367`
 
 4. **Restart your services** to pick up the `.env` changes:
 
@@ -322,7 +348,7 @@ If you see this error in your service logs, it means the logging service tunnel 
 5. **Test logging service connection:**
 
    ```bash
-   curl http://localhost:3267/health
+   curl http://localhost:3367/health
    ```
 
    Should return: `{"success":true,"status":"ok",...}`
@@ -338,13 +364,13 @@ If you see this error in your service logs, it means the logging service tunnel 
 - [ ] SSH access to `statex` works (`ssh statex`)
 - [ ] `.env` file configured with:
   - `DB_HOST=localhost`
-  - `LOGGING_SERVICE_URL=http://localhost:3267` (important!)
+  - `LOGGING_SERVICE_URL=http://localhost:3367` (important!)
   - `AUTH_SERVICE_PORT=3371`
 - [ ] SSH tunnels started (`./scripts/setup-ssh-tunnel.sh start`)
   - Verify all tunnels are running: `./scripts/setup-ssh-tunnel.sh status`
   - At minimum: database, auth, and logging tunnels must be running
 - [ ] Database connection tested (`npx prisma db execute --stdin <<< "SELECT 1;"`)
-- [ ] Logging service accessible: `curl http://localhost:3267/health`
+- [ ] Logging service accessible: `curl http://localhost:3367/health`
 - [ ] Shared module built (`cd shared && npm run build`)
 - [ ] Services started (`npm run start:dev` or `docker compose up -d`)
 
@@ -352,13 +378,13 @@ If you see this error in your service logs, it means the logging service tunnel 
 
 ✅ **Database**: Access via SSH tunnel (`localhost:5432` → `statex:127.0.0.1:5432`) - **Required**  
 ✅ **Auth Service**: Access via SSH tunnel (`localhost:3371` → `statex:127.0.0.1:3371`) - **Required**  
-✅ **Logging Service**: Access via SSH tunnel (`localhost:3267` → `statex:127.0.0.1:3267`) - **Required** (prevents "Failed to send log" errors)  
+✅ **Logging Service**: Access via SSH tunnel (`localhost:3367` → `statex:127.0.0.1:3367`) - **Required** (prevents "Failed to send log" errors)  
 ✅ **Notifications Service**: Access via SSH tunnel (`localhost:3368` → `statex:127.0.0.1:3368`) - Optional  
 
 **Important Notes:**
 
 - **All tunnels must be started before running services** to avoid connection errors
-- Make sure `.env` has `LOGGING_SERVICE_URL=http://localhost:3267` (port 3267, not 3367)
+- Make sure `.env` has `LOGGING_SERVICE_URL=http://localhost:3367`
 - If you see "Failed to send log to logging service" errors, check that the logging tunnel is running: `./scripts/setup-ssh-tunnel.sh status`
 - **Alternative**: You can use HTTPS URLs (`https://auth.statex.cz`, etc.) if services are healthy on production, but SSH tunnels are recommended for reliability
 

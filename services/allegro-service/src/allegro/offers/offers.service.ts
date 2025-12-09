@@ -21,7 +21,13 @@ export class OffersService {
     private readonly configService: ConfigService,
     private readonly allegroAuth: AllegroAuthService,
   ) {
-    this.encryptionKey = this.configService.get<string>('ENCRYPTION_KEY') || 'default-encryption-key-change-in-production-32chars!!';
+    this.encryptionKey = this.configService.get<string>('ENCRYPTION_KEY');
+    if (!this.encryptionKey) {
+      throw new Error('ENCRYPTION_KEY must be configured in .env file');
+    }
+    if (this.encryptionKey.length < 32) {
+      throw new Error('ENCRYPTION_KEY must be at least 32 characters long');
+    }
   }
 
   /**

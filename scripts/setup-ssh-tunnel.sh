@@ -11,7 +11,7 @@ TUNNELS_DIR="/tmp/allegro-tunnels"
 TUNNELS=(
   "db|5432|127.0.0.1|5432|database"
   "auth|3371|127.0.0.1|3371|auth-service"
-  "logging|3267|127.0.0.1|3267|logging-service"
+  "logging|3367|127.0.0.1|3367|logging-service"
   "notifications|3368|127.0.0.1|3368|notifications-service"
 )
 
