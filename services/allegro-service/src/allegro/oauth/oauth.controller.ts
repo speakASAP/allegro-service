@@ -104,6 +104,7 @@ export class OAuthController {
     );
 
     // Store state and code verifier in database
+    // Clear any old OAuth state first to prevent conflicts
     await this.prisma.userSettings.update({
       where: { userId },
       data: {
@@ -160,6 +161,14 @@ export class OAuthController {
         codeVerifier = this.decrypt(settings.allegroOAuthCodeVerifier || '');
       } catch (error) {
         this.logger.error('Failed to decrypt code verifier', { userId: settings.userId, error: error.message });
+        // Clear the invalid OAuth state so user can try again
+        await this.prisma.userSettings.update({
+          where: { userId: settings.userId },
+          data: {
+            allegroOAuthState: null,
+            allegroOAuthCodeVerifier: null,
+          },
+        });
         return res.redirect(`${this.getFrontendUrl()}/auth/callback?error=decryption_failed`);
       }
 
