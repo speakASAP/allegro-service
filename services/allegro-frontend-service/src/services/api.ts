@@ -9,7 +9,10 @@ import { authService } from './auth';
 // Determine API URL:
 // 1. Use VITE_API_URL if set during build (production)
 // 2. Auto-detect from current origin (if on production domain)
-// 3. Fallback to localhost for development
+// 3. Hard fallback to prod URL to avoid blank baseURL during SSR/edge cases
+// 4. Fallback to localhost for development
+const PRODUCTION_API_URL = 'https://allegro.statex.cz/api';
+
 const getApiUrl = (): string => {
   // If VITE_API_URL is set during build, use it
   if (import.meta.env.VITE_API_URL) {
@@ -17,9 +20,15 @@ const getApiUrl = (): string => {
   }
   
   // Auto-detect production URL from current origin
-  const origin = window.location.origin;
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
   if (origin.includes('allegro.statex.cz') || origin.includes('statex.cz')) {
-    return `${origin}/api`;
+    const normalizedOrigin = origin.endsWith('/') ? origin.slice(0, -1) : origin;
+    return `${normalizedOrigin}/api`;
+  }
+
+  // Hard fallback for any environment where origin is not available
+  if (!origin) {
+    return PRODUCTION_API_URL;
   }
   
   // Development fallback
