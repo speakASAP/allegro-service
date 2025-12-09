@@ -79,7 +79,7 @@ export class SettingsService {
     }
 
     // Decrypt sensitive data before returning
-    const result = { ...settings };
+    const result: any = { ...settings };
     if (result.allegroClientSecret) {
       try {
         result.allegroClientSecret = this.decrypt(result.allegroClientSecret);
