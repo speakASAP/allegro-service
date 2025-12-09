@@ -85,6 +85,7 @@ export class GatewayService {
 
   /**
    * Forward request to service
+   * Returns response data and status code, or full response object if redirect
    */
   async forwardRequest(
     serviceName: string,
@@ -92,6 +93,7 @@ export class GatewayService {
     method: string,
     body?: any,
     headers?: Record<string, string>,
+    followRedirects: boolean = true,
   ): Promise<any> {
     const baseUrl = this.serviceUrls[serviceName];
     if (!baseUrl) {
@@ -113,6 +115,8 @@ export class GatewayService {
         }
         return parseInt(timeout);
       })(),
+      maxRedirects: followRedirects ? 5 : 0,
+      validateStatus: (status) => status >= 200 && status < 400, // Accept redirects
     };
 
     // Log request details
@@ -160,8 +164,20 @@ export class GatewayService {
         statusCode: response.status,
         duration: `${duration}ms`,
         responseSize: JSON.stringify(response.data).length,
+        isRedirect: response.status >= 300 && response.status < 400,
+        location: response.headers?.location,
       });
       this.logger.debug(`[${requestId}] ${method} ${url} - ${response.status} (${duration}ms)`);
+
+      // If it's a redirect, return the full response object
+      if (response.status >= 300 && response.status < 400) {
+        return {
+          _isRedirect: true,
+          status: response.status,
+          location: response.headers?.location,
+          headers: response.headers,
+        };
+      }
 
       return response.data;
     } catch (error: any) {
