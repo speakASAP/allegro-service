@@ -1,4 +1,9 @@
-require('dotenv').config();
+// Read environment variables (already set in container, or use dotenv if available)
+try {
+  require('dotenv').config();
+} catch (e) {
+  // dotenv not available, use process.env directly
+}
 
 // Parse DATABASE_URL or use individual env vars
 let connectionConfig;
