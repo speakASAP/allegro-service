@@ -83,9 +83,17 @@ export class SettingsService {
     if (result.allegroClientSecret) {
       try {
         result.allegroClientSecret = this.decrypt(result.allegroClientSecret);
-      } catch (error) {
-        this.logger.error('Failed to decrypt allegroClientSecret', { userId, error: error.message });
+      } catch (error: any) {
+        this.logger.error('Failed to decrypt allegroClientSecret', { userId, error: error.message, errorStack: error.stack });
+        // Set to null to indicate it exists but decryption failed
         result.allegroClientSecret = null;
+        // Add detailed error information
+        result._allegroClientSecretDecryptionError = {
+          exists: true,
+          error: error.message || 'Unknown decryption error',
+          errorType: error.constructor?.name || 'Error',
+          suggestion: 'This usually happens when the encryption key has changed or the data was encrypted with a different key. Please re-enter your Client Secret.',
+        };
       }
     }
 

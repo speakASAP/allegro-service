@@ -61,10 +61,23 @@ const SettingsPage: React.FC = () => {
         const data = response.data.data;
         setSettings(data);
         setAllegroClientId(data.allegroClientId || '');
-        // Display Client Secret if it exists (even if null from decryption failure)
-        // The backend returns the decrypted value, or null if decryption failed
-        // We should display the actual value if it exists
-        setAllegroClientSecret(data.allegroClientSecret ?? '');
+        // Display Client Secret if it exists
+        // If it's null and _allegroClientSecretDecryptionError exists, it means decryption failed
+        if (data._allegroClientSecretDecryptionError && data.allegroClientSecret === null) {
+          const errorInfo = data._allegroClientSecretDecryptionError;
+          const errorMessage = errorInfo && typeof errorInfo === 'object'
+            ? `Client Secret Decryption Error:\n\n` +
+              `• Status: Client Secret exists in database but could not be decrypted\n` +
+              `• Error Type: ${errorInfo.errorType || 'Unknown'}\n` +
+              `• Error Details: ${errorInfo.error || 'Unknown error'}\n\n` +
+              `• Solution: ${errorInfo.suggestion || 'Please re-enter your Client Secret and save it again.'}\n\n` +
+              `This typically occurs when the encryption key has changed or the data was encrypted with a different configuration.`
+            : 'Client Secret exists in database but could not be decrypted. Please re-enter your Client Secret and save it again.';
+          setError(errorMessage);
+          setAllegroClientSecret('');
+        } else {
+          setAllegroClientSecret(data.allegroClientSecret ?? '');
+        }
       }
     } catch (err: unknown) {
       if (err instanceof AxiosError) {
