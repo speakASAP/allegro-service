@@ -234,6 +234,13 @@ export class OffersService {
         offset,
       });
     } catch (oauthError: any) {
+      // Check if error is specifically about OAuth being required
+      if (oauthError.message && oauthError.message.includes('OAuth authorization required')) {
+        // Don't fall back to client credentials - OAuth is required
+        this.logger.warn('OAuth authorization required for accessing user offers', { userId });
+        throw new Error('OAuth authorization required. Please authorize the application in Settings to access your Allegro offers.');
+      }
+      
       // OAuth not available or failed, fall back to client credentials
       this.logger.debug('OAuth token not available, falling back to client credentials', {
         userId,

@@ -6,6 +6,7 @@
 import {
   Controller,
   All,
+  Get,
   Req,
   Res,
   UseGuards,
