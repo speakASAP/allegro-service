@@ -32,11 +32,66 @@ export class GatewayController {
 
   /**
    * Route OAuth callback (public, no auth required)
+   * This endpoint returns a redirect, so we need to handle it specially
    */
   @Get('allegro/oauth/callback')
   async allegroOAuthCallback(@Req() req: ExpressRequest, @Res() res: ExpressResponse) {
     const path = req.url.replace('/api/allegro', '');
-    return this.routeRequest('allegro', `/allegro${path}`, req, res);
+    const method = req.method;
+    const requestId = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const startTime = Date.now();
+
+    this.sharedLogger.info(`[${requestId}] OAuth callback request`, {
+      method,
+      path,
+      originalUrl: req.originalUrl,
+      url: req.url,
+      query: req.query,
+    });
+
+    try {
+      // Don't follow redirects - we want to handle them ourselves
+      const response = await this.gatewayService.forwardRequest(
+        'allegro',
+        `/allegro${path}`,
+        method,
+        undefined,
+        this.getHeaders(req),
+        false, // Don't follow redirects
+      );
+
+      // If it's a redirect response, redirect the client
+      if (response && response._isRedirect && response.location) {
+        const duration = Date.now() - startTime;
+        this.sharedLogger.info(`[${requestId}] OAuth callback redirecting`, {
+          status: response.status,
+          location: response.location,
+          duration: `${duration}ms`,
+        });
+        return res.redirect(response.status || 302, response.location);
+      }
+
+      // Otherwise return JSON response
+      const duration = Date.now() - startTime;
+      this.sharedLogger.info(`[${requestId}] OAuth callback completed`, {
+        duration: `${duration}ms`,
+      });
+      return res.status(200).json(response);
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      this.sharedLogger.error(`[${requestId}] OAuth callback error`, {
+        error: error.message,
+        duration: `${duration}ms`,
+      });
+      const errorStatus = error.response?.status || 500;
+      return res.status(errorStatus).json({
+        success: false,
+        error: {
+          code: 'OAUTH_CALLBACK_ERROR',
+          message: error.response?.data?.error?.message || error.message || 'OAuth callback failed',
+        },
+      });
+    }
   }
 
   /**
