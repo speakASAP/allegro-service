@@ -84,6 +84,12 @@ export class GatewayController {
    */
   @All('auth/login')
   async authLogin(@Req() req: ExpressRequest, @Res() res: ExpressResponse) {
+    // Temporary debug: log incoming login payload to troubleshoot empty/invalid bodies in dev
+    this.logger.warn(`Auth login payload | url=${req.originalUrl}`, {
+      body: req.body,
+      hasBody: !!req.body,
+      contentType: req.headers['content-type'],
+    });
     return this.routeRequest('auth', '/auth/login', req, res);
   }
 

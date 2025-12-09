@@ -38,7 +38,8 @@ export const authService = {
   },
 
   async login(data: LoginData): Promise<AuthResponse> {
-    console.log('[Auth Service] login called', { email: data.email });
+    console.log('[Auth Service] login called', { email: data.email, passwordPresent: !!data.password });
+    console.log('[Auth Service] login payload', JSON.stringify(data));
     const baseURL = api.defaults.baseURL || '';
     console.log('[Auth Service] login - API instance:', {
       baseURL: baseURL,

@@ -75,7 +75,7 @@ LOGGING_SERVICE_URL=https://logging.statex.cz
 
 ## Step 3: Start SSH Tunnels
 
-Before starting your local services, you must start the SSH tunnels to production services:
+**⚠️ IMPORTANT**: Before starting your local services, you **must** start the SSH tunnels to production services. Without these tunnels, you will see connection errors like "Failed to send log to logging service" and services may fail to start.
 
 ```bash
 # Start all tunnels (database, auth, logging, notifications)
@@ -90,12 +90,14 @@ Before starting your local services, you must start the SSH tunnels to productio
 
 The tunnels will:
 
-- **Database**: Forward `localhost:5432` → `statex:127.0.0.1:5432`
-- **Auth Service**: Forward `localhost:3371` → `statex:127.0.0.1:3371`
-- **Logging Service**: Forward `localhost:3267` → `statex:127.0.0.1:3267`
-- **Notifications Service**: Forward `localhost:3368` → `statex:127.0.0.1:3368`
+- **Database**: Forward `localhost:5432` → `statex:127.0.0.1:5432` (Required for database access)
+- **Auth Service**: Forward `localhost:3371` → `statex:127.0.0.1:3371` (Required for authentication)
+- **Logging Service**: Forward `localhost:3267` → `statex:127.0.0.1:3267` (Required - prevents "Failed to send log to logging service" errors)
+- **Notifications Service**: Forward `localhost:3368` → `statex:127.0.0.1:3368` (Optional, for notifications)
 - Run in the background
 - Store PIDs in `/tmp/allegro-tunnels/`
+
+**Note**: Make sure your `.env` file has `LOGGING_SERVICE_URL=http://localhost:3267` (not port 3367) to match the tunnel configuration.
 
 ### SSH Tunnel Commands
 
@@ -281,22 +283,83 @@ To use OAuth for accessing user-specific Allegro resources (like `/sale/offers`)
 
 4. **Service URLs** - External services (auth, logging, notifications) use HTTPS and don't require SSH tunnel
 
+## DEV Troubleshooting
+
+### "Failed to send log to logging service" Error
+
+If you see this error in your service logs, it means the logging service tunnel is not running or the `.env` configuration is incorrect.
+
+**Solution:**
+
+1. **Check if logging tunnel is running:**
+
+   ```bash
+   ./scripts/setup-ssh-tunnel.sh status
+   ```
+
+2. **Start the logging tunnel if not running:**
+
+   ```bash
+   ./scripts/setup-ssh-tunnel.sh start logging
+   ```
+
+3. **Verify `.env` has correct port:**
+
+   ```bash
+   cat .env | grep LOGGING_SERVICE_URL
+   ```
+
+   Should show: `LOGGING_SERVICE_URL=http://localhost:3267` (not 3367)
+
+4. **Restart your services** to pick up the `.env` changes:
+
+   ```bash
+   # Stop services (Ctrl+C or kill processes)
+   # Then restart:
+   npm run start:dev
+   ```
+
+5. **Test logging service connection:**
+
+   ```bash
+   curl http://localhost:3267/health
+   ```
+
+   Should return: `{"success":true,"status":"ok",...}`
+
+### Other Common Issues
+
+- **503 Service Unavailable**: Check if required services are running (allegro-service, settings-service, etc.)
+- **Database connection errors**: Verify SSH tunnel is running: `./scripts/setup-ssh-tunnel.sh status`
+- **Auth service errors**: Ensure auth tunnel is running: `./scripts/setup-ssh-tunnel.sh start auth`
+
 ## Quick Start Checklist
 
 - [ ] SSH access to `statex` works (`ssh statex`)
-- [ ] `.env` file configured with `DB_HOST=localhost`
-- [ ] SSH tunnel started (`./scripts/setup-ssh-tunnel.sh start`)
+- [ ] `.env` file configured with:
+  - `DB_HOST=localhost`
+  - `LOGGING_SERVICE_URL=http://localhost:3267` (important!)
+  - `AUTH_SERVICE_PORT=3371`
+- [ ] SSH tunnels started (`./scripts/setup-ssh-tunnel.sh start`)
+  - Verify all tunnels are running: `./scripts/setup-ssh-tunnel.sh status`
+  - At minimum: database, auth, and logging tunnels must be running
 - [ ] Database connection tested (`npx prisma db execute --stdin <<< "SELECT 1;"`)
+- [ ] Logging service accessible: `curl http://localhost:3267/health`
 - [ ] Shared module built (`cd shared && npm run build`)
 - [ ] Services started (`npm run start:dev` or `docker compose up -d`)
 
 ## Summary
 
-✅ **Database**: Access via SSH tunnel (`localhost:5432` → `statex:127.0.0.1:5432`)  
-✅ **Auth Service**: Access via SSH tunnel (`localhost:3371` → `statex:127.0.0.1:3371`)  
-✅ **Logging Service**: Access via SSH tunnel (`localhost:3267` → `statex:127.0.0.1:3267`)  
-✅ **Notifications Service**: Access via SSH tunnel (`localhost:3368` → `statex:127.0.0.1:3368`)  
+✅ **Database**: Access via SSH tunnel (`localhost:5432` → `statex:127.0.0.1:5432`) - **Required**  
+✅ **Auth Service**: Access via SSH tunnel (`localhost:3371` → `statex:127.0.0.1:3371`) - **Required**  
+✅ **Logging Service**: Access via SSH tunnel (`localhost:3267` → `statex:127.0.0.1:3267`) - **Required** (prevents "Failed to send log" errors)  
+✅ **Notifications Service**: Access via SSH tunnel (`localhost:3368` → `statex:127.0.0.1:3368`) - Optional  
 
-**Alternative**: You can use HTTPS URLs (`https://auth.statex.cz`, etc.) if services are healthy on production, but SSH tunnels are recommended for reliability.
+**Important Notes:**
+
+- **All tunnels must be started before running services** to avoid connection errors
+- Make sure `.env` has `LOGGING_SERVICE_URL=http://localhost:3267` (port 3267, not 3367)
+- If you see "Failed to send log to logging service" errors, check that the logging tunnel is running: `./scripts/setup-ssh-tunnel.sh status`
+- **Alternative**: You can use HTTPS URLs (`https://auth.statex.cz`, etc.) if services are healthy on production, but SSH tunnels are recommended for reliability
 
 All services run locally but connect to production infrastructure via SSH tunnels.
