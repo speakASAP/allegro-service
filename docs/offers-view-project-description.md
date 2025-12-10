@@ -17,7 +17,7 @@
 - ✅ Sync Provenance: Added `syncSource` field to track data origin (ALLEGRO_API, SALES_CENTER, MANUAL)
 - ✅ Production: Migrations applied (rawData, syncSource), code deployed
 
-### 🔄 In Progress / Next Steps
+### ✅ All Core Features Completed
 
 - ✅ Validation/Readiness: Added validationStatus, validationErrors, lastValidatedAt fields
 - ✅ Validation Logic: Checks title, description, images, price, stock, category, delivery/payment, required attributes
@@ -25,6 +25,7 @@
 - ✅ Manual Validation: POST /allegro/offers/:id/validate endpoint
 - ✅ Frontend Display: Validation status in list and detail view with error/warning display
 - ✅ Metrics: MetricsService tracks list/detail/validation requests and errors; GET /allegro/offers/metrics endpoint
+- ✅ Error Tracking: All catch blocks in offers controller track errors in metrics
 
 ## Goal
 
