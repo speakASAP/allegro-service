@@ -583,7 +583,9 @@ const ImportJobsPage: React.FC = () => {
                       />
                     </td>
                     <td className="px-4 py-2 text-sm text-gray-900">{offer.title}</td>
-                    <td className="px-4 py-2 text-sm text-gray-900">{offer.price} PLN</td>
+                    <td className="px-4 py-2 text-sm text-gray-900">
+                      {offer.price} {offer.currency || 'PLN'}
+                    </td>
                     <td className="px-4 py-2 text-sm text-gray-900">{offer.quantity}</td>
                     <td className="px-4 py-2 text-sm text-gray-900">{offer.status}</td>
                   </tr>

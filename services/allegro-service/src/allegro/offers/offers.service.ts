@@ -328,6 +328,7 @@ export class OffersService {
         description: allegroOffer.description,
         categoryId: allegroOffer.category?.id || '',
         price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
+        currency: allegroOffer.sellingMode?.price?.currency || 'PLN',
         quantity: allegroOffer.stock?.available || 0,
         stockQuantity: allegroOffer.stock?.available || 0,
         status: allegroOffer.publication?.status || 'INACTIVE',
@@ -374,6 +375,7 @@ export class OffersService {
               description: allegroOffer.description,
               categoryId: allegroOffer.category?.id || '',
               price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
+              currency: allegroOffer.sellingMode?.price?.currency || 'PLN',
               quantity: allegroOffer.stock?.available || 0,
               stockQuantity: allegroOffer.stock?.available || 0,
               status: allegroOffer.publication?.status || 'INACTIVE',
@@ -387,6 +389,7 @@ export class OffersService {
               description: allegroOffer.description,
               categoryId: allegroOffer.category?.id || '',
               price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
+              currency: allegroOffer.sellingMode?.price?.currency || 'PLN',
               quantity: allegroOffer.stock?.available || 0,
               stockQuantity: allegroOffer.stock?.available || 0,
               status: allegroOffer.publication?.status || 'INACTIVE',
@@ -592,8 +595,8 @@ export class OffersService {
   /**
    * Preview offers from Allegro Sales Center (without importing)
    */
-  async previewOffersFromSalesCenter() {
-    this.logger.log('Previewing offers from Allegro Sales Center');
+  async previewOffersFromSalesCenter(userId: string) {
+    this.logger.log('Previewing offers from Allegro Sales Center', { userId });
 
     const limit = 100;
     const queryParams: any = {
@@ -601,8 +604,37 @@ export class OffersService {
       offset: '0',
     };
     
-    const response = await this.allegroApi.getOffers(queryParams);
-    const offers = response.offers || [];
+    let response;
+    try {
+      const oauthToken = await this.allegroAuth.getUserAccessToken(userId);
+      response = await this.allegroApi.getOffersWithOAuthToken(oauthToken, queryParams);
+    } catch (error: any) {
+      const errorStatus = error.response?.status;
+      const errorData = error.response?.data || {};
+
+      if (
+        errorStatus === 401 ||
+        errorStatus === 403 ||
+        error.message?.includes('OAuth authorization required')
+      ) {
+        this.logger.warn('OAuth authorization required for Sales Center preview', {
+          userId,
+          errorStatus,
+          errorData,
+        });
+        throw new Error('OAuth authorization required. Please authorize the application in Settings to access your Allegro offers.');
+      }
+
+      this.logger.error('Failed to preview offers from Sales Center', {
+        userId,
+        error: error.message,
+        errorStatus,
+        errorData,
+      });
+      throw error;
+    }
+
+    const offers = response?.offers || [];
     
     const previewOffers = offers.map((allegroOffer: any) => ({
       allegroOfferId: allegroOffer.id,
@@ -614,18 +646,19 @@ export class OffersService {
       stockQuantity: allegroOffer.stock?.available || 0,
       status: allegroOffer.publication?.status || 'INACTIVE',
       publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
+      currency: allegroOffer.sellingMode?.price?.currency || 'PLN',
       rawData: allegroOffer,
     }));
 
-    this.logger.log('Finished previewing offers from Sales Center', { total: previewOffers.length });
-    return { items: previewOffers, total: response.count || previewOffers.length };
+    this.logger.log('Finished previewing offers from Sales Center', { total: previewOffers.length, userId });
+    return { items: previewOffers, total: response?.count || previewOffers.length };
   }
 
   /**
    * Import approved offers from Sales Center preview
    */
-  async importApprovedOffersFromSalesCenter(approvedOfferIds: string[]) {
-    this.logger.log('Importing approved offers from Sales Center', { count: approvedOfferIds.length });
+  async importApprovedOffersFromSalesCenter(approvedOfferIds: string[], userId: string) {
+    this.logger.log('Importing approved offers from Sales Center', { count: approvedOfferIds.length, userId });
 
     let offset = 0;
     const limit = 100;
@@ -639,7 +672,34 @@ export class OffersService {
         offset: offset.toString(),
       };
       
-      const response = await this.allegroApi.getOffers(queryParams);
+      let response;
+      try {
+        const oauthToken = await this.allegroAuth.getUserAccessToken(userId);
+        response = await this.allegroApi.getOffersWithOAuthToken(oauthToken, queryParams);
+      } catch (error: any) {
+        const errorStatus = error.response?.status;
+        const errorData = error.response?.data || {};
+        if (
+          errorStatus === 401 ||
+          errorStatus === 403 ||
+          error.message?.includes('OAuth authorization required')
+        ) {
+          this.logger.warn('OAuth authorization required for Sales Center import', {
+            userId,
+            errorStatus,
+            errorData,
+          });
+          throw new Error('OAuth authorization required. Please authorize the application in Settings to access your Allegro offers.');
+        }
+
+        this.logger.error('Failed to import approved offers from Sales Center', {
+          userId,
+          error: error.message,
+          errorStatus,
+          errorData,
+        });
+        throw error;
+      }
       const offers = response.offers || [];
       
       for (const allegroOffer of offers) {
@@ -655,6 +715,7 @@ export class OffersService {
               description: allegroOffer.description,
               categoryId: allegroOffer.category?.id || '',
               price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
+              currency: allegroOffer.sellingMode?.price?.currency || 'PLN',
               quantity: allegroOffer.stock?.available || 0,
               stockQuantity: allegroOffer.stock?.available || 0,
               status: allegroOffer.publication?.status || 'INACTIVE',
@@ -668,6 +729,7 @@ export class OffersService {
               description: allegroOffer.description,
               categoryId: allegroOffer.category?.id || '',
               price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
+              currency: allegroOffer.sellingMode?.price?.currency || 'PLN',
               quantity: allegroOffer.stock?.available || 0,
               stockQuantity: allegroOffer.stock?.available || 0,
               status: allegroOffer.publication?.status || 'INACTIVE',
@@ -689,15 +751,15 @@ export class OffersService {
       offset += limit;
     }
 
-    this.logger.log('Finished importing approved offers from Sales Center', { totalImported });
+    this.logger.log('Finished importing approved offers from Sales Center', { totalImported, userId });
     return { totalImported };
   }
 
   /**
    * Import offers from Allegro Sales Center (my-assortment)
    */
-  async importFromSalesCenter() {
-    this.logger.log('Importing offers from Allegro Sales Center');
+  async importFromSalesCenter(userId: string) {
+    this.logger.log('Importing offers from Allegro Sales Center', { userId });
 
     let offset = 0;
     const limit = 100;
@@ -713,19 +775,47 @@ export class OffersService {
         offset: offset.toString(),
       };
       
-      const response = await this.allegroApi.getOffers(queryParams);
+      let response;
+      try {
+        const oauthToken = await this.allegroAuth.getUserAccessToken(userId);
+        response = await this.allegroApi.getOffersWithOAuthToken(oauthToken, queryParams);
+      } catch (error: any) {
+        const errorStatus = error.response?.status;
+        const errorData = error.response?.data || {};
+        if (
+          errorStatus === 401 ||
+          errorStatus === 403 ||
+          error.message?.includes('OAuth authorization required')
+        ) {
+          this.logger.warn('OAuth authorization required for Sales Center import', {
+            userId,
+            errorStatus,
+            errorData,
+          });
+          throw new Error('OAuth authorization required. Please authorize the application in Settings to access your Allegro offers.');
+        }
+
+        this.logger.error('Failed to import offers from Sales Center', {
+          userId,
+          error: error.message,
+          errorStatus,
+          errorData,
+        });
+        throw error;
+      }
 
       const offers = response.offers || [];
       
       for (const allegroOffer of offers) {
         try {
-          await this.prisma.allegroOffer.upsert({
+            await this.prisma.allegroOffer.upsert({
             where: { allegroOfferId: allegroOffer.id },
             update: {
               title: allegroOffer.name,
               description: allegroOffer.description,
               categoryId: allegroOffer.category?.id || '',
               price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
+                currency: allegroOffer.sellingMode?.price?.currency || 'PLN',
               quantity: allegroOffer.stock?.available || 0,
               stockQuantity: allegroOffer.stock?.available || 0,
               status: allegroOffer.publication?.status || 'INACTIVE',
@@ -733,12 +823,13 @@ export class OffersService {
               syncStatus: 'SYNCED',
               lastSyncedAt: new Date(),
             },
-            create: {
+              create: {
               allegroOfferId: allegroOffer.id,
               title: allegroOffer.name,
               description: allegroOffer.description,
               categoryId: allegroOffer.category?.id || '',
               price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
+                currency: allegroOffer.sellingMode?.price?.currency || 'PLN',
               quantity: allegroOffer.stock?.available || 0,
               stockQuantity: allegroOffer.stock?.available || 0,
               status: allegroOffer.publication?.status || 'INACTIVE',
@@ -760,7 +851,7 @@ export class OffersService {
       offset += limit;
     }
 
-    this.logger.log('Finished importing offers from Sales Center', { totalImported });
+    this.logger.log('Finished importing offers from Sales Center', { totalImported, userId });
     return { totalImported };
   }
 }

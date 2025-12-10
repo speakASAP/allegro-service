@@ -146,7 +146,8 @@ export class OffersController {
   async previewOffersFromSalesCenter(@Request() req: any): Promise<{ success: boolean; data: any }> {
     try {
       this.logger.log('Previewing offers from Allegro Sales Center');
-      const result = await this.offersService.previewOffersFromSalesCenter();
+      const userId = String(req.user.id);
+      const result = await this.offersService.previewOffersFromSalesCenter(userId);
       return { success: true, data: result };
     } catch (error: any) {
       const errorStatus = error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR;
@@ -163,6 +164,10 @@ export class OffersController {
 
       // Provide more helpful error messages based on status code
       let userFriendlyMessage = errorMessage;
+      const requiresOAuth =
+        errorStatus === HttpStatus.FORBIDDEN ||
+        errorStatus === HttpStatus.UNAUTHORIZED ||
+        errorMessage.toLowerCase().includes('oauth authorization required');
       if (errorStatus === 403) {
         // Allegro API requires OAuth authorization code flow for accessing user's offers
         // client_credentials grant only works for public endpoints
@@ -184,6 +189,7 @@ export class OffersController {
             message: userFriendlyMessage,
             status: errorStatus,
             details: errorData,
+            requiresOAuth,
           },
         },
         errorStatus,
@@ -193,15 +199,23 @@ export class OffersController {
 
   @Post('import/sales-center/approve')
   @UseGuards(JwtAuthGuard)
-  async importApprovedOffersFromSalesCenter(@Body() body: { offerIds: string[] }): Promise<{ success: boolean; data: any }> {
-    const result = await this.offersService.importApprovedOffersFromSalesCenter(body.offerIds);
+  async importApprovedOffersFromSalesCenter(
+    @Request() req: any,
+    @Body() body: { offerIds: string[] },
+  ): Promise<{ success: boolean; data: any }> {
+    const userId = String(req.user.id);
+    const result = await this.offersService.importApprovedOffersFromSalesCenter(
+      body.offerIds,
+      userId,
+    );
     return { success: true, data: result };
   }
 
   @Post('import/sales-center')
   @UseGuards(JwtAuthGuard)
-  async importFromSalesCenter(): Promise<{ success: boolean; data: any }> {
-    const result = await this.offersService.importFromSalesCenter();
+  async importFromSalesCenter(@Request() req: any): Promise<{ success: boolean; data: any }> {
+    const userId = String(req.user.id);
+    const result = await this.offersService.importFromSalesCenter(userId);
     return { success: true, data: result };
   }
 

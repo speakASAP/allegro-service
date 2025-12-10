@@ -9,12 +9,15 @@ import {
   Param,
   Query,
   UseGuards,
+  HttpException,
+  HttpStatus,
+  UnauthorizedException,
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ImportService } from './import.service';
-import { JwtAuthGuard } from '@allegro/shared';
+import { JwtAuthGuard, LoggerService } from '@allegro/shared';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -29,7 +32,12 @@ interface MulterFile {
 
 @Controller('import')
 export class ImportController {
-  constructor(private readonly importService: ImportService) {}
+  constructor(
+    private readonly importService: ImportService,
+    private readonly logger: LoggerService,
+  ) {
+    this.logger.setContext('ImportController');
+  }
 
   @Post('csv')
   @UseGuards(JwtAuthGuard)
@@ -57,8 +65,38 @@ export class ImportController {
   @Get('jobs')
   @UseGuards(JwtAuthGuard)
   async listJobs(@Query() query: any): Promise<{ success: boolean; data: any }> {
-    const result = await this.importService.listImportJobs(query);
-    return { success: true, data: result };
+    try {
+      const result = await this.importService.listImportJobs(query);
+      this.logger.log('Import jobs fetched', {
+        total: result?.pagination?.total,
+        page: result?.pagination?.page,
+        limit: result?.pagination?.limit,
+      });
+      return { success: true, data: result };
+    } catch (error: any) {
+      if (error instanceof UnauthorizedException) {
+        this.logger.warn('Unauthorized when listing import jobs', {
+          message: error.message,
+        });
+        throw error;
+      }
+
+      this.logger.error('Failed to list import jobs', {
+        error: error.message,
+      });
+
+      throw new HttpException(
+        {
+          success: false,
+          error: {
+            code: 'IMPORT_JOBS_ERROR',
+            message: 'Failed to load import jobs. Please try again later.',
+            statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+          },
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Get('jobs/:id')
