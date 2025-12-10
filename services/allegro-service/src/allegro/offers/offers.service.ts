@@ -204,9 +204,16 @@ export class OffersService {
       };
     }
 
-    // Images
-    if (dto.images !== undefined) {
+    // Images - always include (required by Allegro API)
+    // If updating, use new images; otherwise preserve existing images
+    if (dto.images !== undefined && dto.images.length > 0) {
       payload.images = dto.images.map((url: string) => ({ url }));
+    } else if (existingOffer.rawData?.images && Array.isArray(existingOffer.rawData.images)) {
+      // Preserve existing images if not updating
+      payload.images = existingOffer.rawData.images;
+    } else if (existingOffer.images && Array.isArray(existingOffer.images)) {
+      // Fallback to images field if rawData.images not available
+      payload.images = existingOffer.images.map((url: string) => ({ url }));
     }
 
     // Parameters/attributes
