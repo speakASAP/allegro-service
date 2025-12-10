@@ -306,10 +306,14 @@ const SettingsPage: React.FC = () => {
       const response = await oauthApi.getStatus();
       if (response.data.success) {
         setOauthStatus(response.data.data);
+      } else {
+        // If response is not successful, set as not authorized
+        setOauthStatus({ authorized: false });
       }
     } catch (err: unknown) {
-      // Silently fail - OAuth status is optional
+      // On error, set as not authorized (don't leave as null to avoid infinite loading)
       console.error('Failed to load OAuth status', err);
+      setOauthStatus({ authorized: false });
     }
   };
 

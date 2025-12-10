@@ -176,6 +176,37 @@ export class AllegroApiService {
   }
 
   /**
+   * Get offer by ID with OAuth token (for user-specific resources)
+   */
+  async getOfferWithOAuthToken(accessToken: string, offerId: string) {
+    const endpoint = `/sale/product-offers/${offerId}`;
+    const url = `${this.apiUrl}${endpoint}`;
+
+    try {
+      const config = {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Accept': 'application/vnd.allegro.public.v1+json',
+        },
+      };
+
+      const response = await firstValueFrom(this.httpService.get(url, config));
+      return response.data;
+    } catch (error: any) {
+      const errorData = error.response?.data || {};
+      this.logger.error('Allegro API request failed with OAuth token', {
+        endpoint,
+        error: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        errorData: errorData,
+        responseHeaders: error.response?.headers,
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Create offer
    */
   async createOffer(data: any) {
