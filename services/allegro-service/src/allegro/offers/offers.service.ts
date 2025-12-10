@@ -454,7 +454,12 @@ export class OffersService {
         hasCategory: !!allegroPayload.category,
         hasImages: !!allegroPayload.images,
         imagesCount: allegroPayload.images?.length || 0,
+        hasDescription: !!allegroPayload.description,
+        descriptionType: typeof allegroPayload.description,
+        descriptionLength: typeof allegroPayload.description === 'string' ? allegroPayload.description.length : 'N/A',
+        dtoHasDescription: dto.description !== undefined,
         usingOAuthToken: !!userId,
+        fullPayload: JSON.stringify(allegroPayload, null, 2),
       });
 
       // Update via Allegro API with OAuth token
