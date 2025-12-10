@@ -233,9 +233,11 @@ const OffersPage: React.FC = () => {
 
   const handleEditOffer = () => {
     if (!selectedOffer) return;
+    const description = selectedOffer.description || 
+      (typeof selectedOffer.rawData?.description === 'string' ? selectedOffer.rawData.description : '') || '';
     setEditedOffer({
       title: selectedOffer.title,
-      description: selectedOffer.description || selectedOffer.rawData?.description || '',
+      description: description,
       price: selectedOffer.price,
       currency: selectedOffer.currency,
       stockQuantity: selectedOffer.stockQuantity,
@@ -844,7 +846,8 @@ const OffersPage: React.FC = () => {
                   <textarea
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     rows={6}
-                    value={editedOffer.description || selectedOffer?.rawData?.description || ''}
+                    value={editedOffer.description || 
+                      (typeof selectedOffer?.rawData?.description === 'string' ? selectedOffer.rawData.description : '') || ''}
                     onChange={(e) => setEditedOffer({ ...editedOffer, description: e.target.value })}
                   />
                 </div>
