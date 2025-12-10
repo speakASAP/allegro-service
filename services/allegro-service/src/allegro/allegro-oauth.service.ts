@@ -145,13 +145,24 @@ export class AllegroOAuthService {
 
       return response.data;
     } catch (error: any) {
+      const errorData = error.response?.data || {};
+      const errorDescription = errorData.error_description || errorData.error || error.message;
+      const errorCode = errorData.error || 'unknown_error';
+      
       this.logger.error('Failed to exchange authorization code for token', {
         error: error.message,
         status: error.response?.status,
-        errorData: error.response?.data,
+        errorCode,
+        errorDescription,
+        errorData: JSON.stringify(errorData),
+        redirectUri: redirectUri.substring(0, 50) + '...',
+        clientId: clientId.substring(0, 8) + '...',
+        hasCodeVerifier: !!codeVerifier,
+        codeVerifierLength: codeVerifier?.length,
       });
+      
       throw new Error(
-        `Failed to exchange authorization code: ${error.response?.data?.error_description || error.message}`,
+        `Failed to exchange authorization code: ${errorDescription} (${errorCode})`,
       );
     }
   }
