@@ -1160,20 +1160,23 @@ export class OffersService {
               },
             });
 
+            // Ensure JSON fields are properly formatted for Prisma
+            const dbData = {
+              ...offerData,
+              // Explicitly set JSON fields to ensure they're saved
+              images: offerData.images ? (Array.isArray(offerData.images) ? offerData.images : [offerData.images]) : null,
+              deliveryOptions: offerData.deliveryOptions || null,
+              paymentOptions: offerData.paymentOptions || null,
+              rawData: offerData.rawData || null,
+              syncStatus: 'SYNCED',
+              syncSource: 'ALLEGRO_API',
+              lastSyncedAt: new Date(),
+            };
+
             const offer = await this.prisma.allegroOffer.upsert({
               where: { allegroOfferId: allegroOffer.id },
-              update: {
-                ...offerData,
-                syncStatus: 'SYNCED',
-                syncSource: 'ALLEGRO_API',
-                lastSyncedAt: new Date(),
-              } as any,
-              create: {
-                ...offerData,
-                syncStatus: 'SYNCED',
-                syncSource: 'ALLEGRO_API',
-                lastSyncedAt: new Date(),
-              } as any,
+              update: dbData as any,
+              create: dbData as any,
             });
 
             // Log after saving to verify what was actually saved
@@ -1953,15 +1956,47 @@ export class OffersService {
       return extracted;
     }
     
+    // Check primaryImage field (Allegro API sometimes uses this instead of images array)
+    if (allegroOffer.primaryImage) {
+      const url = typeof allegroOffer.primaryImage === 'string' 
+        ? allegroOffer.primaryImage 
+        : (allegroOffer.primaryImage.url || allegroOffer.primaryImage.path || allegroOffer.primaryImage.src);
+      if (url) {
+        this.logger.log('[extractImages] Found primaryImage', {
+          offerId,
+          imageUrl: url.substring(0, 100),
+        });
+        return [url];
+      }
+    }
+    
+    // Check rawData.primaryImage as fallback
+    if (allegroOffer.rawData?.primaryImage) {
+      const url = typeof allegroOffer.rawData.primaryImage === 'string' 
+        ? allegroOffer.rawData.primaryImage 
+        : (allegroOffer.rawData.primaryImage.url || allegroOffer.rawData.primaryImage.path || allegroOffer.rawData.primaryImage.src);
+      if (url) {
+        this.logger.log('[extractImages] Found rawData.primaryImage', {
+          offerId,
+          imageUrl: url.substring(0, 100),
+        });
+        return [url];
+      }
+    }
+    
     this.logger.warn('[extractImages] No images found in offer', {
       offerId,
       hasDirectImages: !!allegroOffer.images,
       directImagesType: allegroOffer.images ? typeof allegroOffer.images : 'null',
       directImagesIsArray: Array.isArray(allegroOffer.images),
       hasRawData: !!allegroOffer.rawData,
+      hasPrimaryImage: !!allegroOffer.primaryImage,
+      hasRawData: !!allegroOffer.rawData,
       hasRawDataImages: !!allegroOffer.rawData?.images,
+      hasRawDataPrimaryImage: !!allegroOffer.rawData?.primaryImage,
       rawDataImagesType: allegroOffer.rawData?.images ? typeof allegroOffer.rawData.images : 'null',
       rawDataImagesIsArray: Array.isArray(allegroOffer.rawData?.images),
+      rawDataKeys: allegroOffer.rawData ? Object.keys(allegroOffer.rawData).join(', ') : 'N/A',
     });
     
     return null;
