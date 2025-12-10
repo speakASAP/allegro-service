@@ -63,6 +63,15 @@ export class OffersService {
     if (query.status) {
       where.status = query.status;
     }
+    if (query.categoryId) {
+      where.categoryId = query.categoryId;
+    }
+    if (query.search) {
+      where.title = {
+        contains: query.search,
+        mode: 'insensitive',
+      };
+    }
 
     const [items, total] = await Promise.all([
       this.prisma.allegroOffer.findMany({
@@ -350,6 +359,7 @@ export class OffersService {
                 stockQuantity: allegroOffer.stock?.available || 0,
                 status: allegroOffer.publication?.status || 'INACTIVE',
                 publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
+                rawData: allegroOffer,
                 syncStatus: 'SYNCED',
                 lastSyncedAt: new Date(),
               },
@@ -364,6 +374,7 @@ export class OffersService {
                 stockQuantity: allegroOffer.stock?.available || 0,
                 status: allegroOffer.publication?.status || 'INACTIVE',
                 publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
+                rawData: allegroOffer,
                 syncStatus: 'SYNCED',
                 lastSyncedAt: new Date(),
               },
@@ -503,6 +514,7 @@ export class OffersService {
                 quantity: allegroOffer.stock?.available || 0,
                 stockQuantity: allegroOffer.stock?.available || 0,
                 status: allegroOffer.publication?.status || 'INACTIVE',
+                rawData: allegroOffer,
                 syncStatus: 'SYNCED',
                 lastSyncedAt: new Date(),
               },
@@ -516,6 +528,7 @@ export class OffersService {
                 quantity: allegroOffer.stock?.available || 0,
                 stockQuantity: allegroOffer.stock?.available || 0,
                 status: allegroOffer.publication?.status || 'INACTIVE',
+                rawData: allegroOffer,
                 syncStatus: 'SYNCED',
                 lastSyncedAt: new Date(),
               },
@@ -741,6 +754,7 @@ export class OffersService {
               stockQuantity: allegroOffer.stock?.available || 0,
               status: allegroOffer.publication?.status || 'INACTIVE',
               publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
+              rawData: allegroOffer,
               syncStatus: 'SYNCED',
               lastSyncedAt: new Date(),
             },
@@ -755,6 +769,7 @@ export class OffersService {
               stockQuantity: allegroOffer.stock?.available || 0,
               status: allegroOffer.publication?.status || 'INACTIVE',
               publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
+              rawData: allegroOffer,
               syncStatus: 'SYNCED',
               lastSyncedAt: new Date(),
             },
@@ -841,6 +856,7 @@ export class OffersService {
               stockQuantity: allegroOffer.stock?.available || 0,
               status: allegroOffer.publication?.status || 'INACTIVE',
               publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
+              rawData: allegroOffer,
               syncStatus: 'SYNCED',
               lastSyncedAt: new Date(),
             },
@@ -855,6 +871,7 @@ export class OffersService {
               stockQuantity: allegroOffer.stock?.available || 0,
               status: allegroOffer.publication?.status || 'INACTIVE',
               publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
+              rawData: allegroOffer,
               syncStatus: 'SYNCED',
               lastSyncedAt: new Date(),
             },

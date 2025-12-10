@@ -12,6 +12,7 @@ import Dashboard from './pages/Dashboard';
 import SettingsPage from './pages/SettingsPage';
 import ImportJobsPage from './pages/ImportJobsPage';
 import OrdersPage from './pages/OrdersPage';
+import OffersPage from './pages/OffersPage';
 import AllegroOAuthCallbackPage from './pages/AllegroOAuthCallbackPage';
 
 function App() {
@@ -39,6 +40,7 @@ function App() {
             <Route index element={<Navigate to="settings" replace />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="import" element={<ImportJobsPage />} />
+            <Route path="offers" element={<OffersPage />} />
             <Route path="orders" element={<OrdersPage />} />
           </Route>
         </Routes>
