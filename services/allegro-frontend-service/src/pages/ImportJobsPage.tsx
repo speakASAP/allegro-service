@@ -4,7 +4,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { AxiosError } from 'axios';
-import api from '../services/api';
+import { useNavigate } from 'react-router-dom';
+import api, { oauthApi } from '../services/api';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
@@ -33,10 +34,12 @@ interface PreviewOffer {
 }
 
 const ImportJobsPage: React.FC = () => {
+  const navigate = useNavigate();
   const [jobs, setJobs] = useState<ImportJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [requiresOAuth, setRequiresOAuth] = useState(false);
 
   // Import preview states
   const [showImportPreview, setShowImportPreview] = useState(false);
@@ -46,6 +49,7 @@ const ImportJobsPage: React.FC = () => {
   const [loadingImportAllegro, setLoadingImportAllegro] = useState(false);
   const [loadingImportSalesCenter, setLoadingImportSalesCenter] = useState(false);
   const [processingImport, setProcessingImport] = useState(false);
+  const [loadingImportAll, setLoadingImportAll] = useState(false);
 
   // Export preview states
   const [showExportPreview, setShowExportPreview] = useState(false);
@@ -109,6 +113,72 @@ const ImportJobsPage: React.FC = () => {
     }
   };
 
+  const handleImportAllOffers = async () => {
+    setLoadingImportAll(true);
+    setError(null);
+    setSuccess(null);
+    setRequiresOAuth(false);
+
+    try {
+      const response = await api.get('/allegro/offers/import');
+      if (response.data.success) {
+        const totalImported = response.data.data?.totalImported || 0;
+        setSuccess(`Successfully imported ${totalImported} offers from Allegro`);
+        loadJobs(); // Refresh the jobs list
+      }
+    } catch (err) {
+      console.error('Failed to import all offers', err);
+      if (err instanceof AxiosError) {
+        // Don't set error if it's a 401 - the interceptor will handle redirect
+        if (err.response?.status === 401) {
+          return; // Let the interceptor handle the redirect
+        }
+        const errorData = err.response?.data?.error;
+        const errorMessage = errorData?.message || 'Failed to import offers';
+        const needsOAuth = errorData?.requiresOAuth || errorMessage.toLowerCase().includes('oauth');
+        
+        if (needsOAuth) {
+          setRequiresOAuth(true);
+          setError(errorMessage);
+        } else {
+          const axiosError = err as AxiosError & { isConnectionError?: boolean; serviceErrorMessage?: string };
+          if (axiosError.isConnectionError && axiosError.serviceErrorMessage) {
+            setError(axiosError.serviceErrorMessage);
+          } else {
+            setError(errorMessage);
+          }
+        }
+      } else {
+        setError('Failed to import offers');
+      }
+    } finally {
+      setLoadingImportAll(false);
+    }
+  };
+
+  const handleAuthorizeOAuth = async () => {
+    try {
+      const response = await oauthApi.authorize();
+      if (response.data.success && response.data.data?.authorizationUrl) {
+        // Redirect to Allegro authorization page
+        window.location.href = response.data.data.authorizationUrl;
+      } else {
+        setError('Failed to generate authorization URL');
+      }
+    } catch (err: unknown) {
+      if (err instanceof AxiosError) {
+        const axiosError = err as AxiosError & { isConnectionError?: boolean; serviceErrorMessage?: string };
+        if (axiosError.isConnectionError && axiosError.serviceErrorMessage) {
+          setError(axiosError.serviceErrorMessage);
+        } else {
+          setError(err.response?.data?.error?.message || 'Failed to start OAuth authorization');
+        }
+      } else {
+        setError('Failed to start OAuth authorization');
+      }
+    }
+  };
+
   const handlePreviewImport = async (source: 'allegro' | 'sales-center') => {
     if (source === 'allegro') {
       setLoadingImportAllegro(true);
@@ -116,6 +186,7 @@ const ImportJobsPage: React.FC = () => {
       setLoadingImportSalesCenter(true);
     }
     setError(null);
+    setRequiresOAuth(false);
     setImportSource(source);
 
     try {
@@ -136,11 +207,20 @@ const ImportJobsPage: React.FC = () => {
         if (err.response?.status === 401) {
           return; // Let the interceptor handle the redirect
         }
-        const axiosError = err as AxiosError & { isConnectionError?: boolean; serviceErrorMessage?: string };
-        if (axiosError.isConnectionError && axiosError.serviceErrorMessage) {
-          setError(axiosError.serviceErrorMessage);
+        const errorData = err.response?.data?.error;
+        const errorMessage = errorData?.message || 'Failed to preview import';
+        const needsOAuth = errorData?.requiresOAuth || errorMessage.toLowerCase().includes('oauth');
+        
+        if (needsOAuth) {
+          setRequiresOAuth(true);
+          setError(errorMessage);
         } else {
-          setError(err.response?.data?.error?.message || 'Failed to preview import');
+          const axiosError = err as AxiosError & { isConnectionError?: boolean; serviceErrorMessage?: string };
+          if (axiosError.isConnectionError && axiosError.serviceErrorMessage) {
+            setError(axiosError.serviceErrorMessage);
+          } else {
+            setError(errorMessage);
+          }
         }
       } else {
         setError('Failed to preview import');
@@ -320,20 +400,28 @@ const ImportJobsPage: React.FC = () => {
         <div className="flex space-x-2">
           <div className="flex space-x-2 border-r pr-2 mr-2">
             <Button
+              onClick={handleImportAllOffers}
+              disabled={loadingImportAll || loadingImportAllegro || loadingImportSalesCenter || processingImport}
+              variant="primary"
+              size="small"
+            >
+              {loadingImportAll ? 'Importing...' : '📥 Import All Offers'}
+            </Button>
+            <Button
               onClick={() => handlePreviewImport('allegro')}
-              disabled={loadingImportAllegro || loadingImportSalesCenter || processingImport}
+              disabled={loadingImportAll || loadingImportAllegro || loadingImportSalesCenter || processingImport}
               variant="secondary"
               size="small"
             >
-              {loadingImportAllegro ? 'Loading...' : '📥 Import from Allegro API'}
+              {loadingImportAllegro ? 'Loading...' : '📋 Preview from Allegro API'}
             </Button>
             <Button
               onClick={() => handlePreviewImport('sales-center')}
-              disabled={loadingImportAllegro || loadingImportSalesCenter || processingImport}
+              disabled={loadingImportAll || loadingImportAllegro || loadingImportSalesCenter || processingImport}
               variant="secondary"
               size="small"
             >
-              {loadingImportSalesCenter ? 'Loading...' : '📥 Import from Sales Center'}
+              {loadingImportSalesCenter ? 'Loading...' : '📋 Preview from Sales Center'}
             </Button>
           </div>
           <div className="flex space-x-2">
@@ -352,7 +440,28 @@ const ImportJobsPage: React.FC = () => {
       {error && (
         <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded whitespace-pre-line">
           <div className="font-semibold mb-2">Error:</div>
-          <div className="text-sm">{error}</div>
+          <div className="text-sm mb-3">{error}</div>
+          {requiresOAuth && (
+            <div className="mt-3 pt-3 border-t border-red-300">
+              <p className="text-sm mb-3">To import offers from Allegro, you need to authorize the application via OAuth.</p>
+              <div className="flex space-x-2">
+                <Button
+                  onClick={handleAuthorizeOAuth}
+                  variant="primary"
+                  size="small"
+                >
+                  Authorize with Allegro
+                </Button>
+                <Button
+                  onClick={() => navigate('/dashboard/settings')}
+                  variant="secondary"
+                  size="small"
+                >
+                  Go to Settings
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -103,9 +103,42 @@ export class OffersController {
   @Get('import')
   @UseGuards(JwtAuthGuard)
   async importOffers(@Request() req: any): Promise<{ success: boolean; data: any }> {
-    const userId = String(req.user.id);
-    const result = await this.offersService.importAllOffers(userId);
-    return { success: true, data: result };
+    try {
+      const userId = String(req.user.id);
+      const result = await this.offersService.importAllOffers(userId);
+      return { success: true, data: result };
+    } catch (error: any) {
+      const errorStatus = error.response?.status || 500;
+      const errorMessage = error.message || 'Failed to import offers from Allegro';
+      
+      this.logger.error('Failed to import offers', {
+        error: error.message,
+        status: errorStatus,
+        userId: req.user?.id,
+      });
+      
+      // Provide helpful error message for OAuth-related errors
+      let userFriendlyMessage = errorMessage;
+      if (errorMessage.includes('OAuth authorization required')) {
+        userFriendlyMessage = errorMessage;
+      } else if (errorStatus === 403 || errorStatus === 401) {
+        userFriendlyMessage = 'OAuth authorization required. The Allegro API requires OAuth authorization to access your offers. Please go to Settings and click "Authorize with Allegro" to grant access to your Allegro account.';
+      }
+      
+      throw new HttpException(
+        {
+          success: false,
+          error: {
+            code: 'IMPORT_ERROR',
+            message: userFriendlyMessage,
+            status: errorStatus,
+            requiresOAuth: errorMessage.includes('OAuth authorization required') || errorStatus === 403 || errorStatus === 401,
+            oauthSettingsUrl: '/dashboard/settings',
+          },
+        },
+        errorStatus,
+      );
+    }
   }
 
   @Get('import/sales-center/preview')
