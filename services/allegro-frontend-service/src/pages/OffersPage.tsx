@@ -92,6 +92,9 @@ interface Offer {
   publicationStatus?: string;
   lastSyncedAt?: string;
   syncSource?: string;
+  validationStatus?: 'READY' | 'WARNINGS' | 'ERRORS';
+  validationErrors?: Array<{ type: string; message: string; severity: 'error' | 'warning' }>;
+  lastValidatedAt?: string;
   images?: ImageArray;
   rawData?: AllegroRawData;
   product?: {
@@ -116,6 +119,7 @@ const OffersPage: React.FC = () => {
   const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [validating, setValidating] = useState(false);
   
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -190,6 +194,27 @@ const OffersPage: React.FC = () => {
       } finally {
         setLoadingDetail(false);
       }
+    }
+  };
+
+  const handleValidateOffer = async () => {
+    if (!selectedOffer) return;
+    
+    setValidating(true);
+    try {
+      const response = await api.post(`/allegro/offers/${selectedOffer.id}/validate`);
+      if (response.data.success) {
+        // Reload offer details to get updated validation status
+        const detailResponse = await api.get(`/allegro/offers/${selectedOffer.id}`);
+        if (detailResponse.data.success) {
+          setSelectedOffer(detailResponse.data.data);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to validate offer', err);
+      setError('Failed to validate offer');
+    } finally {
+      setValidating(false);
     }
   };
 
@@ -538,6 +563,7 @@ const OffersPage: React.FC = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Publication</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Validation</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sync Source</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Synced</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
@@ -691,6 +717,24 @@ const OffersPage: React.FC = () => {
                     <div className="font-medium">{selectedOffer.syncSource}</div>
                   </div>
                 )}
+                {selectedOffer.validationStatus && (
+                  <div>
+                    <div className="text-sm text-gray-600">Validation Status</div>
+                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                      selectedOffer.validationStatus === 'READY' ? 'bg-green-100 text-green-800' :
+                      selectedOffer.validationStatus === 'WARNINGS' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-red-100 text-red-800'
+                    }`}>
+                      {selectedOffer.validationStatus}
+                    </span>
+                  </div>
+                )}
+                {selectedOffer.lastValidatedAt && (
+                  <div>
+                    <div className="text-sm text-gray-600">Last Validated</div>
+                    <div className="font-medium">{new Date(selectedOffer.lastValidatedAt).toLocaleString()}</div>
+                  </div>
+                )}
                 {selectedOffer.product && (
                   <div>
                     <div className="text-sm text-gray-600">Linked Product</div>
@@ -699,6 +743,62 @@ const OffersPage: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {/* Validation Errors */}
+            {selectedOffer.validationErrors && selectedOffer.validationErrors.length > 0 && (
+              <div>
+                <h3 className="font-semibold mb-2 flex items-center justify-between">
+                  <span>Validation Issues</span>
+                  <Button
+                    variant="secondary"
+                    size="small"
+                    onClick={handleValidateOffer}
+                    disabled={validating}
+                  >
+                    {validating ? 'Validating...' : 'Re-validate'}
+                  </Button>
+                </h3>
+                <div className="space-y-2">
+                  {selectedOffer.validationErrors.map((error, idx) => (
+                    <div
+                      key={idx}
+                      className={`p-3 rounded border ${
+                        error.severity === 'error' ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'
+                      }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <span className={`text-xs font-semibold ${
+                          error.severity === 'error' ? 'text-red-700' : 'text-yellow-700'
+                        }`}>
+                          {error.severity === 'error' ? '❌' : '⚠️'}
+                        </span>
+                        <div className="flex-1">
+                          <div className="text-sm font-medium">
+                            {error.type}
+                          </div>
+                          <div className="text-xs text-gray-600 mt-1">
+                            {error.message}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Validate Button (if no errors shown) */}
+            {(!selectedOffer.validationErrors || selectedOffer.validationErrors.length === 0) && (
+              <div>
+                <Button
+                  variant="secondary"
+                  onClick={handleValidateOffer}
+                  disabled={validating}
+                >
+                  {validating ? 'Validating...' : 'Validate Offer'}
+                </Button>
+              </div>
+            )}
 
             {/* Description */}
             {selectedOffer.description && (

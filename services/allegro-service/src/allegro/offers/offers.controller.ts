@@ -398,5 +398,24 @@ export class OffersController {
     const result = await this.offersService.updateStock(id, body.quantity);
     return { success: true, data: result };
   }
+
+  @Post(':id/validate')
+  @UseGuards(JwtAuthGuard)
+  async validateOffer(@Param('id') id: string, @Request() req: any): Promise<{ success: boolean; data: any }> {
+    const userId = String(req.user?.id || 'unknown');
+    this.logger.log('Validating offer', {
+      userId,
+      offerId: id,
+    });
+    const validation = await this.offersService.validateOffer(id);
+    this.logger.log('Offer validation completed', {
+      userId,
+      offerId: id,
+      status: validation.status,
+      errorCount: validation.errors.filter(e => e.severity === 'error').length,
+      warningCount: validation.errors.filter(e => e.severity === 'warning').length,
+    });
+    return { success: true, data: validation };
+  }
 }
 

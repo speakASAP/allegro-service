@@ -403,9 +403,19 @@ export class OffersService {
 
             if (existingOffer) {
               // Update existing offer
-              await this.prisma.allegroOffer.update({
+              const updated = await this.prisma.allegroOffer.update({
                 where: { allegroOfferId: allegroOffer.id },
                 data: offerData,
+              });
+              // Run validation
+              const validation = this.validateOfferReadiness(updated);
+              await this.prisma.allegroOffer.update({
+                where: { allegroOfferId: allegroOffer.id },
+                data: {
+                  validationStatus: validation.status,
+                  validationErrors: validation.errors as any,
+                  lastValidatedAt: new Date(),
+                },
               });
               totalUpdated++;
               this.logger.log('[importApprovedOffers] Successfully updated existing offer', {
@@ -415,11 +425,21 @@ export class OffersService {
               });
             } else {
               // Create new offer
-              await this.prisma.allegroOffer.create({
+              const created = await this.prisma.allegroOffer.create({
                 data: {
                   allegroOfferId: allegroOffer.id,
                   ...offerData,
                   syncSource: 'ALLEGRO_API',
+                },
+              });
+              // Run validation
+              const validation = this.validateOfferReadiness(created);
+              await this.prisma.allegroOffer.update({
+                where: { id: created.id },
+                data: {
+                  validationStatus: validation.status,
+                  validationErrors: validation.errors as any,
+                  lastValidatedAt: new Date(),
                 },
               });
               totalCreated++;
@@ -551,7 +571,7 @@ export class OffersService {
         for (const allegroOffer of offers) {
           try {
             const images = this.extractImages(allegroOffer);
-            await this.prisma.allegroOffer.upsert({
+            const offer = await this.prisma.allegroOffer.upsert({
               where: { allegroOfferId: allegroOffer.id },
               update: {
                 title: allegroOffer.name,
@@ -585,6 +605,16 @@ export class OffersService {
                 syncStatus: 'SYNCED',
                 syncSource: 'ALLEGRO_API',
                 lastSyncedAt: new Date(),
+              },
+            });
+            // Run validation
+            const validation = this.validateOfferReadiness(offer);
+            await this.prisma.allegroOffer.update({
+              where: { id: offer.id },
+              data: {
+                validationStatus: validation.status,
+                validationErrors: validation.errors as any,
+                lastValidatedAt: new Date(),
               },
             });
             totalImported++;
@@ -820,7 +850,7 @@ export class OffersService {
             });
 
             const images = this.extractImages(allegroOffer);
-            await this.prisma.allegroOffer.upsert({
+            const offer = await this.prisma.allegroOffer.upsert({
               where: { allegroOfferId: allegroOffer.id },
               update: {
                 title: allegroOffer.name,
@@ -856,6 +886,16 @@ export class OffersService {
                 syncStatus: 'SYNCED',
                 syncSource: 'SALES_CENTER',
                 lastSyncedAt: new Date(),
+              },
+            });
+            // Run validation
+            const validation = this.validateOfferReadiness(offer);
+            await this.prisma.allegroOffer.update({
+              where: { id: offer.id },
+              data: {
+                validationStatus: validation.status,
+                validationErrors: validation.errors as any,
+                lastValidatedAt: new Date(),
               },
             });
             totalImported++;
@@ -1009,7 +1049,7 @@ export class OffersService {
       for (const allegroOffer of offers) {
         try {
           const images = this.extractImages(allegroOffer);
-            await this.prisma.allegroOffer.upsert({
+          const offer = await this.prisma.allegroOffer.upsert({
             where: { allegroOfferId: allegroOffer.id },
             update: {
               title: allegroOffer.name,
@@ -1045,6 +1085,16 @@ export class OffersService {
               syncStatus: 'SYNCED',
               syncSource: 'SALES_CENTER',
               lastSyncedAt: new Date(),
+            },
+          });
+          // Run validation
+          const validation = this.validateOfferReadiness(offer);
+          await this.prisma.allegroOffer.update({
+            where: { id: offer.id },
+            data: {
+              validationStatus: validation.status,
+              validationErrors: validation.errors as any,
+              lastValidatedAt: new Date(),
             },
           });
           totalImported++;
@@ -1113,6 +1163,131 @@ export class OffersService {
       });
     }
     return null;
+  }
+
+  /**
+   * Validate offer readiness for publishing
+   * Returns validation status and array of errors/warnings
+   */
+  private validateOfferReadiness(offer: any): {
+    status: 'READY' | 'WARNINGS' | 'ERRORS';
+    errors: Array<{ type: string; message: string; severity: 'error' | 'warning' }>;
+  } {
+    const errors: Array<{ type: string; message: string; severity: 'error' | 'warning' }> = [];
+
+    // Required: Title
+    if (!offer.title || offer.title.trim().length === 0) {
+      errors.push({ type: 'MISSING_TITLE', message: 'Title is required', severity: 'error' });
+    }
+
+    // Required: Description
+    if (!offer.description || offer.description.trim().length === 0) {
+      errors.push({ type: 'MISSING_DESCRIPTION', message: 'Description is required', severity: 'error' });
+    }
+
+    // Required: At least one image
+    const images = this.extractImages(offer);
+    if (!images || images.length === 0) {
+      errors.push({ type: 'MISSING_IMAGES', message: 'At least one image is required', severity: 'error' });
+    } else if (images.length < 3) {
+      errors.push({ type: 'FEW_IMAGES', message: `Only ${images.length} image(s) - consider adding more for better visibility`, severity: 'warning' });
+    }
+
+    // Required: Valid price
+    const price = typeof offer.price === 'number' ? offer.price : parseFloat(offer.price || '0');
+    if (!price || price <= 0) {
+      errors.push({ type: 'INVALID_PRICE', message: 'Price must be greater than 0', severity: 'error' });
+    }
+
+    // Required: Valid stock
+    const stock = offer.stockQuantity !== undefined ? offer.stockQuantity : offer.quantity;
+    if (stock === undefined || stock < 0) {
+      errors.push({ type: 'INVALID_STOCK', message: 'Stock quantity must be 0 or greater', severity: 'error' });
+    } else if (stock === 0) {
+      errors.push({ type: 'OUT_OF_STOCK', message: 'Stock is 0 - offer may not be visible', severity: 'warning' });
+    }
+
+    // Required: Category
+    if (!offer.categoryId || offer.categoryId.trim().length === 0) {
+      errors.push({ type: 'MISSING_CATEGORY', message: 'Category is required', severity: 'error' });
+    }
+
+    // Check delivery options
+    if (!offer.deliveryOptions || (Array.isArray(offer.deliveryOptions) && offer.deliveryOptions.length === 0)) {
+      errors.push({ type: 'MISSING_DELIVERY', message: 'At least one delivery option is recommended', severity: 'warning' });
+    }
+
+    // Check payment options
+    if (!offer.paymentOptions || (Array.isArray(offer.paymentOptions) && offer.paymentOptions.length === 0)) {
+      errors.push({ type: 'MISSING_PAYMENT', message: 'At least one payment option is recommended', severity: 'warning' });
+    }
+
+    // Check rawData for required attributes (if available)
+    if (offer.rawData) {
+      const rawData = offer.rawData;
+      
+      // Check if publication is active but offer has issues
+      if (rawData.publication?.status === 'ACTIVE' && errors.some(e => e.severity === 'error')) {
+        errors.push({ type: 'ACTIVE_WITH_ERRORS', message: 'Offer is published but has validation errors', severity: 'error' });
+      }
+
+      // Check for required parameters/attributes (category-specific requirements vary)
+      if (rawData.parameters && Array.isArray(rawData.parameters)) {
+        const requiredParams = rawData.parameters.filter((p: any) => p.required === true && (!p.values || p.values.length === 0));
+        if (requiredParams.length > 0) {
+          errors.push({
+            type: 'MISSING_REQUIRED_ATTRIBUTES',
+            message: `${requiredParams.length} required attribute(s) missing`,
+            severity: 'error',
+          });
+        }
+      }
+    }
+
+    // Determine overall status
+    const hasErrors = errors.some(e => e.severity === 'error');
+    const hasWarnings = errors.some(e => e.severity === 'warning');
+
+    let status: 'READY' | 'WARNINGS' | 'ERRORS';
+    if (hasErrors) {
+      status = 'ERRORS';
+    } else if (hasWarnings) {
+      status = 'WARNINGS';
+    } else {
+      status = 'READY';
+    }
+
+    return { status, errors };
+  }
+
+  /**
+   * Validate and update validation status for an offer
+   */
+  async validateOffer(offerId: string): Promise<{
+    status: 'READY' | 'WARNINGS' | 'ERRORS';
+    errors: Array<{ type: string; message: string; severity: 'error' | 'warning' }>;
+  }> {
+    const offer = await this.prisma.allegroOffer.findUnique({
+      where: { id: offerId },
+    });
+
+    if (!offer) {
+      throw new HttpException('Offer not found', HttpStatus.NOT_FOUND);
+    }
+
+    const validation = this.validateOfferReadiness(offer);
+
+    // Update validation status in database
+    await this.prisma.allegroOffer.update({
+      where: { id: offerId },
+      data: {
+        validationStatus: validation.status,
+        validationErrors: validation.errors as any,
+        lastValidatedAt: new Date(),
+      },
+    });
+
+    return validation;
   }
 }
 
