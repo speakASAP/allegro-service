@@ -24,6 +24,7 @@
 - ✅ Auto-validation: Runs during import operations
 - ✅ Manual Validation: POST /allegro/offers/:id/validate endpoint
 - ✅ Frontend Display: Validation status in list and detail view with error/warning display
+- ✅ Metrics: MetricsService tracks list/detail/validation requests and errors; GET /allegro/offers/metrics endpoint
 
 ## Goal
 
