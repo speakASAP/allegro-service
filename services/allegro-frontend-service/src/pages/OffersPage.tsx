@@ -596,6 +596,22 @@ const OffersPage: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                         {offer.product ? `${offer.product.code} - ${offer.product.name}` : '-'}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {offer.validationStatus ? (
+                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                            offer.validationStatus === 'READY' ? 'bg-green-100 text-green-800' :
+                            offer.validationStatus === 'WARNINGS' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                            {offer.validationStatus}
+                            {offer.validationErrors && offer.validationErrors.length > 0 && (
+                              <span className="ml-1">({offer.validationErrors.length})</span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {offer.syncSource || '-'}
                       </td>
