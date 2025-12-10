@@ -119,13 +119,6 @@ interface Offer {
   attributes?: Array<{ id: string; values: string[] }>;
 }
 
-interface OfferQueryParams {
-  page?: number;
-  limit?: number;
-  status?: string;
-  search?: string;
-  categoryId?: string;
-}
 
 const OffersPage: React.FC = () => {
   const [offers, setOffers] = useState<Offer[]>([]);
@@ -150,28 +143,23 @@ const OffersPage: React.FC = () => {
   const [total, setTotal] = useState(0);
   const limit = 20;
 
-  const loadOffers = useCallback(async () => {
+  // Store all offers for client-side filtering
+  const [allOffers, setAllOffers] = useState<Offer[]>([]);
+
+  // Load all offers once on mount (client-side filtering for instant filtering)
+  const loadAllOffers = useCallback(async () => {
     setLoading(true);
     try {
-      const params: OfferQueryParams = {
-        page,
-        limit,
-      };
-      if (statusFilter && statusFilter.trim()) {
-        params.status = statusFilter;
-      }
-      if (searchQuery && searchQuery.trim()) {
-        params.search = searchQuery;
-      }
-      if (categoryFilter && categoryFilter.trim()) {
-        params.categoryId = categoryFilter;
-      }
-
-      const response = await api.get('/allegro/offers', { params });
+      // Load all offers without pagination for client-side filtering
+      const response = await api.get('/allegro/offers', { 
+        params: { 
+          limit: 1000, // Load all offers at once
+          page: 1 
+        } 
+      });
       if (response.data.success) {
-        setOffers(response.data.data.items || []);
-        setTotalPages(response.data.data.pagination?.totalPages || 1);
-        setTotal(response.data.data.pagination?.total || 0);
+        const items = response.data.data.items || [];
+        setAllOffers(items);
         setError(null);
       }
     } catch (err) {
@@ -189,11 +177,45 @@ const OffersPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, searchQuery, categoryFilter, limit]);
+  }, []);
 
   useEffect(() => {
-    loadOffers();
-  }, [loadOffers]);
+    loadAllOffers();
+  }, [loadAllOffers]);
+
+  // Client-side filtering - instant!
+  useEffect(() => {
+    let filtered = [...allOffers];
+
+    // Apply search filter
+    if (searchQuery && searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(offer => 
+        offer.title?.toLowerCase().includes(query)
+      );
+    }
+
+    // Apply status filter
+    if (statusFilter && statusFilter.trim()) {
+      filtered = filtered.filter(offer => offer.status === statusFilter);
+    }
+
+    // Apply category filter
+    if (categoryFilter && categoryFilter.trim()) {
+      filtered = filtered.filter(offer => offer.categoryId === categoryFilter);
+    }
+
+    // Calculate pagination
+    const totalFiltered = filtered.length;
+    const totalPagesFiltered = Math.ceil(totalFiltered / limit);
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const paginatedOffers = filtered.slice(startIndex, endIndex);
+
+    setOffers(paginatedOffers);
+    setTotalPages(totalPagesFiltered);
+    setTotal(totalFiltered);
+  }, [allOffers, searchQuery, statusFilter, categoryFilter, page, limit]);
 
   const handleViewDetails = async (offer: Offer) => {
     setSelectedOffer(offer);
@@ -348,7 +370,7 @@ const OffersPage: React.FC = () => {
               setIsEditMode(false);
               setEditedOffer(null);
               // Refresh offers list to show updated data
-              loadOffers();
+              loadAllOffers();
             }
           }
         } catch (err) {
@@ -414,7 +436,7 @@ const OffersPage: React.FC = () => {
           setIsEditMode(false);
           setEditedOffer(null);
           // Refresh offers list to show updated data
-          loadOffers();
+          loadAllOffers();
         }
       }
     } catch (err) {
@@ -729,7 +751,7 @@ const OffersPage: React.FC = () => {
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
-                setPage(1);
+                setPage(1); // Reset to first page on filter change
               }}
             />
           </div>
