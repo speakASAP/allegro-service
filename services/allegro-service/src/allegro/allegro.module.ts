@@ -5,7 +5,7 @@
 import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { ConfigModule } from '@nestjs/config';
-import { PrismaModule, LoggerModule, AuthModule } from '@allegro/shared';
+import { PrismaModule, LoggerModule, AuthModule, MetricsModule } from '@allegro/shared';
 import { AllegroApiService } from './allegro-api.service';
 import { AllegroAuthService } from './allegro-auth.service';
 import { AllegroOAuthService } from './allegro-oauth.service';
@@ -21,7 +21,7 @@ import { EventsService } from './events/events.service';
 import { OAuthController } from './oauth/oauth.controller';
 
 @Module({
-  imports: [HttpModule, ConfigModule, PrismaModule, LoggerModule, AuthModule],
+  imports: [HttpModule, ConfigModule, PrismaModule, LoggerModule, AuthModule, MetricsModule],
   controllers: [
     OffersController,
     OrdersController,
