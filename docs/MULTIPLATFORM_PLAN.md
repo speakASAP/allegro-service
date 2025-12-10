@@ -100,7 +100,7 @@
 ## Sync Provenance & Validation
 
 - ✅ Track last sync time and source (Allegro import vs Sales Center) per offer via `syncSource` field; displayed in UI.
-- ⏳ Add simple readiness/validation flag on projection (e.g., missing media/attributes) to prepare for future publish flows.
+- ✅ Validation/readiness flags: Added `validationStatus` (READY/WARNINGS/ERRORS), `validationErrors` JSON, `lastValidatedAt`; auto-validates on import; manual validation endpoint; displayed in UI.
 
 ## Logging & Metrics
 

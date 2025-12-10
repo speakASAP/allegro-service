@@ -20,5 +20,7 @@ export * from './resilience/fallback.service';
 export * from './resilience/resilience.monitor';
 export * from './health/health.module';
 export * from './health/health.service';
+export * from './metrics/metrics.module';
+export * from './metrics/metrics.service';
 export * from './utils/supplier-placeholder.service';
 

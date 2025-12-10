@@ -19,7 +19,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { OffersService } from './offers.service';
-import { JwtAuthGuard, LoggerService } from '@allegro/shared';
+import { JwtAuthGuard, LoggerService, MetricsService } from '@allegro/shared';
 import { CreateOfferDto } from '../dto/create-offer.dto';
 import { UpdateOfferDto } from '../dto/update-offer.dto';
 import { OfferQueryDto } from '../dto/offer-query.dto';
@@ -31,6 +31,7 @@ export class OffersController {
   constructor(
     private readonly offersService: OffersService,
     loggerService: LoggerService,
+    private readonly metricsService: MetricsService,
   ) {
     this.logger = loggerService;
     this.logger.setContext('OffersController');
@@ -40,25 +41,31 @@ export class OffersController {
   @UseGuards(JwtAuthGuard)
   async getOffers(@Query() query: OfferQueryDto, @Request() req: any): Promise<{ success: boolean; data: any }> {
     const userId = String(req.user?.id || 'unknown');
-    this.logger.log('Getting offers list', {
-      userId,
-      filters: {
-        status: query.status,
-        search: query.search,
-        categoryId: query.categoryId,
-      },
-      pagination: {
-        page: query.page || 1,
-        limit: query.limit || 20,
-      },
-    });
-    const result = await this.offersService.getOffers(query);
-    this.logger.log('Offers list retrieved', {
-      userId,
-      total: result.pagination?.total || 0,
-      returned: result.items?.length || 0,
-    });
-    return { success: true, data: result };
+    try {
+      this.logger.log('Getting offers list', {
+        userId,
+        filters: {
+          status: query.status,
+          search: query.search,
+          categoryId: query.categoryId,
+        },
+        pagination: {
+          page: query.page || 1,
+          limit: query.limit || 20,
+        },
+      });
+      const result = await this.offersService.getOffers(query);
+      this.metricsService.incrementListRequests();
+      this.logger.log('Offers list retrieved', {
+        userId,
+        total: result.pagination?.total || 0,
+        returned: result.items?.length || 0,
+      });
+      return { success: true, data: result };
+    } catch (error: any) {
+      this.metricsService.incrementErrors();
+      throw error;
+    }
   }
 
   @Get('import/preview')
@@ -357,18 +364,24 @@ export class OffersController {
   @UseGuards(JwtAuthGuard)
   async getOffer(@Param('id') id: string, @Request() req: any): Promise<{ success: boolean; data: any }> {
     const userId = String(req.user?.id || 'unknown');
-    this.logger.log('Getting offer details', {
-      userId,
-      offerId: id,
-    });
-    const offer = await this.offersService.getOffer(id);
-    this.logger.log('Offer details retrieved', {
-      userId,
-      offerId: id,
-      allegroOfferId: offer.allegroOfferId,
-      hasRawData: !!offer.rawData,
-    });
-    return { success: true, data: offer };
+    try {
+      this.logger.log('Getting offer details', {
+        userId,
+        offerId: id,
+      });
+      const offer = await this.offersService.getOffer(id);
+      this.metricsService.incrementDetailRequests();
+      this.logger.log('Offer details retrieved', {
+        userId,
+        offerId: id,
+        allegroOfferId: offer.allegroOfferId,
+        hasRawData: !!offer.rawData,
+      });
+      return { success: true, data: offer };
+    } catch (error: any) {
+      this.metricsService.incrementErrors();
+      throw error;
+    }
   }
 
   @Post()
@@ -403,19 +416,34 @@ export class OffersController {
   @UseGuards(JwtAuthGuard)
   async validateOffer(@Param('id') id: string, @Request() req: any): Promise<{ success: boolean; data: any }> {
     const userId = String(req.user?.id || 'unknown');
-    this.logger.log('Validating offer', {
-      userId,
-      offerId: id,
-    });
-    const validation = await this.offersService.validateOffer(id);
-    this.logger.log('Offer validation completed', {
-      userId,
-      offerId: id,
-      status: validation.status,
-      errorCount: validation.errors.filter(e => e.severity === 'error').length,
-      warningCount: validation.errors.filter(e => e.severity === 'warning').length,
-    });
-    return { success: true, data: validation };
+    try {
+      this.logger.log('Validating offer', {
+        userId,
+        offerId: id,
+      });
+      const validation = await this.offersService.validateOffer(id);
+      this.metricsService.incrementValidationRequests();
+      this.logger.log('Offer validation completed', {
+        userId,
+        offerId: id,
+        status: validation.status,
+        errorCount: validation.errors.filter(e => e.severity === 'error').length,
+        warningCount: validation.errors.filter(e => e.severity === 'warning').length,
+      });
+      return { success: true, data: validation };
+    } catch (error: any) {
+      this.metricsService.incrementErrors();
+      throw error;
+    }
+  }
+
+  @Get('metrics')
+  @UseGuards(JwtAuthGuard)
+  async getMetrics(): Promise<{ success: boolean; data: any }> {
+    return {
+      success: true,
+      data: this.metricsService.getMetrics(),
+    };
   }
 }
 

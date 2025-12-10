@@ -19,7 +19,11 @@
 
 ### 🔄 In Progress / Next Steps
 
-- ⏳ Add validation/readiness flags for future publish flows (e.g., missing media/attributes validation)
+- ✅ Validation/Readiness: Added validationStatus, validationErrors, lastValidatedAt fields
+- ✅ Validation Logic: Checks title, description, images, price, stock, category, delivery/payment, required attributes
+- ✅ Auto-validation: Runs during import operations
+- ✅ Manual Validation: POST /allegro/offers/:id/validate endpoint
+- ✅ Frontend Display: Validation status in list and detail view with error/warning display
 
 ## Goal
 
