@@ -148,13 +148,13 @@ const OffersPage: React.FC = () => {
         page,
         limit,
       };
-      if (statusFilter) {
+      if (statusFilter && statusFilter.trim()) {
         params.status = statusFilter;
       }
-      if (searchQuery) {
+      if (searchQuery && searchQuery.trim()) {
         params.search = searchQuery;
       }
-      if (categoryFilter) {
+      if (categoryFilter && categoryFilter.trim()) {
         params.categoryId = categoryFilter;
       }
 
