@@ -2,13 +2,82 @@
  * Offers Page - View all imported/exported Allegro offers
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AxiosError } from 'axios';
 import api from '../services/api';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Modal } from '../components/Modal';
+
+interface ImageItem {
+  url?: string;
+  path?: string;
+}
+
+type ImageArray = (string | ImageItem)[];
+
+interface ParameterValue {
+  name?: string;
+}
+
+interface Parameter {
+  id?: string;
+  name?: string;
+  values?: ParameterValue[] | string;
+  value?: string;
+}
+
+interface Price {
+  amount: string;
+  currency: string;
+}
+
+interface MinimalPrice {
+  amount: string;
+  currency: string;
+}
+
+interface SellingMode {
+  format?: string;
+  price?: {
+    amount: string;
+    currency: string;
+    minimalPrice?: MinimalPrice;
+  };
+}
+
+interface AfterSalesServices {
+  impatient?: string;
+  returnPolicy?: string;
+  warranty?: string;
+}
+
+interface Variant {
+  name?: string;
+  quantity?: number;
+  price?: Price;
+}
+
+interface Publication {
+  startedAt?: string;
+  endedAt?: string;
+  endingAt?: string;
+}
+
+interface AllegroRawData {
+  parameters?: Parameter[];
+  sellingMode?: SellingMode;
+  afterSalesServices?: AfterSalesServices;
+  variants?: Variant[];
+  publication?: Publication;
+  delivery?: Record<string, unknown>;
+  deliveryOptions?: Record<string, unknown>;
+  payments?: Record<string, unknown>;
+  paymentOptions?: Record<string, unknown>;
+  images?: ImageArray;
+  [key: string]: unknown;
+}
 
 interface Offer {
   id: string;
@@ -22,13 +91,21 @@ interface Offer {
   status: string;
   publicationStatus?: string;
   lastSyncedAt?: string;
-  images?: any;
-  rawData?: any;
+  images?: ImageArray;
+  rawData?: AllegroRawData;
   product?: {
     id: string;
     code: string;
     name: string;
   };
+}
+
+interface OfferQueryParams {
+  page?: number;
+  limit?: number;
+  status?: string;
+  search?: string;
+  categoryId?: string;
 }
 
 const OffersPage: React.FC = () => {
@@ -50,14 +127,10 @@ const OffersPage: React.FC = () => {
   const [total, setTotal] = useState(0);
   const limit = 20;
 
-  useEffect(() => {
-    loadOffers();
-  }, [page, statusFilter, searchQuery, categoryFilter]);
-
-  const loadOffers = async () => {
+  const loadOffers = useCallback(async () => {
     setLoading(true);
     try {
-      const params: any = {
+      const params: OfferQueryParams = {
         page,
         limit,
       };
@@ -93,7 +166,11 @@ const OffersPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, statusFilter, searchQuery, categoryFilter, limit]);
+
+  useEffect(() => {
+    loadOffers();
+  }, [loadOffers]);
 
   const handleViewDetails = async (offer: Offer) => {
     setSelectedOffer(offer);
@@ -139,7 +216,7 @@ const OffersPage: React.FC = () => {
     }
   };
 
-  const renderImages = (images: any) => {
+  const renderImages = (images: ImageArray | undefined) => {
     if (!images) return null;
     
     const imageArray = Array.isArray(images) ? images : [];
@@ -147,8 +224,8 @@ const OffersPage: React.FC = () => {
 
     return (
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
-        {imageArray.map((img: any, idx: number) => {
-          const url = typeof img === 'string' ? img : img.url || img;
+        {imageArray.map((img: string | ImageItem, idx: number) => {
+          const url = typeof img === 'string' ? img : (img as ImageItem).url || (img as ImageItem).path || '';
           return (
             <img
               key={idx}
@@ -165,7 +242,7 @@ const OffersPage: React.FC = () => {
     );
   };
 
-  const renderRawData = (rawData: any) => {
+  const renderRawData = (rawData: AllegroRawData | undefined) => {
     if (!rawData) return null;
     
     return (
@@ -178,7 +255,7 @@ const OffersPage: React.FC = () => {
     );
   };
 
-  const renderAttributes = (rawData: any) => {
+  const renderAttributes = (rawData: AllegroRawData | undefined) => {
     if (!rawData?.parameters) return null;
     
     const parameters = Array.isArray(rawData.parameters) ? rawData.parameters : [];
@@ -188,16 +265,186 @@ const OffersPage: React.FC = () => {
       <div className="mt-4">
         <h4 className="font-semibold mb-2">Attributes / Parameters</h4>
         <div className="space-y-2">
-          {parameters.map((param: any, idx: number) => (
+          {parameters.map((param: Parameter, idx: number) => (
             <div key={idx} className="border-b pb-2">
               <div className="font-medium">{param.name || param.id}</div>
               <div className="text-sm text-gray-600">
                 {Array.isArray(param.values) 
-                  ? param.values.map((v: any) => v.name || v).join(', ')
+                  ? param.values.map((v: ParameterValue) => v.name || String(v)).join(', ')
                   : param.values || param.value || '-'}
               </div>
             </div>
           ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderSellingMode = (rawData: AllegroRawData | undefined) => {
+    if (!rawData?.sellingMode) return null;
+
+    return (
+      <div className="mt-4">
+        <h4 className="font-semibold mb-2">Selling Mode</h4>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <div className="text-sm text-gray-600">Format</div>
+            <div className="font-medium">{rawData.sellingMode.format || '-'}</div>
+          </div>
+          {rawData.sellingMode.price && (
+            <>
+              <div>
+                <div className="text-sm text-gray-600">Price</div>
+                <div className="font-medium">
+                  {rawData.sellingMode.price.amount} {rawData.sellingMode.price.currency}
+                </div>
+              </div>
+              {rawData.sellingMode.price.minimalPrice && (
+                <div>
+                  <div className="text-sm text-gray-600">Minimal Price</div>
+                  <div className="font-medium">
+                    {rawData.sellingMode.price.minimalPrice.amount} {rawData.sellingMode.price.minimalPrice.currency}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderAfterSalesServices = (rawData: AllegroRawData | undefined) => {
+    if (!rawData?.afterSalesServices) return null;
+
+    const services = rawData.afterSalesServices;
+    const hasServices = services.impatient || services.returnPolicy || services.warranty;
+
+    if (!hasServices) return null;
+
+    return (
+      <div className="mt-4">
+        <h4 className="font-semibold mb-2">After-Sales Services</h4>
+        <div className="space-y-2">
+          {services.impatient && (
+            <div>
+              <div className="text-sm text-gray-600">Impatient</div>
+              <div className="text-sm">{services.impatient}</div>
+            </div>
+          )}
+          {services.returnPolicy && (
+            <div>
+              <div className="text-sm text-gray-600">Return Policy</div>
+              <div className="text-sm">{services.returnPolicy}</div>
+            </div>
+          )}
+          {services.warranty && (
+            <div>
+              <div className="text-sm text-gray-600">Warranty</div>
+              <div className="text-sm">{services.warranty}</div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderVariations = (rawData: AllegroRawData | undefined) => {
+    if (!rawData?.variants || !Array.isArray(rawData.variants) || rawData.variants.length === 0) return null;
+
+    return (
+      <div className="mt-4">
+        <h4 className="font-semibold mb-2">Variations</h4>
+        <div className="space-y-3">
+          {rawData.variants.map((variant: Variant, idx: number) => (
+            <div key={idx} className="border rounded p-3">
+              <div className="font-medium mb-2">Variant {idx + 1}</div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                {variant.name && (
+                  <div>
+                    <span className="text-gray-600">Name: </span>
+                    <span>{variant.name}</span>
+                  </div>
+                )}
+                {variant.quantity && (
+                  <div>
+                    <span className="text-gray-600">Quantity: </span>
+                    <span>{variant.quantity}</span>
+                  </div>
+                )}
+                {variant.price && (
+                  <div>
+                    <span className="text-gray-600">Price: </span>
+                    <span>{variant.price.amount} {variant.price.currency}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderPublicationDetails = (rawData: AllegroRawData | undefined) => {
+    if (!rawData?.publication) return null;
+
+    const pub = rawData.publication;
+    return (
+      <div className="mt-4">
+        <h4 className="font-semibold mb-2">Publication Details</h4>
+        <div className="grid grid-cols-2 gap-4">
+          {pub.startedAt && (
+            <div>
+              <div className="text-sm text-gray-600">Started At</div>
+              <div className="font-medium">{new Date(pub.startedAt).toLocaleString()}</div>
+            </div>
+          )}
+          {pub.endedAt && (
+            <div>
+              <div className="text-sm text-gray-600">Ended At</div>
+              <div className="font-medium">{new Date(pub.endedAt).toLocaleString()}</div>
+            </div>
+          )}
+          {pub.endingAt && (
+            <div>
+              <div className="text-sm text-gray-600">Ending At</div>
+              <div className="font-medium">{new Date(pub.endingAt).toLocaleString()}</div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderDeliveryPayment = (rawData: AllegroRawData | undefined) => {
+    if (!rawData) return null;
+
+    const hasDelivery = rawData.delivery || rawData.deliveryOptions;
+    const hasPayment = rawData.payments || rawData.paymentOptions;
+
+    if (!hasDelivery && !hasPayment) return null;
+
+    return (
+      <div className="mt-4">
+        <h3 className="font-semibold mb-2">Delivery & Payment</h3>
+        <div className="grid grid-cols-2 gap-4">
+          {hasDelivery && (
+            <div>
+              <div className="text-sm text-gray-600 mb-1">Delivery Options</div>
+              <pre className="bg-gray-100 p-2 rounded text-xs overflow-auto max-h-32">
+                {JSON.stringify(rawData.delivery || rawData.deliveryOptions, null, 2)}
+              </pre>
+            </div>
+          )}
+          {hasPayment && (
+            <div>
+              <div className="text-sm text-gray-600 mb-1">Payment Options</div>
+              <pre className="bg-gray-100 p-2 rounded text-xs overflow-auto max-h-32">
+                {JSON.stringify(rawData.payments || rawData.paymentOptions, null, 2)}
+              </pre>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -389,7 +636,17 @@ const OffersPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <div className="text-sm text-gray-600">Allegro Offer ID</div>
-                  <div className="font-medium">{selectedOffer.allegroOfferId}</div>
+                  <div className="font-medium flex items-center gap-2">
+                    {selectedOffer.allegroOfferId}
+                    <a
+                      href={`https://allegro.pl/oferta/${selectedOffer.allegroOfferId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 text-xs"
+                    >
+                      (View on Allegro ↗)
+                    </a>
+                  </div>
                 </div>
                 <div>
                   <div className="text-sm text-gray-600">Category ID</div>
@@ -446,33 +703,23 @@ const OffersPage: React.FC = () => {
             {/* Images */}
             {renderImages(selectedOffer.images || selectedOffer.rawData?.images)}
 
+            {/* Selling Mode */}
+            {renderSellingMode(selectedOffer.rawData)}
+
             {/* Attributes */}
             {renderAttributes(selectedOffer.rawData)}
 
+            {/* Variations */}
+            {renderVariations(selectedOffer.rawData)}
+
+            {/* Publication Details */}
+            {renderPublicationDetails(selectedOffer.rawData)}
+
             {/* Delivery/Payment Options */}
-            {selectedOffer.rawData && (
-              <div className="mt-4">
-                <h3 className="font-semibold mb-2">Delivery & Payment</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  {selectedOffer.rawData.delivery && (
-                    <div>
-                      <div className="text-sm text-gray-600 mb-1">Delivery Options</div>
-                      <pre className="bg-gray-100 p-2 rounded text-xs overflow-auto max-h-32">
-                        {JSON.stringify(selectedOffer.rawData.delivery, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-                  {selectedOffer.rawData.payments && (
-                    <div>
-                      <div className="text-sm text-gray-600 mb-1">Payment Options</div>
-                      <pre className="bg-gray-100 p-2 rounded text-xs overflow-auto max-h-32">
-                        {JSON.stringify(selectedOffer.rawData.payments, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+            {renderDeliveryPayment(selectedOffer.rawData)}
+
+            {/* After-Sales Services */}
+            {renderAfterSalesServices(selectedOffer.rawData)}
 
             {/* Raw JSON */}
             {renderRawData(selectedOffer.rawData)}

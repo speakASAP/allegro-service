@@ -25,10 +25,10 @@
 - Services kept: **api-gateway**, **allegro-service**, **import-service**, **allegro-settings-service**, **allegro-frontend-service**.
 - Prisma models already in place:
   - `Product`: canonical product data (descriptions, SEO, media URLs, prices, dimensions, attributes, tags, categories).
-  - `AllegroOffer`: platform offer projection with price, stock, status, images, delivery/payment JSON, sync metadata.
+  - `AllegroOffer`: platform offer projection with price, stock, status, images, delivery/payment JSON, sync metadata, **rawData JSONB** ✅.
   - `AllegroOrder`, `SyncJob`, `ImportJob`, `WebhookEvent`, `SupplierProduct`, `UserSettings` (stores Allegro creds/tokens).
 - Flows implemented: Allegro import (all, preview/approve), Sales Center preview/import, CRUD on offers, stock update, CSV export.
-- Frontend: dashboard has Settings / Import Jobs / Orders; **no offers catalog/editor view yet**.
+- Frontend: dashboard has Settings / Import Jobs / Orders / **Offers** ✅ (list + detail view with full payload display).
 
 ## Target Architecture (Conceptual)
 
@@ -80,22 +80,22 @@
 
 ## Schema / Storage Notes
 
-- Allegro: add `rawData` JSON on `allegro_offers` to store full `/sale/offers` payload; keep existing indexed fields (title, price, stock, status/publicationStatus, images, delivery/payment, lastSyncedAt, syncStatus).
-- Consider per-sync snapshots or lastSync metadata (source: Allegro import vs Sales Center) to surface provenance in UI.
+- ✅ **Allegro**: `rawData` JSONB column added to `allegro_offers` to store full `/sale/offers` payload; existing indexed fields preserved (title, price, stock, status/publicationStatus, images, delivery/payment, lastSyncedAt, syncStatus).
+- ⏳ Consider per-sync snapshots or lastSync metadata (source: Allegro import vs Sales Center) to surface provenance in UI.
 - Future: per-platform projection tables (Aukro/Heureka/Bazos) linked to `Product` with platform IDs, validation state, media ordering, errors, and sync metadata.
 
 ## API Contract (Allegro view, DB-backed)
 
-- `GET /allegro/offers`: pagination (page, limit), filters (status, search in title, optional category), returns items with core fields + `rawData` (or selected subsets), `product` link, and pagination meta; no live Allegro calls.
-- `GET /allegro/offers/:id`: returns single offer with full stored payload (`rawData`), core mapped fields, linked product info; DB-only.
-- Keep existing import/export endpoints unchanged; list/detail consume stored data to ensure deterministic auditing and offline review.
+- ✅ `GET /allegro/offers`: pagination (page, limit), filters (status, search in title, optional category), returns items with core fields + `rawData`, `product` link, and pagination meta; no live Allegro calls.
+- ✅ `GET /allegro/offers/:id`: returns single offer with full stored payload (`rawData`), core mapped fields, linked product info; DB-only.
+- ✅ Keep existing import/export endpoints unchanged; list/detail consume stored data to ensure deterministic auditing and offline review.
 
 ## Frontend Acceptance (Offers view)
 
-- Route: `/dashboard/offers`; sidebar entry “Offers”.
-- List columns: title, price + currency, stock quantity, status/publicationStatus, lastSyncedAt, linked product code/name (if present).
-- Filters: status, text search (title), optional category.
-- Detail view (drawer/page): core fields; description rendered safely; media gallery from stored URLs; attributes/parameters/variations from `rawData`; delivery/payment; publication; product link; raw JSON tab (read-only) for debugging.
+- ✅ Route: `/dashboard/offers`; sidebar entry "Offers".
+- ✅ List columns: title, price + currency, stock quantity, status/publicationStatus, lastSyncedAt, linked product code/name (if present).
+- ✅ Filters: status, text search (title), optional category.
+- ✅ Detail view (modal): core fields; description rendered safely; media gallery from stored URLs; attributes/parameters/variations from `rawData`; selling mode; delivery/payment; publication details; after-sales services; product link; raw JSON tab (read-only) for debugging.
 
 ## Sync Provenance & Validation
 
@@ -104,8 +104,8 @@
 
 ## Logging & Metrics
 
-- Log offers list/detail API calls via centralized logger; include filters, pagination, userId.
-- Basic counters/metrics: list requests, detail requests, errors; reuse existing health/logging conventions.
+- ⏳ Log offers list/detail API calls via centralized logger; include filters, pagination, userId.
+- ⏳ Basic counters/metrics: list requests, detail requests, errors; reuse existing health/logging conventions.
 
 ## Platform Discovery Checklist (future)
 

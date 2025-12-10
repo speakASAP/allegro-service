@@ -73,6 +73,15 @@ export class OffersService {
       };
     }
 
+    this.logger.log('Fetching offers from database', {
+      filters: {
+        status: query.status,
+        categoryId: query.categoryId,
+        search: query.search,
+      },
+      pagination: { page, limit, skip },
+    });
+
     const [items, total] = await Promise.all([
       this.prisma.allegroOffer.findMany({
         where,
@@ -85,6 +94,13 @@ export class OffersService {
       }),
       this.prisma.allegroOffer.count({ where }),
     ]);
+
+    this.logger.log('Offers fetched from database', {
+      total,
+      returned: items.length,
+      page,
+      limit,
+    });
 
     return {
       items,
@@ -101,6 +117,8 @@ export class OffersService {
    * Get offer by ID
    */
   async getOffer(id: string): Promise<any> {
+    this.logger.log('Fetching offer by ID from database', { offerId: id });
+
     const offer = await this.prisma.allegroOffer.findUnique({
       where: { id },
       include: {
@@ -109,8 +127,16 @@ export class OffersService {
     });
 
     if (!offer) {
+      this.logger.warn('Offer not found', { offerId: id });
       throw new Error(`Offer with ID ${id} not found`);
     }
+
+    this.logger.log('Offer fetched from database', {
+      offerId: id,
+      allegroOfferId: offer.allegroOfferId,
+      hasRawData: !!offer.rawData,
+      hasProduct: !!offer.product,
+    });
 
     return offer;
   }
@@ -713,7 +739,11 @@ export class OffersService {
    * Import approved offers from Sales Center preview
    */
   async importApprovedOffersFromSalesCenter(userId: string, approvedOfferIds: string[]) {
-    this.logger.log('Importing approved offers from Sales Center', { count: approvedOfferIds.length, userId });
+    this.logger.log('[importApprovedOffersFromSalesCenter] Starting import', {
+      userId,
+      approvedCount: approvedOfferIds.length,
+      approvedOfferIds: approvedOfferIds.slice(0, 5), // Log first 5 for debugging
+    });
 
     let offset = 0;
     const limit = 100;
@@ -721,99 +751,198 @@ export class OffersService {
     let totalImported = 0;
     const approvedSet = new Set(approvedOfferIds);
 
+    // Get OAuth token with detailed logging
+    let oauthToken: string;
+    try {
+      this.logger.log('[importApprovedOffersFromSalesCenter] Retrieving OAuth token', { userId });
+      oauthToken = await this.allegroAuth.getUserAccessToken(userId);
+      this.logger.log('[importApprovedOffersFromSalesCenter] OAuth token retrieved successfully', {
+        userId,
+        tokenLength: oauthToken?.length || 0,
+        tokenFirstChars: oauthToken?.substring(0, 20) || 'N/A',
+      });
+    } catch (error: any) {
+      this.logger.error('[importApprovedOffersFromSalesCenter] Failed to get OAuth token', {
+        userId,
+        error: error.message,
+        errorCode: error.code,
+        errorStatus: error.status,
+      });
+      throw error; // Re-throw to let controller handle it
+    }
+
+    let tokenRefreshAttempted = false;
+
     while (hasMore) {
       const queryParams: any = {
         limit: limit.toString(),
         offset: offset.toString(),
       };
       
-      let response;
       try {
-        const oauthToken = await this.allegroAuth.getUserAccessToken(userId);
-        response = await this.allegroApi.getOffersWithOAuthToken(oauthToken, queryParams);
+        this.logger.log('[importApprovedOffersFromSalesCenter] Fetching offers batch from Allegro API', {
+          userId,
+          offset,
+          limit,
+          approvedSetSize: approvedSet.size,
+          tokenRefreshAttempted,
+        });
+
+        const response = await this.allegroApi.getOffersWithOAuthToken(oauthToken, queryParams);
+
+        this.logger.log('[importApprovedOffersFromSalesCenter] Received response from Allegro API', {
+          userId,
+          offersCount: response.offers?.length || 0,
+          totalCount: response.count || 0,
+          offset,
+        });
+        const offers = response.offers || [];
+        
+        for (const allegroOffer of offers) {
+          if (!approvedSet.has(allegroOffer.id)) {
+            continue;
+          }
+
+          try {
+            this.logger.log('[importApprovedOffersFromSalesCenter] Importing approved offer', {
+              userId,
+              offerId: allegroOffer.id,
+              offerTitle: allegroOffer.name?.substring(0, 50),
+              price: allegroOffer.sellingMode?.price?.amount,
+              currency: allegroOffer.sellingMode?.price?.currency,
+            });
+
+            const images = this.extractImages(allegroOffer);
+            await this.prisma.allegroOffer.upsert({
+              where: { allegroOfferId: allegroOffer.id },
+              update: {
+                title: allegroOffer.name,
+                description: allegroOffer.description,
+                categoryId: allegroOffer.category?.id || '',
+                price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
+                currency: allegroOffer.sellingMode?.price?.currency || this.getDefaultCurrency(),
+                quantity: allegroOffer.stock?.available || 0,
+                stockQuantity: allegroOffer.stock?.available || 0,
+                status: allegroOffer.publication?.status || 'INACTIVE',
+                publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
+                images: images,
+                // @ts-expect-error - rawData exists in Prisma schema but IDE types may not be reloaded
+                rawData: allegroOffer as any,
+                syncStatus: 'SYNCED',
+                lastSyncedAt: new Date(),
+              },
+              create: {
+                allegroOfferId: allegroOffer.id,
+                title: allegroOffer.name,
+                description: allegroOffer.description,
+                categoryId: allegroOffer.category?.id || '',
+                price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
+                currency: allegroOffer.sellingMode?.price?.currency || this.getDefaultCurrency(),
+                quantity: allegroOffer.stock?.available || 0,
+                stockQuantity: allegroOffer.stock?.available || 0,
+                status: allegroOffer.publication?.status || 'INACTIVE',
+                publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
+                images: images,
+                // @ts-expect-error - rawData exists in Prisma schema but IDE types may not be reloaded
+                rawData: allegroOffer as any,
+                syncStatus: 'SYNCED',
+                lastSyncedAt: new Date(),
+              },
+            });
+            totalImported++;
+            this.logger.log('[importApprovedOffersFromSalesCenter] Successfully imported offer', {
+              userId,
+              offerId: allegroOffer.id,
+              totalImported,
+            });
+          } catch (error: any) {
+            this.logger.error('[importApprovedOffersFromSalesCenter] Failed to import approved offer', {
+              userId,
+              offerId: allegroOffer.id,
+              error: error.message,
+              errorStack: error.stack,
+            });
+          }
+        }
+
+        hasMore = offers.length === limit;
+        offset += limit;
+        // Reset token refresh flag on successful request
+        tokenRefreshAttempted = false;
       } catch (error: any) {
         const errorStatus = error.response?.status;
         const errorData = error.response?.data || {};
-        if (
-          errorStatus === 401 ||
-          errorStatus === 403 ||
-          error.message?.includes('OAuth authorization required')
-        ) {
-          this.logger.warn('OAuth authorization required for Sales Center import', {
+        const errorHeaders = error.response?.headers || {};
+
+        this.logger.error('[importApprovedOffersFromSalesCenter] Allegro API request failed', {
+          userId,
+          offset,
+          errorStatus,
+          errorMessage: error.message,
+          errorCode: error.code,
+          errorData: JSON.stringify(errorData, null, 2),
+          errorHeaders: JSON.stringify(errorHeaders, null, 2),
+          errorStack: error.stack,
+          tokenRefreshAttempted,
+        });
+
+        if ((errorStatus === 403 || errorStatus === 401) && !tokenRefreshAttempted) {
+          const allegroError = errorData.errors?.[0] || errorData;
+          this.logger.warn('[importApprovedOffersFromSalesCenter] Access denied - attempting token refresh', {
             userId,
             errorStatus,
-            errorData,
+            allegroErrorCode: allegroError.code,
+            allegroErrorMessage: allegroError.message || allegroError.error_description,
           });
-          throw new Error('OAuth authorization required. Please authorize the application in Settings to access your Allegro offers.');
-        }
 
-        this.logger.error('Failed to import approved offers from Sales Center', {
+          try {
+            // Attempt to force refresh the token
+            this.logger.log('[importApprovedOffersFromSalesCenter] Forcing OAuth token refresh', { userId });
+            oauthToken = await this.allegroAuth.refreshUserToken(userId);
+            this.logger.log('[importApprovedOffersFromSalesCenter] Token refreshed successfully, retrying API call', {
+              userId,
+              newTokenLength: oauthToken?.length || 0,
+            });
+            tokenRefreshAttempted = true;
+            // Retry the same request with new token (don't increment offset)
+            continue;
+          } catch (refreshError: any) {
+            this.logger.error('[importApprovedOffersFromSalesCenter] Failed to refresh OAuth token', {
+              userId,
+              refreshError: refreshError.message,
+              refreshErrorStack: refreshError.stack,
+            });
+            throw new Error('OAuth authorization required or token expired. Failed to refresh token. Please go to Settings and re-authorize the application to access your Allegro Sales Center offers.');
+          }
+        } else if (errorStatus === 403 || errorStatus === 401) {
+          // Already tried refresh, still getting 403/401
+          const allegroError = errorData.errors?.[0] || errorData;
+          this.logger.error('[importApprovedOffersFromSalesCenter] Access denied by Allegro API after token refresh - OAuth may be invalid or scopes insufficient', {
+            userId,
+            errorStatus,
+            allegroErrorCode: allegroError.code,
+            allegroErrorMessage: allegroError.message || allegroError.error_description,
+            fullErrorData: JSON.stringify(errorData, null, 2),
+          });
+          throw new Error('OAuth authorization required or token expired. The Allegro API returned 403/401 even after token refresh. Please go to Settings and re-authorize the application to access your Allegro Sales Center offers.');
+        }
+        
+        // Re-throw other errors
+        this.logger.error('[importApprovedOffersFromSalesCenter] Unexpected error during import', {
           userId,
-          error: error.message,
           errorStatus,
-          errorData,
+          errorMessage: error.message,
+          errorData: JSON.stringify(errorData, null, 2),
         });
         throw error;
       }
-      const offers = response.offers || [];
-      
-      for (const allegroOffer of offers) {
-        if (!approvedSet.has(allegroOffer.id)) {
-          continue;
-        }
-
-        try {
-          const images = this.extractImages(allegroOffer);
-          await this.prisma.allegroOffer.upsert({
-            where: { allegroOfferId: allegroOffer.id },
-            update: {
-              title: allegroOffer.name,
-              description: allegroOffer.description,
-              categoryId: allegroOffer.category?.id || '',
-              price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
-              currency: allegroOffer.sellingMode?.price?.currency || this.getDefaultCurrency(),
-              quantity: allegroOffer.stock?.available || 0,
-              stockQuantity: allegroOffer.stock?.available || 0,
-              status: allegroOffer.publication?.status || 'INACTIVE',
-              publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
-              images: images,
-              // @ts-expect-error - rawData exists in Prisma schema but IDE types may not be reloaded
-              rawData: allegroOffer as any,
-              syncStatus: 'SYNCED',
-              lastSyncedAt: new Date(),
-            },
-            create: {
-              allegroOfferId: allegroOffer.id,
-              title: allegroOffer.name,
-              description: allegroOffer.description,
-              categoryId: allegroOffer.category?.id || '',
-              price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
-              currency: allegroOffer.sellingMode?.price?.currency || this.getDefaultCurrency(),
-              quantity: allegroOffer.stock?.available || 0,
-              stockQuantity: allegroOffer.stock?.available || 0,
-              status: allegroOffer.publication?.status || 'INACTIVE',
-              publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
-              images: images,
-              // @ts-expect-error - rawData exists in Prisma schema but IDE types may not be reloaded
-              rawData: allegroOffer as any,
-              syncStatus: 'SYNCED',
-              lastSyncedAt: new Date(),
-            },
-          });
-          totalImported++;
-        } catch (error: any) {
-          this.logger.error('Failed to import approved offer from Sales Center', {
-            offerId: allegroOffer.id,
-            error: error.message,
-          });
-        }
-      }
-
-      hasMore = offers.length === limit;
-      offset += limit;
     }
 
-    this.logger.log('Finished importing approved offers from Sales Center', { totalImported, userId });
+    this.logger.log('[importApprovedOffersFromSalesCenter] Finished importing approved offers', {
+      userId,
+      totalImported,
+      requestedCount: approvedOfferIds.length,
+    });
     return { totalImported };
   }
 
