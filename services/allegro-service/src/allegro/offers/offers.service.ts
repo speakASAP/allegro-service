@@ -392,9 +392,6 @@ export class OffersService {
     }
 
     try {
-      // Transform DTO to Allegro API format
-      const allegroPayload = this.transformDtoToAllegroFormat(dto, offer);
-
       // Get user's OAuth token for updating offers (required for user-specific operations)
       let oauthToken: string;
       if (userId) {
@@ -404,10 +401,34 @@ export class OffersService {
         oauthToken = await this.allegroAuth.getAccessToken();
       }
 
+      // Fetch current offer from Allegro API to ensure we have all required fields
+      // This ensures we have the latest parameters and required fields
+      let currentAllegroOffer: any = null;
+      try {
+        currentAllegroOffer = await this.allegroApi.getOfferWithOAuthToken(oauthToken, offer.allegroOfferId);
+        this.logger.log('Fetched current offer from Allegro API', {
+          allegroOfferId: offer.allegroOfferId,
+          hasParameters: !!currentAllegroOffer?.parameters,
+          parametersCount: currentAllegroOffer?.parameters?.length || 0,
+        });
+      } catch (error: any) {
+        this.logger.warn('Failed to fetch current offer from Allegro API, using stored rawData', {
+          allegroOfferId: offer.allegroOfferId,
+          error: error.message,
+        });
+      }
+
+      // Use current offer from API if available, otherwise use stored rawData
+      const sourceOffer = currentAllegroOffer || offer.rawData || offer;
+
+      // Transform DTO to Allegro API format
+      const allegroPayload = this.transformDtoToAllegroFormat(dto, { ...offer, rawData: sourceOffer });
+
       // Update via Allegro API with OAuth token
       this.logger.log('Updating offer via Allegro API', {
         allegroOfferId: offer.allegroOfferId,
         payloadKeys: Object.keys(allegroPayload),
+        parametersCount: allegroPayload.parameters?.length || 0,
         usingOAuthToken: !!userId,
       });
       await this.allegroApi.updateOfferWithOAuthToken(oauthToken, offer.allegroOfferId, allegroPayload);
