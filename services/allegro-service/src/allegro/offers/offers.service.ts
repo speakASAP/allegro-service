@@ -165,7 +165,7 @@ export class OffersService {
         syncStatus: 'SYNCED',
         syncSource: 'MANUAL',
         lastSyncedAt: new Date(),
-      },
+      } as any,
     });
 
     return offer;
@@ -520,7 +520,7 @@ export class OffersService {
           validationStatus: validation.status,
           validationErrors: validation.errors as any,
           lastValidatedAt: new Date(),
-        },
+        } as any,
       });
 
       this.logger.log('Offer updated successfully', {
@@ -617,7 +617,7 @@ export class OffersService {
         syncStatus: 'SYNCED',
         syncSource: 'MANUAL',
         lastSyncedAt: new Date(),
-      },
+      } as any,
     });
 
     return updated;
@@ -646,18 +646,10 @@ export class OffersService {
     const offers = response.offers || [];
     
     for (const allegroOffer of offers) {
+      const offerData = this.extractOfferData(allegroOffer);
       previewOffers.push({
-        allegroOfferId: allegroOffer.id,
-        title: allegroOffer.name,
-        description: allegroOffer.description,
-        categoryId: allegroOffer.category?.id || '',
-        price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
-        currency: allegroOffer.sellingMode?.price?.currency || this.getDefaultCurrency(),
-        quantity: allegroOffer.stock?.available || 0,
-        stockQuantity: allegroOffer.stock?.available || 0,
-        status: allegroOffer.publication?.status || 'INACTIVE',
-        publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
-        rawData: allegroOffer, // Keep raw data for reference
+        ...offerData,
+        // Keep raw data for reference (already included in offerData)
       });
     }
 
@@ -749,29 +741,18 @@ export class OffersService {
               where: { allegroOfferId: allegroOffer.id },
             });
 
-            const images = this.extractImages(allegroOffer);
-            const offerData = {
-              title: allegroOffer.name,
-              description: allegroOffer.description,
-              categoryId: allegroOffer.category?.id || '',
-              price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
-              currency: allegroOffer.sellingMode?.price?.currency || this.getDefaultCurrency(),
-              quantity: allegroOffer.stock?.available || 0,
-              stockQuantity: allegroOffer.stock?.available || 0,
-              status: allegroOffer.publication?.status || 'INACTIVE',
-              publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
-              images: images,
-              rawData: allegroOffer as any,
-              syncStatus: 'SYNCED' as const,
-              syncSource: 'ALLEGRO_API' as const,
-              lastSyncedAt: new Date(),
-            };
+            const offerData = this.extractOfferData(allegroOffer);
 
             if (existingOffer) {
               // Update existing offer
               const updated = await this.prisma.allegroOffer.update({
                 where: { allegroOfferId: allegroOffer.id },
-                data: offerData,
+                data: {
+                  ...offerData,
+                  syncStatus: 'SYNCED',
+                  syncSource: 'ALLEGRO_API',
+                  lastSyncedAt: new Date(),
+                } as any,
               });
               // Run validation
               const validation = this.validateOfferReadiness(updated);
@@ -781,7 +762,7 @@ export class OffersService {
                   validationStatus: validation.status,
                   validationErrors: validation.errors as any,
                   lastValidatedAt: new Date(),
-                },
+                } as any,
               });
               totalUpdated++;
               this.logger.log('[importApprovedOffers] Successfully updated existing offer', {
@@ -793,10 +774,11 @@ export class OffersService {
               // Create new offer
               const created = await this.prisma.allegroOffer.create({
                 data: {
-                  allegroOfferId: allegroOffer.id,
                   ...offerData,
+                  syncStatus: 'SYNCED',
                   syncSource: 'ALLEGRO_API',
-                },
+                  lastSyncedAt: new Date(),
+                } as any,
               });
               // Run validation
               const validation = this.validateOfferReadiness(created);
@@ -806,7 +788,7 @@ export class OffersService {
                   validationStatus: validation.status,
                   validationErrors: validation.errors as any,
                   lastValidatedAt: new Date(),
-                },
+                } as any,
               });
               totalCreated++;
               this.logger.log('[importApprovedOffers] Successfully created new offer', {
@@ -936,40 +918,21 @@ export class OffersService {
         
         for (const allegroOffer of offers) {
           try {
-            const images = this.extractImages(allegroOffer);
+            const offerData = this.extractOfferData(allegroOffer);
             const offer = await this.prisma.allegroOffer.upsert({
               where: { allegroOfferId: allegroOffer.id },
               update: {
-                title: allegroOffer.name,
-                description: allegroOffer.description,
-                categoryId: allegroOffer.category?.id || '',
-                price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
-                currency: allegroOffer.sellingMode?.price?.currency || this.getDefaultCurrency(),
-                quantity: allegroOffer.stock?.available || 0,
-                stockQuantity: allegroOffer.stock?.available || 0,
-                status: allegroOffer.publication?.status || 'INACTIVE',
-                images: images,
-                rawData: allegroOffer as any,
+                ...offerData,
                 syncStatus: 'SYNCED',
                 syncSource: 'ALLEGRO_API',
                 lastSyncedAt: new Date(),
-              },
+              } as any,
               create: {
-                allegroOfferId: allegroOffer.id,
-                title: allegroOffer.name,
-                description: allegroOffer.description,
-                categoryId: allegroOffer.category?.id || '',
-                price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
-                currency: allegroOffer.sellingMode?.price?.currency || this.getDefaultCurrency(),
-                quantity: allegroOffer.stock?.available || 0,
-                stockQuantity: allegroOffer.stock?.available || 0,
-                status: allegroOffer.publication?.status || 'INACTIVE',
-                images: images,
-                rawData: allegroOffer as any,
+                ...offerData,
                 syncStatus: 'SYNCED',
                 syncSource: 'ALLEGRO_API',
                 lastSyncedAt: new Date(),
-              },
+              } as any,
             });
             // Run validation
             const validation = this.validateOfferReadiness(offer);
@@ -979,7 +942,7 @@ export class OffersService {
                 validationStatus: validation.status,
                 validationErrors: validation.errors as any,
                 lastValidatedAt: new Date(),
-              },
+              } as any,
             });
             totalImported++;
           } catch (error: any) {
@@ -1213,42 +1176,21 @@ export class OffersService {
               currency: allegroOffer.sellingMode?.price?.currency,
             });
 
-            const images = this.extractImages(allegroOffer);
+            const offerData = this.extractOfferData(allegroOffer);
             const offer = await this.prisma.allegroOffer.upsert({
               where: { allegroOfferId: allegroOffer.id },
               update: {
-                title: allegroOffer.name,
-                description: allegroOffer.description,
-                categoryId: allegroOffer.category?.id || '',
-                price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
-                currency: allegroOffer.sellingMode?.price?.currency || this.getDefaultCurrency(),
-                quantity: allegroOffer.stock?.available || 0,
-                stockQuantity: allegroOffer.stock?.available || 0,
-                status: allegroOffer.publication?.status || 'INACTIVE',
-                publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
-                images: images,
-                rawData: allegroOffer as any,
+                ...offerData,
                 syncStatus: 'SYNCED',
                 syncSource: 'SALES_CENTER',
                 lastSyncedAt: new Date(),
-              },
+              } as any,
               create: {
-                allegroOfferId: allegroOffer.id,
-                title: allegroOffer.name,
-                description: allegroOffer.description,
-                categoryId: allegroOffer.category?.id || '',
-                price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
-                currency: allegroOffer.sellingMode?.price?.currency || this.getDefaultCurrency(),
-                quantity: allegroOffer.stock?.available || 0,
-                stockQuantity: allegroOffer.stock?.available || 0,
-                status: allegroOffer.publication?.status || 'INACTIVE',
-                publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
-                images: images,
-                rawData: allegroOffer as any,
+                ...offerData,
                 syncStatus: 'SYNCED',
                 syncSource: 'SALES_CENTER',
                 lastSyncedAt: new Date(),
-              },
+              } as any,
             });
             // Run validation
             const validation = this.validateOfferReadiness(offer);
@@ -1258,7 +1200,7 @@ export class OffersService {
                 validationStatus: validation.status,
                 validationErrors: validation.errors as any,
                 lastValidatedAt: new Date(),
-              },
+              } as any,
             });
             totalImported++;
             this.logger.log('[importApprovedOffersFromSalesCenter] Successfully imported offer', {
@@ -1410,42 +1352,21 @@ export class OffersService {
       
       for (const allegroOffer of offers) {
         try {
-          const images = this.extractImages(allegroOffer);
+          const offerData = this.extractOfferData(allegroOffer);
           const offer = await this.prisma.allegroOffer.upsert({
             where: { allegroOfferId: allegroOffer.id },
             update: {
-              title: allegroOffer.name,
-              description: allegroOffer.description,
-              categoryId: allegroOffer.category?.id || '',
-              price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
-                currency: allegroOffer.sellingMode?.price?.currency || this.getDefaultCurrency(),
-              quantity: allegroOffer.stock?.available || 0,
-              stockQuantity: allegroOffer.stock?.available || 0,
-              status: allegroOffer.publication?.status || 'INACTIVE',
-              publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
-              images: images,
-              rawData: allegroOffer as any,
+              ...offerData,
               syncStatus: 'SYNCED',
               syncSource: 'SALES_CENTER',
               lastSyncedAt: new Date(),
-            },
-              create: {
-              allegroOfferId: allegroOffer.id,
-              title: allegroOffer.name,
-              description: allegroOffer.description,
-              categoryId: allegroOffer.category?.id || '',
-              price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
-                currency: allegroOffer.sellingMode?.price?.currency || this.getDefaultCurrency(),
-              quantity: allegroOffer.stock?.available || 0,
-              stockQuantity: allegroOffer.stock?.available || 0,
-              status: allegroOffer.publication?.status || 'INACTIVE',
-              publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
-              images: images,
-              rawData: allegroOffer as any,
+            } as any,
+            create: {
+              ...offerData,
               syncStatus: 'SYNCED',
               syncSource: 'SALES_CENTER',
               lastSyncedAt: new Date(),
-            },
+            } as any,
           });
           // Run validation
           const validation = this.validateOfferReadiness(offer);
@@ -1455,7 +1376,7 @@ export class OffersService {
               validationStatus: validation.status,
               validationErrors: validation.errors as any,
               lastValidatedAt: new Date(),
-            },
+            } as any,
           });
           totalImported++;
         } catch (error: any) {
@@ -1508,6 +1429,36 @@ export class OffersService {
 
   private getDefaultCurrency(): string {
     return this.configService.get('PRICE_CURRENCY_TARGET') || 'CZK';
+  }
+
+  /**
+   * Extract all offer data from Allegro API response
+   * Separates and normalizes all fields for database storage
+   */
+  private extractOfferData(allegroOffer: any): any {
+    const images = this.extractImages(allegroOffer);
+    const stockAvailable = allegroOffer.stock?.available || 0;
+    const publicationStatus = allegroOffer.publication?.status || 'INACTIVE';
+    const priceAmount = allegroOffer.sellingMode?.price?.amount || '0';
+    const currency = allegroOffer.sellingMode?.price?.currency || this.getDefaultCurrency();
+
+    return {
+      allegroOfferId: allegroOffer.id,
+      allegroListingId: allegroOffer.listing?.id || allegroOffer.external?.id || null,
+      title: allegroOffer.name || '',
+      description: allegroOffer.description || null,
+      categoryId: allegroOffer.category?.id || '',
+      price: parseFloat(priceAmount),
+      currency: currency,
+      quantity: stockAvailable,
+      stockQuantity: stockAvailable,
+      status: publicationStatus,
+      publicationStatus: publicationStatus,
+      images: images,
+      deliveryOptions: allegroOffer.delivery || allegroOffer.deliveryOptions || null,
+      paymentOptions: allegroOffer.payments || allegroOffer.paymentOptions || null,
+      rawData: allegroOffer as any,
+    };
   }
 
   /**
@@ -1670,7 +1621,7 @@ export class OffersService {
         validationStatus: validation.status,
         validationErrors: validation.errors as any,
         lastValidatedAt: new Date(),
-      },
+      } as any,
     });
 
     return validation;
