@@ -172,34 +172,283 @@ export class OffersService {
   }
 
   /**
+   * Transform DTO to Allegro API format
+   */
+  private transformDtoToAllegroFormat(dto: any, existingOffer: any): any {
+    const payload: any = {};
+
+    // Basic fields
+    if (dto.title !== undefined) payload.name = dto.title;
+    if (dto.description !== undefined) payload.description = dto.description;
+    if (dto.categoryId !== undefined) {
+      payload.category = { id: dto.categoryId };
+    }
+
+    // Selling mode (price)
+    if (dto.price !== undefined || dto.currency !== undefined) {
+      payload.sellingMode = {
+        ...(existingOffer.rawData?.sellingMode || {}),
+        price: {
+          amount: String(dto.price !== undefined ? dto.price : existingOffer.price),
+          currency: dto.currency || existingOffer.currency || this.getDefaultCurrency(),
+        },
+      };
+    }
+
+    // Stock
+    if (dto.stockQuantity !== undefined || dto.quantity !== undefined) {
+      const stockQty = dto.stockQuantity !== undefined ? dto.stockQuantity : dto.quantity;
+      payload.stock = {
+        ...(existingOffer.rawData?.stock || {}),
+        available: stockQty,
+      };
+    }
+
+    // Images
+    if (dto.images !== undefined) {
+      payload.images = dto.images.map((url: string) => ({ url }));
+    }
+
+    // Parameters/attributes
+    if (dto.attributes !== undefined && Array.isArray(dto.attributes)) {
+      payload.parameters = dto.attributes.map((attr: any) => ({
+        id: attr.id,
+        values: attr.values,
+      }));
+    }
+
+    // Publication status
+    if (dto.publicationStatus !== undefined) {
+      payload.publication = {
+        ...(existingOffer.rawData?.publication || {}),
+        status: dto.publicationStatus,
+      };
+    }
+
+    // Delivery and payment options
+    if (dto.deliveryOptions !== undefined) {
+      payload.delivery = dto.deliveryOptions;
+    }
+    if (dto.paymentOptions !== undefined) {
+      payload.payments = dto.paymentOptions;
+    }
+
+    return payload;
+  }
+
+  /**
+   * Fetch updated offer from Allegro API
+   */
+  private async fetchUpdatedOfferFromAllegro(allegroOfferId: string): Promise<any> {
+    try {
+      // Use getOffers endpoint with specific offer ID filter, or implement getOfferById if available
+      // For now, we'll merge updates into existing rawData
+      // In a full implementation, we'd call GET /sale/offers/{offerId}
+      return null; // Will merge instead
+    } catch (error: any) {
+      this.logger.warn('Failed to fetch updated offer from Allegro', {
+        allegroOfferId,
+        error: error.message,
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Merge updates into rawData
+   */
+  private mergeRawDataUpdates(existingRawData: any, updates: any, dto: any): any {
+    if (!existingRawData) {
+      return updates;
+    }
+
+    const merged = { ...existingRawData };
+
+    // Merge basic fields
+    if (dto.title !== undefined) merged.name = dto.title;
+    if (dto.description !== undefined) merged.description = dto.description;
+    if (dto.categoryId !== undefined) {
+      merged.category = { ...(merged.category || {}), id: dto.categoryId };
+    }
+
+    // Merge selling mode
+    if (dto.price !== undefined || dto.currency !== undefined) {
+      merged.sellingMode = {
+        ...(merged.sellingMode || {}),
+        price: {
+          amount: String(dto.price !== undefined ? dto.price : existingRawData.sellingMode?.price?.amount || '0'),
+          currency: dto.currency || existingRawData.sellingMode?.price?.currency || this.getDefaultCurrency(),
+        },
+      };
+    }
+
+    // Merge stock
+    if (dto.stockQuantity !== undefined || dto.quantity !== undefined) {
+      const stockQty = dto.stockQuantity !== undefined ? dto.stockQuantity : dto.quantity;
+      merged.stock = {
+        ...(merged.stock || {}),
+        available: stockQty,
+      };
+    }
+
+    // Merge images
+    if (dto.images !== undefined) {
+      merged.images = dto.images.map((url: string) => ({ url }));
+    }
+
+    // Merge parameters
+    if (dto.attributes !== undefined && Array.isArray(dto.attributes)) {
+      const existingParams = merged.parameters || [];
+      const updatedParams = dto.attributes.map((attr: any) => {
+        const existing = existingParams.find((p: any) => p.id === attr.id);
+        return {
+          ...existing,
+          id: attr.id,
+          values: attr.values,
+        };
+      });
+      // Keep non-updated parameters
+      const otherParams = existingParams.filter((p: any) => !dto.attributes.some((a: any) => a.id === p.id));
+      merged.parameters = [...otherParams, ...updatedParams];
+    }
+
+    // Merge publication
+    if (dto.publicationStatus !== undefined) {
+      merged.publication = {
+        ...(merged.publication || {}),
+        status: dto.publicationStatus,
+      };
+    }
+
+    // Merge delivery and payment
+    if (dto.deliveryOptions !== undefined) {
+      merged.delivery = dto.deliveryOptions;
+    }
+    if (dto.paymentOptions !== undefined) {
+      merged.payments = dto.paymentOptions;
+    }
+
+    return merged;
+  }
+
+  /**
    * Update offer
    */
   async updateOffer(id: string, dto: any): Promise<any> {
-    this.logger.log('Updating Allegro offer', { id });
+    this.logger.log('Updating Allegro offer', { id, fields: Object.keys(dto) });
 
     const offer = await this.prisma.allegroOffer.findUnique({
       where: { id },
     });
 
     if (!offer) {
-      throw new Error(`Offer with ID ${id} not found`);
+      throw new HttpException('Offer not found', HttpStatus.NOT_FOUND);
     }
 
-    // Update via Allegro API
-    await this.allegroApi.updateOffer(offer.allegroOfferId, dto);
+    try {
+      // Transform DTO to Allegro API format
+      const allegroPayload = this.transformDtoToAllegroFormat(dto, offer);
 
-    // Update in database
-    const updated = await this.prisma.allegroOffer.update({
-      where: { id },
-      data: {
-        ...dto,
+      // Update via Allegro API
+      this.logger.log('Updating offer via Allegro API', {
+        allegroOfferId: offer.allegroOfferId,
+        payloadKeys: Object.keys(allegroPayload),
+      });
+      await this.allegroApi.updateOffer(offer.allegroOfferId, allegroPayload);
+
+      // Merge updates into rawData
+      const updatedRawData = this.mergeRawDataUpdates(offer.rawData as any, allegroPayload, dto);
+
+      // Prepare database update data
+      const dbUpdateData: any = {
         syncStatus: 'SYNCED',
         syncSource: 'MANUAL',
         lastSyncedAt: new Date(),
-      },
-    });
+        syncError: null,
+      };
 
-    return updated;
+      // Update fields that changed
+      if (dto.title !== undefined) dbUpdateData.title = dto.title;
+      if (dto.description !== undefined) dbUpdateData.description = dto.description;
+      if (dto.categoryId !== undefined) dbUpdateData.categoryId = dto.categoryId;
+      if (dto.price !== undefined) dbUpdateData.price = dto.price;
+      if (dto.currency !== undefined) dbUpdateData.currency = dto.currency;
+      if (dto.stockQuantity !== undefined) {
+        dbUpdateData.stockQuantity = dto.stockQuantity;
+        dbUpdateData.quantity = dto.stockQuantity;
+      } else if (dto.quantity !== undefined) {
+        dbUpdateData.quantity = dto.quantity;
+        dbUpdateData.stockQuantity = dto.quantity;
+      }
+      if (dto.images !== undefined) dbUpdateData.images = dto.images;
+      if (dto.status !== undefined) dbUpdateData.status = dto.status;
+      if (dto.publicationStatus !== undefined) dbUpdateData.publicationStatus = dto.publicationStatus;
+      if (dto.deliveryOptions !== undefined) dbUpdateData.deliveryOptions = dto.deliveryOptions;
+      if (dto.paymentOptions !== undefined) dbUpdateData.paymentOptions = dto.paymentOptions;
+
+      // Update rawData
+      dbUpdateData.rawData = updatedRawData;
+
+      // Update in database
+      const updated = await this.prisma.allegroOffer.update({
+        where: { id },
+        data: dbUpdateData,
+      });
+
+      // Re-validate offer
+      const validation = this.validateOfferReadiness(updated);
+      await this.prisma.allegroOffer.update({
+        where: { id },
+        data: {
+          validationStatus: validation.status,
+          validationErrors: validation.errors as any,
+          lastValidatedAt: new Date(),
+        },
+      });
+
+      this.logger.log('Offer updated successfully', {
+        id,
+        allegroOfferId: offer.allegroOfferId,
+        validationStatus: validation.status,
+      });
+
+      // Fetch updated offer with validation
+      const finalOffer = await this.prisma.allegroOffer.findUnique({
+        where: { id },
+      });
+
+      return finalOffer;
+    } catch (error: any) {
+      this.logger.error('Failed to update offer', {
+        id,
+        allegroOfferId: offer.allegroOfferId,
+        error: error.message,
+        errorStack: error.stack,
+      });
+
+      // Update sync status to ERROR
+      await this.prisma.allegroOffer.update({
+        where: { id },
+        data: {
+          syncStatus: 'ERROR',
+          syncError: error.message || 'Failed to update offer',
+        },
+      });
+
+      // Re-throw with user-friendly message
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to update offer';
+      throw new HttpException(
+        {
+          success: false,
+          error: {
+            code: 'UPDATE_ERROR',
+            message: errorMessage,
+            details: error.response?.data,
+          },
+        },
+        error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   /**

@@ -398,9 +398,32 @@ export class OffersController {
 
   @Put(':id')
   @UseGuards(JwtAuthGuard)
-  async updateOffer(@Param('id') id: string, @Body() dto: UpdateOfferDto): Promise<{ success: boolean; data: any }> {
-    const offer = await this.offersService.updateOffer(id, dto);
-    return { success: true, data: offer };
+  async updateOffer(@Param('id') id: string, @Body() dto: UpdateOfferDto, @Request() req: any): Promise<{ success: boolean; data: any }> {
+    const userId = String(req.user?.id || 'unknown');
+    try {
+      this.logger.log('Updating offer', {
+        userId,
+        offerId: id,
+        fields: Object.keys(dto),
+      });
+      const offer = await this.offersService.updateOffer(id, dto);
+      this.logger.log('Offer updated successfully', {
+        userId,
+        offerId: id,
+        allegroOfferId: offer.allegroOfferId,
+        validationStatus: offer.validationStatus,
+      });
+      return { success: true, data: offer };
+    } catch (error: any) {
+      this.metricsService.incrementErrors();
+      this.logger.error('Failed to update offer', {
+        userId,
+        offerId: id,
+        error: error.message,
+        errorStatus: error.status,
+      });
+      throw error;
+    }
   }
 
   @Delete(':id')

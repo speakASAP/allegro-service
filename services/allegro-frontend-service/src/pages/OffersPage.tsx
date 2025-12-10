@@ -102,6 +102,10 @@ interface Offer {
     code: string;
     name: string;
   };
+  // Edit form fields
+  deliveryOptions?: Record<string, unknown>;
+  paymentOptions?: Record<string, unknown>;
+  attributes?: Array<{ id: string; values: string[] }>;
 }
 
 interface OfferQueryParams {
@@ -120,6 +124,9 @@ const OffersPage: React.FC = () => {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [validating, setValidating] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editedOffer, setEditedOffer] = useState<Partial<Offer> | null>(null);
+  const [saving, setSaving] = useState(false);
   
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -215,6 +222,81 @@ const OffersPage: React.FC = () => {
       setError('Failed to validate offer');
     } finally {
       setValidating(false);
+    }
+  };
+
+  const handleEditOffer = () => {
+    if (!selectedOffer) return;
+    setEditedOffer({
+      title: selectedOffer.title,
+      description: selectedOffer.description,
+      price: selectedOffer.price,
+      currency: selectedOffer.currency,
+      stockQuantity: selectedOffer.stockQuantity,
+      status: selectedOffer.status,
+      publicationStatus: selectedOffer.publicationStatus,
+      categoryId: selectedOffer.categoryId,
+      images: Array.isArray(selectedOffer.images) 
+        ? selectedOffer.images.map((img: string | ImageItem) => typeof img === 'string' ? img : (img.url || img.path || ''))
+        : [],
+      deliveryOptions: (selectedOffer.rawData?.delivery || selectedOffer.rawData?.deliveryOptions) as Record<string, unknown> | undefined,
+      paymentOptions: (selectedOffer.rawData?.payments || selectedOffer.rawData?.paymentOptions) as Record<string, unknown> | undefined,
+      attributes: selectedOffer.rawData?.parameters?.map((p: Parameter) => ({
+        id: p.id || '',
+        values: Array.isArray(p.values) ? p.values.map((v: ParameterValue | string) => typeof v === 'string' ? v : (v as ParameterValue).name || '') : [],
+      })) || [],
+    });
+    setIsEditMode(true);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditMode(false);
+    setEditedOffer(null);
+    setError(null);
+  };
+
+  const handleSaveOffer = async () => {
+    if (!selectedOffer || !editedOffer) return;
+
+    setSaving(true);
+    setError(null);
+    try {
+      const updateData: Record<string, unknown> = {};
+      
+      if (editedOffer.title !== undefined) updateData.title = editedOffer.title;
+      if (editedOffer.description !== undefined) updateData.description = editedOffer.description;
+      if (editedOffer.price !== undefined) updateData.price = editedOffer.price;
+      if (editedOffer.currency !== undefined) updateData.currency = editedOffer.currency;
+      if (editedOffer.stockQuantity !== undefined) updateData.stockQuantity = editedOffer.stockQuantity;
+      if (editedOffer.status !== undefined) updateData.status = editedOffer.status;
+      if (editedOffer.publicationStatus !== undefined) updateData.publicationStatus = editedOffer.publicationStatus;
+      if (editedOffer.categoryId !== undefined) updateData.categoryId = editedOffer.categoryId;
+      if (editedOffer.images !== undefined) updateData.images = editedOffer.images;
+      if (editedOffer.deliveryOptions !== undefined) updateData.deliveryOptions = editedOffer.deliveryOptions;
+      if (editedOffer.paymentOptions !== undefined) updateData.paymentOptions = editedOffer.paymentOptions;
+      if (editedOffer.attributes !== undefined && Array.isArray(editedOffer.attributes)) {
+        updateData.attributes = editedOffer.attributes;
+      }
+
+      const response = await api.put(`/allegro/offers/${selectedOffer.id}`, updateData);
+      if (response.data.success) {
+        // Reload offer details to get updated data
+        const detailResponse = await api.get(`/allegro/offers/${selectedOffer.id}`);
+        if (detailResponse.data.success) {
+          setSelectedOffer(detailResponse.data.data);
+          setIsEditMode(false);
+          setEditedOffer(null);
+          // Refresh offers list to show updated data
+          loadOffers();
+        }
+      }
+    } catch (err) {
+      console.error('Failed to save offer', err);
+      const axiosError = err as AxiosError & { response?: { data?: { error?: { message?: string } } } };
+      const errorMessage = axiosError.response?.data?.error?.message || (err as Error).message || 'Failed to save offer';
+      setError(errorMessage);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -669,6 +751,9 @@ const OffersPage: React.FC = () => {
         onClose={() => {
           setShowDetailModal(false);
           setSelectedOffer(null);
+          setIsEditMode(false);
+          setEditedOffer(null);
+          setError(null);
         }}
         title={selectedOffer?.title || 'Offer Details'}
         size="xlarge"
@@ -677,6 +762,146 @@ const OffersPage: React.FC = () => {
           <div>Loading offer details...</div>
         ) : selectedOffer ? (
           <div className="space-y-4">
+            {/* Edit/View Mode Toggle */}
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold text-lg">{isEditMode ? 'Edit Offer' : 'Offer Details'}</h3>
+              <div className="flex gap-2">
+                {!isEditMode ? (
+                  <Button
+                    variant="primary"
+                    size="small"
+                    onClick={handleEditOffer}
+                  >
+                    Edit
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      variant="secondary"
+                      size="small"
+                      onClick={handleCancelEdit}
+                      disabled={saving}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="small"
+                      onClick={handleSaveOffer}
+                      disabled={saving}
+                    >
+                      {saving ? 'Saving...' : 'Save'}
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {error && (
+              <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded text-sm">
+                {error}
+              </div>
+            )}
+
+            {isEditMode && editedOffer ? (
+              /* Edit Form */
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                  <Input
+                    type="text"
+                    value={editedOffer.title || ''}
+                    onChange={(e) => setEditedOffer({ ...editedOffer, title: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <textarea
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    rows={6}
+                    value={editedOffer.description || ''}
+                    onChange={(e) => setEditedOffer({ ...editedOffer, description: e.target.value })}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Price</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={editedOffer.price || 0}
+                      onChange={(e) => setEditedOffer({ ...editedOffer, price: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+                    <select
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      value={editedOffer.currency || 'PLN'}
+                      onChange={(e) => setEditedOffer({ ...editedOffer, currency: e.target.value })}
+                    >
+                      <option value="PLN">PLN</option>
+                      <option value="CZK">CZK</option>
+                      <option value="EUR">EUR</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Stock Quantity</label>
+                    <Input
+                      type="number"
+                      value={editedOffer.stockQuantity || 0}
+                      onChange={(e) => setEditedOffer({ ...editedOffer, stockQuantity: parseInt(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                    <select
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      value={editedOffer.status || 'ACTIVE'}
+                      onChange={(e) => setEditedOffer({ ...editedOffer, status: e.target.value })}
+                    >
+                      <option value="ACTIVE">Active</option>
+                      <option value="INACTIVE">Inactive</option>
+                      <option value="ENDED">Ended</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Publication Status</label>
+                    <select
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      value={editedOffer.publicationStatus || 'INACTIVE'}
+                      onChange={(e) => setEditedOffer({ ...editedOffer, publicationStatus: e.target.value })}
+                    >
+                      <option value="ACTIVE">Active</option>
+                      <option value="INACTIVE">Inactive</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Category ID</label>
+                    <Input
+                      type="text"
+                      value={editedOffer.categoryId || ''}
+                      onChange={(e) => setEditedOffer({ ...editedOffer, categoryId: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Images (URLs, one per line)</label>
+                  <textarea
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    rows={4}
+                    value={Array.isArray(editedOffer.images) ? editedOffer.images.join('\n') : ''}
+                    onChange={(e) => setEditedOffer({ 
+                      ...editedOffer, 
+                      images: e.target.value.split('\n').filter(url => url.trim()) 
+                    })}
+                    placeholder="https://example.com/image1.jpg&#10;https://example.com/image2.jpg"
+                  />
+                </div>
+              </div>
+            ) : (
+              /* View Mode */
+              <>
             {/* Core Fields */}
             <div>
               <h3 className="font-semibold mb-2">Core Information</h3>
@@ -850,6 +1075,8 @@ const OffersPage: React.FC = () => {
 
             {/* Raw JSON */}
             {renderRawData(selectedOffer.rawData)}
+              </>
+            )}
           </div>
         ) : null}
       </Modal>
