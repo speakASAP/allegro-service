@@ -14,6 +14,13 @@ All services are running and healthy on production:
 
 *Frontend shows "unhealthy" but is accessible and working
 
+## Latest Verification (2025-12-10)
+
+- OAuth callback confirmed working for user `6` (statex account); tokens stored and refreshed.
+- `/import/jobs` now returns 401 on invalid/expired tokens instead of 500 (global filter added in import-service).
+- Allegro/Sales Center previews require OAuth and return `requiresOAuth`; client-credentials fallback removed.
+- Frontend import preview shows API currency (no hardcoded PLN). Import jobs page loads without 500; Allegro API preview modal opens successfully (29 offers visible during test).
+
 ## OAuth Configuration ✅
 
 ### Environment Variables
@@ -27,6 +34,7 @@ ALLEGRO_OAUTH_TOKEN_URL=https://allegro.pl/auth/oauth/token
 ### OAuth Routes Registered
 
 All OAuth routes are properly registered:
+
 - ✅ `GET /allegro/oauth/authorize` - Generate authorization URL
 - ✅ `GET /allegro/oauth/callback` - Handle OAuth callback
 - ✅ `GET /allegro/oauth/verify-config` - Verify configuration
@@ -73,18 +81,21 @@ The system is ready for OAuth authorization:
 ## Verification
 
 ### Check OAuth Configuration
+
 ```bash
 ssh statex "cd /home/statex/allegro && cat .env | grep ALLEGRO_REDIRECT_URI"
 # Expected: ALLEGRO_REDIRECT_URI=https://allegro.statex.cz/api/allegro/oauth/callback
 ```
 
 ### Check Service Logs
+
 ```bash
 ssh statex "cd /home/statex/allegro && docker logs allegro-service-green --tail 50 | grep -i oauth"
 ```
 
 ### Test OAuth Status
-- Go to: https://allegro.statex.cz/dashboard/settings
+
+- Go to: <https://allegro.statex.cz/dashboard/settings>
 - OAuth section should show current authorization status
 - Click "Authorize with Allegro" to start authorization flow
 
@@ -95,11 +106,10 @@ ssh statex "cd /home/statex/allegro && docker logs allegro-service-green --tail 
 
 2. **Client Credentials**: Must be configured in Settings page before OAuth authorization
 
-3. **OAuth Flow**: 
+3. **OAuth Flow**:
    - User clicks "Authorize with Allegro"
    - Redirects to Allegro authorization page
    - User grants permissions
    - Allegro redirects to: `https://allegro.statex.cz/api/allegro/oauth/callback?code=...&state=...`
    - Backend exchanges code for tokens
    - User redirected to Settings page with "Authorized" status
-

@@ -265,74 +265,203 @@ export class OffersService {
    * Import approved offers from preview
    */
   async importApprovedOffers(userId: string, approvedOfferIds: string[]) {
-    this.logger.log('Importing approved offers', { count: approvedOfferIds.length, userId });
+    this.logger.log('[importApprovedOffers] Starting import', {
+      userId,
+      approvedCount: approvedOfferIds.length,
+      approvedOfferIds: approvedOfferIds.slice(0, 5), // Log first 5 for debugging
+    });
 
     let offset = 0;
     const limit = 100;
     let hasMore = true;
     let totalImported = 0;
     const approvedSet = new Set(approvedOfferIds);
-    const oauthToken = await this.getUserOAuthToken(userId);
 
-    while (hasMore) {
-      const response = await this.allegroApi.getOffersWithOAuthToken(oauthToken, {
-        limit,
-        offset,
+    // Get OAuth token with detailed logging
+    let oauthToken: string;
+    try {
+      this.logger.log('[importApprovedOffers] Retrieving OAuth token', { userId });
+      oauthToken = await this.getUserOAuthToken(userId);
+      this.logger.log('[importApprovedOffers] OAuth token retrieved successfully', {
+        userId,
+        tokenLength: oauthToken?.length || 0,
+        tokenFirstChars: oauthToken?.substring(0, 20) || 'N/A',
       });
-
-      const offers = response.offers || [];
-      
-      for (const allegroOffer of offers) {
-        // Only import if approved
-        if (!approvedSet.has(allegroOffer.id)) {
-          continue;
-        }
-
-        try {
-          await this.prisma.allegroOffer.upsert({
-            where: { allegroOfferId: allegroOffer.id },
-            update: {
-              title: allegroOffer.name,
-              description: allegroOffer.description,
-              categoryId: allegroOffer.category?.id || '',
-              price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
-              currency: allegroOffer.sellingMode?.price?.currency || this.getDefaultCurrency(),
-              quantity: allegroOffer.stock?.available || 0,
-              stockQuantity: allegroOffer.stock?.available || 0,
-              status: allegroOffer.publication?.status || 'INACTIVE',
-              publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
-              syncStatus: 'SYNCED',
-              lastSyncedAt: new Date(),
-            },
-            create: {
-              allegroOfferId: allegroOffer.id,
-              title: allegroOffer.name,
-              description: allegroOffer.description,
-              categoryId: allegroOffer.category?.id || '',
-              price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
-              currency: allegroOffer.sellingMode?.price?.currency || this.getDefaultCurrency(),
-              quantity: allegroOffer.stock?.available || 0,
-              stockQuantity: allegroOffer.stock?.available || 0,
-              status: allegroOffer.publication?.status || 'INACTIVE',
-              publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
-              syncStatus: 'SYNCED',
-              lastSyncedAt: new Date(),
-            },
-          });
-          totalImported++;
-        } catch (error: any) {
-          this.logger.error('Failed to import approved offer', {
-            offerId: allegroOffer.id,
-            error: error.message,
-          });
-        }
-      }
-
-      hasMore = offers.length === limit;
-      offset += limit;
+    } catch (error: any) {
+      this.logger.error('[importApprovedOffers] Failed to get OAuth token', {
+        userId,
+        error: error.message,
+        errorCode: error.code,
+        errorStatus: error.status,
+      });
+      throw error; // Re-throw to let controller handle it
     }
 
-    this.logger.log('Finished importing approved offers', { totalImported });
+    let tokenRefreshAttempted = false;
+
+    while (hasMore) {
+      try {
+        this.logger.log('[importApprovedOffers] Fetching offers batch from Allegro API', {
+          userId,
+          offset,
+          limit,
+          approvedSetSize: approvedSet.size,
+          tokenRefreshAttempted,
+        });
+
+        const response = await this.allegroApi.getOffersWithOAuthToken(oauthToken, {
+          limit,
+          offset,
+        });
+
+        this.logger.log('[importApprovedOffers] Received response from Allegro API', {
+          userId,
+          offersCount: response.offers?.length || 0,
+          totalCount: response.count || 0,
+          offset,
+        });
+
+        const offers = response.offers || [];
+        
+        for (const allegroOffer of offers) {
+          // Only import if approved
+          if (!approvedSet.has(allegroOffer.id)) {
+            continue;
+          }
+
+          try {
+            this.logger.log('[importApprovedOffers] Importing approved offer', {
+              userId,
+              offerId: allegroOffer.id,
+              offerTitle: allegroOffer.name?.substring(0, 50),
+              price: allegroOffer.sellingMode?.price?.amount,
+              currency: allegroOffer.sellingMode?.price?.currency,
+            });
+
+            await this.prisma.allegroOffer.upsert({
+              where: { allegroOfferId: allegroOffer.id },
+              update: {
+                title: allegroOffer.name,
+                description: allegroOffer.description,
+                categoryId: allegroOffer.category?.id || '',
+                price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
+                currency: allegroOffer.sellingMode?.price?.currency || this.getDefaultCurrency(),
+                quantity: allegroOffer.stock?.available || 0,
+                stockQuantity: allegroOffer.stock?.available || 0,
+                status: allegroOffer.publication?.status || 'INACTIVE',
+                publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
+                syncStatus: 'SYNCED',
+                lastSyncedAt: new Date(),
+              },
+              create: {
+                allegroOfferId: allegroOffer.id,
+                title: allegroOffer.name,
+                description: allegroOffer.description,
+                categoryId: allegroOffer.category?.id || '',
+                price: parseFloat(allegroOffer.sellingMode?.price?.amount || '0'),
+                currency: allegroOffer.sellingMode?.price?.currency || this.getDefaultCurrency(),
+                quantity: allegroOffer.stock?.available || 0,
+                stockQuantity: allegroOffer.stock?.available || 0,
+                status: allegroOffer.publication?.status || 'INACTIVE',
+                publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
+                syncStatus: 'SYNCED',
+                lastSyncedAt: new Date(),
+              },
+            });
+            totalImported++;
+            this.logger.log('[importApprovedOffers] Successfully imported offer', {
+              userId,
+              offerId: allegroOffer.id,
+              totalImported,
+            });
+          } catch (error: any) {
+            this.logger.error('[importApprovedOffers] Failed to import approved offer', {
+              userId,
+              offerId: allegroOffer.id,
+              error: error.message,
+              errorStack: error.stack,
+            });
+          }
+        }
+
+        hasMore = offers.length === limit;
+        offset += limit;
+        // Reset token refresh flag on successful request
+        tokenRefreshAttempted = false;
+      } catch (error: any) {
+        const errorStatus = error.response?.status;
+        const errorData = error.response?.data || {};
+        const errorHeaders = error.response?.headers || {};
+
+        this.logger.error('[importApprovedOffers] Allegro API request failed', {
+          userId,
+          offset,
+          errorStatus,
+          errorMessage: error.message,
+          errorCode: error.code,
+          errorData: JSON.stringify(errorData, null, 2),
+          errorHeaders: JSON.stringify(errorHeaders, null, 2),
+          errorStack: error.stack,
+          tokenRefreshAttempted,
+        });
+
+        if ((errorStatus === 403 || errorStatus === 401) && !tokenRefreshAttempted) {
+          const allegroError = errorData.errors?.[0] || errorData;
+          this.logger.warn('[importApprovedOffers] Access denied - attempting token refresh', {
+            userId,
+            errorStatus,
+            allegroErrorCode: allegroError.code,
+            allegroErrorMessage: allegroError.message || allegroError.error_description,
+          });
+
+          try {
+            // Attempt to force refresh the token
+            this.logger.log('[importApprovedOffers] Forcing OAuth token refresh', { userId });
+            oauthToken = await this.allegroAuth.refreshUserToken(userId);
+            this.logger.log('[importApprovedOffers] Token refreshed successfully, retrying API call', {
+              userId,
+              newTokenLength: oauthToken?.length || 0,
+            });
+            tokenRefreshAttempted = true;
+            // Retry the same request with new token (don't increment offset)
+            continue;
+          } catch (refreshError: any) {
+            this.logger.error('[importApprovedOffers] Failed to refresh OAuth token', {
+              userId,
+              refreshError: refreshError.message,
+              refreshErrorStack: refreshError.stack,
+            });
+            throw new Error('OAuth authorization required or token expired. Failed to refresh token. Please go to Settings and re-authorize the application to access your Allegro offers.');
+          }
+        } else if (errorStatus === 403 || errorStatus === 401) {
+          // Already tried refresh, still getting 403/401
+          const allegroError = errorData.errors?.[0] || errorData;
+          this.logger.error('[importApprovedOffers] Access denied by Allegro API after token refresh - OAuth may be invalid or scopes insufficient', {
+            userId,
+            errorStatus,
+            allegroErrorCode: allegroError.code,
+            allegroErrorMessage: allegroError.message || allegroError.error_description,
+            fullErrorData: JSON.stringify(errorData, null, 2),
+          });
+          throw new Error('OAuth authorization required or token expired. The Allegro API returned 403/401 even after token refresh. Please go to Settings and re-authorize the application to access your Allegro offers.');
+        }
+        
+        // Re-throw other errors
+        this.logger.error('[importApprovedOffers] Unexpected error during import', {
+          userId,
+          errorStatus,
+          errorMessage: error.message,
+          errorData: JSON.stringify(errorData, null, 2),
+        });
+        throw error;
+      }
+    }
+
+    this.logger.log('[importApprovedOffers] Finished importing approved offers', {
+      userId,
+      totalImported,
+      requestedCount: approvedOfferIds.length,
+    });
     return { totalImported };
   }
 
@@ -749,11 +878,21 @@ export class OffersService {
 
   private async getUserOAuthToken(userId: string): Promise<string> {
     try {
-      return await this.allegroAuth.getUserAccessToken(userId);
+      this.logger.log('[getUserOAuthToken] Retrieving OAuth token', { userId });
+      const token = await this.allegroAuth.getUserAccessToken(userId);
+      this.logger.log('[getUserOAuthToken] OAuth token retrieved successfully', {
+        userId,
+        tokenLength: token?.length || 0,
+        tokenFirstChars: token?.substring(0, 20) || 'N/A',
+      });
+      return token;
     } catch (error: any) {
-      this.logger.warn('OAuth authorization required for Allegro operations', {
+      this.logger.error('[getUserOAuthToken] Failed to get OAuth token', {
         userId,
         error: error.message,
+        errorCode: error.code,
+        errorStatus: error.status,
+        errorStack: error.stack,
       });
       throw new HttpException(
         {
