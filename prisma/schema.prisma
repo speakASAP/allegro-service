@@ -122,6 +122,11 @@ model AllegroOffer {
   syncError    String?   @db.Text
   syncSource   String?   @db.VarChar(50) // ALLEGRO_API, SALES_CENTER, MANUAL, etc.
 
+  // Validation/readiness for publish flows
+  validationStatus String?  @db.VarChar(50) // READY, WARNINGS, ERRORS
+  validationErrors Json?     // Array of validation error/warning objects
+  lastValidatedAt  DateTime? @db.Timestamp(6)
+
   // Timestamps
   createdAt DateTime @default(now()) @db.Timestamp(6)
   updatedAt DateTime @updatedAt @db.Timestamp(6)
