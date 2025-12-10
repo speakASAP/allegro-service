@@ -214,11 +214,19 @@ export class OAuthController {
         return res.redirect(`${this.getFrontendUrl()}/auth/callback?error=decryption_failed`);
       }
 
-      // Get redirect URI
+      // Get redirect URI - must match exactly what was used in authorization URL
       const redirectUri = this.configService.get<string>('ALLEGRO_REDIRECT_URI');
       if (!redirectUri) {
         throw new Error('ALLEGRO_REDIRECT_URI not configured');
       }
+
+      this.logger.log('Exchanging code for token', {
+        userId: settings.userId,
+        redirectUri,
+        codeLength: code?.length,
+        codeVerifierLength: codeVerifier?.length,
+        clientId: settings.allegroClientId?.substring(0, 8) + '...',
+      });
 
       // Decrypt client secret
       let clientSecret: string;
