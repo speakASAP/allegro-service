@@ -200,28 +200,31 @@ export class OffersService {
       payload.category = { id: existingOffer.categoryId };
     }
 
-    // Selling mode (price) - always include if exists
+    // Selling mode (price) - only include price, not other sellingMode properties
     if (dto.price !== undefined || dto.currency !== undefined) {
       payload.sellingMode = {
-        ...(existingOffer.rawData?.sellingMode || {}),
         price: {
           amount: String(dto.price !== undefined ? dto.price : existingOffer.price),
           currency: dto.currency || existingOffer.currency || this.getDefaultCurrency(),
         },
       };
-    } else if (existingOffer.rawData?.sellingMode) {
-      payload.sellingMode = existingOffer.rawData.sellingMode;
+    } else if (existingOffer.rawData?.sellingMode?.price) {
+      // Only include price, not other sellingMode properties
+      payload.sellingMode = {
+        price: existingOffer.rawData.sellingMode.price,
+      };
     }
 
-    // Stock - always include if exists
+    // Stock - only include available, not other stock properties
     if (dto.stockQuantity !== undefined || dto.quantity !== undefined) {
       const stockQty = dto.stockQuantity !== undefined ? dto.stockQuantity : dto.quantity;
       payload.stock = {
-        ...(existingOffer.rawData?.stock || {}),
         available: stockQty,
       };
-    } else if (existingOffer.rawData?.stock) {
-      payload.stock = existingOffer.rawData.stock;
+    } else if (existingOffer.rawData?.stock?.available !== undefined) {
+      payload.stock = {
+        available: existingOffer.rawData.stock.available,
+      };
     }
 
     // Images - always include (required by Allegro API)
@@ -259,14 +262,15 @@ export class OffersService {
       payload.parameters = existingParams;
     }
 
-    // Publication status
+    // Publication status - only include status, not other publication properties
     if (dto.publicationStatus !== undefined) {
       payload.publication = {
-        ...(existingOffer.rawData?.publication || {}),
         status: dto.publicationStatus,
       };
-    } else if (existingOffer.rawData?.publication) {
-      payload.publication = existingOffer.rawData.publication;
+    } else if (existingOffer.rawData?.publication?.status) {
+      payload.publication = {
+        status: existingOffer.rawData.publication.status,
+      };
     }
 
     // Delivery options - include if exists
