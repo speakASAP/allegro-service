@@ -538,6 +538,7 @@ const OffersPage: React.FC = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Publication</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sync Source</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Synced</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                   </tr>
@@ -568,6 +569,9 @@ const OffersPage: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                         {offer.product ? `${offer.product.code} - ${offer.product.name}` : '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {offer.syncSource || '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {offer.lastSyncedAt ? new Date(offer.lastSyncedAt).toLocaleString() : '-'}
