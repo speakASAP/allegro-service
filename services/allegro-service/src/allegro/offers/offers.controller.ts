@@ -96,9 +96,62 @@ export class OffersController {
   @Post('import/approve')
   @UseGuards(JwtAuthGuard)
   async importApprovedOffers(@Request() req: any, @Body() body: { offerIds: string[] }): Promise<{ success: boolean; data: any }> {
-    const userId = String(req.user.id);
-    const result = await this.offersService.importApprovedOffers(userId, body.offerIds);
-    return { success: true, data: result };
+    try {
+      const userId = String(req.user.id);
+      this.logger.log('[importApprovedOffers] Controller received request', {
+        userId,
+        offerIdsCount: body.offerIds?.length || 0,
+        offerIds: body.offerIds?.slice(0, 5), // Log first 5 for debugging
+      });
+
+      const result = await this.offersService.importApprovedOffers(userId, body.offerIds);
+
+      this.logger.log('[importApprovedOffers] Controller completed successfully', {
+        userId,
+        totalImported: result.totalImported,
+      });
+
+      return { success: true, data: result };
+    } catch (error: any) {
+      const errorStatus = error.response?.status || error.status || HttpStatus.INTERNAL_SERVER_ERROR;
+      const errorData = error.response?.data || {};
+      const errorMessage = errorData.error_description || errorData.error || errorData.message || error.message || 'Failed to import approved offers';
+
+      this.logger.error('[importApprovedOffers] Controller error', {
+        error: error.message,
+        status: errorStatus,
+        userId: req.user?.id,
+        errorData: JSON.stringify(errorData, null, 2),
+        errorStack: error.stack,
+      });
+
+      // Check if error is OAuth-related
+      const isOAuthError = errorMessage.toLowerCase().includes('oauth') ||
+                          errorMessage.toLowerCase().includes('authorization required') ||
+                          errorStatus === 403 ||
+                          errorStatus === 401 ||
+                          error.code === 'OAUTH_REQUIRED';
+
+      let userFriendlyMessage = errorMessage;
+      if (isOAuthError) {
+        userFriendlyMessage = 'OAuth authorization required or token expired. Please go to Settings and re-authorize the application to access your Allegro offers.';
+      }
+
+      throw new HttpException(
+        {
+          success: false,
+          error: {
+            code: isOAuthError ? 'OAUTH_REQUIRED' : 'IMPORT_ERROR',
+            message: userFriendlyMessage,
+            status: errorStatus,
+            requiresOAuth: isOAuthError,
+            oauthSettingsUrl: '/dashboard/settings',
+            details: errorData,
+          },
+        },
+        errorStatus,
+      );
+    }
   }
 
   @Get('import')
