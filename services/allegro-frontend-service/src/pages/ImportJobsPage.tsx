@@ -55,7 +55,6 @@ const ImportJobsPage: React.FC = () => {
   // Export preview states
   const [showExportPreview, setShowExportPreview] = useState(false);
   const [exportPreviewData, setExportPreviewData] = useState<any[]>([]);
-  const [selectedExportIds, setSelectedExportIds] = useState<Set<string>>(new Set());
   const [loadingExportOffers, setLoadingExportOffers] = useState(false);
   const [processingExport, setProcessingExport] = useState(false);
 
