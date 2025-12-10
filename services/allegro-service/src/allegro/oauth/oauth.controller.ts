@@ -280,21 +280,46 @@ export class OAuthController {
         clientId: settings.allegroClientId?.substring(0, 8) + '...',
       });
 
+      // Validate client ID
+      if (!settings.allegroClientId || settings.allegroClientId.trim().length === 0) {
+        this.logger.error('Client ID is missing for OAuth token exchange', { userId: settings.userId });
+        return res.redirect(`${this.getFrontendUrl()}/auth/callback?error=client_id_missing`);
+      }
+
       // Decrypt client secret
       let clientSecret: string;
       try {
-        clientSecret = this.decrypt(settings.allegroClientSecret || '');
+        if (!settings.allegroClientSecret) {
+          this.logger.error('Client Secret is missing for OAuth token exchange', { userId: settings.userId });
+          return res.redirect(`${this.getFrontendUrl()}/auth/callback?error=client_secret_missing`);
+        }
+        clientSecret = this.decrypt(settings.allegroClientSecret);
       } catch (error) {
         this.logger.error('Failed to decrypt client secret', { userId: settings.userId, error: error.message });
         return res.redirect(`${this.getFrontendUrl()}/auth/callback?error=decryption_failed`);
       }
+
+      // Validate all parameters before exchange
+      this.logger.log('Validating parameters before token exchange', {
+        userId: settings.userId,
+        hasCode: !!trimmedCode,
+        codeLength: trimmedCode?.length,
+        hasCodeVerifier: !!codeVerifier,
+        codeVerifierLength: codeVerifier?.length,
+        hasRedirectUri: !!normalizedRedirectUri,
+        redirectUri: normalizedRedirectUri,
+        hasClientId: !!settings.allegroClientId,
+        clientId: settings.allegroClientId.substring(0, 8) + '...',
+        hasClientSecret: !!clientSecret,
+        clientSecretLength: clientSecret?.length,
+      });
 
       // Exchange code for tokens - use normalized redirect URI and trimmed code
       const tokenResponse = await this.oauthService.exchangeCodeForToken(
         trimmedCode,
         codeVerifier,
         normalizedRedirectUri,
-        settings.allegroClientId || '',
+        settings.allegroClientId,
         clientSecret,
       );
 
