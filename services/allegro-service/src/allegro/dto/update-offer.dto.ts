@@ -24,6 +24,7 @@ export class UpdateOfferDto {
   categoryId?: string;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   price?: number;
 
@@ -32,10 +33,12 @@ export class UpdateOfferDto {
   currency?: string;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   quantity?: number;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   stockQuantity?: number;
 

@@ -218,7 +218,13 @@ test_connections() {
       fi
       
       if command -v psql > /dev/null 2>&1; then
-        DB_URL="postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
+        # Use DATABASE_URL if available (already has URL-encoded password), remove query params for psql
+        if [ -n "$DATABASE_URL" ]; then
+          DB_URL="${DATABASE_URL%%\?*}"
+        else
+          # Fallback: construct from individual variables (password needs URL encoding)
+          DB_URL="postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
+        fi
         if psql "$DB_URL" -c "SELECT 1;" > /dev/null 2>&1; then
           echo "  ✅ Database: Connection successful"
         else
