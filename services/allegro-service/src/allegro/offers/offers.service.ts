@@ -491,6 +491,18 @@ export class OffersService {
       if (dto.deliveryOptions !== undefined) dbUpdateData.deliveryOptions = dto.deliveryOptions;
       if (dto.paymentOptions !== undefined) dbUpdateData.paymentOptions = dto.paymentOptions;
 
+      // Extract delivery and payment from updated rawData if not explicitly updated
+      if (dto.deliveryOptions === undefined && updatedRawData?.delivery) {
+        dbUpdateData.deliveryOptions = updatedRawData.delivery;
+      }
+      if (dto.paymentOptions === undefined && updatedRawData?.payments) {
+        dbUpdateData.paymentOptions = updatedRawData.payments;
+      }
+      // Extract images from updated rawData if not explicitly updated
+      if (dto.images === undefined && updatedRawData?.images && Array.isArray(updatedRawData.images)) {
+        dbUpdateData.images = this.extractImages({ rawData: updatedRawData });
+      }
+
       // Update rawData
       dbUpdateData.rawData = updatedRawData;
 
