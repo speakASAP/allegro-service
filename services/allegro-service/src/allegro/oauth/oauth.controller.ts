@@ -176,30 +176,69 @@ export class OAuthController {
   @Get('callback')
   async callback(@Query('code') code: string, @Query('state') state: string, @Res() res: Response) {
     if (!code || !state) {
-      this.logger.error('OAuth callback missing code or state', { code: !!code, state: !!state });
+      this.logger.error('OAuth callback missing code or state', { 
+        hasCode: !!code, 
+        hasState: !!state,
+        codeLength: code?.length,
+        stateLength: state?.length,
+      });
       return res.redirect(`${this.getFrontendUrl()}/auth/callback?error=missing_parameters`);
     }
 
-    this.logger.log('Processing OAuth callback', { state, code: code.substring(0, 10) + '...' });
+    // Trim and validate code and state
+    const trimmedCode = code.trim();
+    const trimmedState = state.trim();
+
+    if (!trimmedCode || !trimmedState) {
+      this.logger.error('OAuth callback code or state is empty after trimming', { 
+        codeLength: trimmedCode?.length,
+        stateLength: trimmedState?.length,
+      });
+      return res.redirect(`${this.getFrontendUrl()}/auth/callback?error=invalid_parameters`);
+    }
+
+    this.logger.log('Processing OAuth callback', { 
+      state: trimmedState, 
+      code: trimmedCode.substring(0, 10) + '...',
+      codeLength: trimmedCode.length,
+    });
 
     try {
-      // Find user by OAuth state
+      // Find user by OAuth state (use trimmed state)
       const settings = await this.prisma.userSettings.findFirst({
-        where: { allegroOAuthState: state },
+        where: { allegroOAuthState: trimmedState },
       });
 
       if (!settings) {
-        this.logger.error('OAuth state not found', { state });
+        this.logger.error('OAuth state not found', { 
+          state: trimmedState,
+          stateLength: trimmedState.length,
+        });
         return res.redirect(`${this.getFrontendUrl()}/auth/callback?error=invalid_state`);
       }
 
-      this.logger.log('Found OAuth state for user', { userId: settings.userId, state });
-      console.log('[OAuth Callback] Found OAuth state for user', { userId: settings.userId, state, hasCodeVerifier: !!settings.allegroOAuthCodeVerifier });
+      this.logger.log('Found OAuth state for user', { 
+        userId: settings.userId, 
+        state: trimmedState,
+        hasCodeVerifier: !!settings.allegroOAuthCodeVerifier,
+      });
+      console.log('[OAuth Callback] Found OAuth state for user', { 
+        userId: settings.userId, 
+        state: trimmedState, 
+        hasCodeVerifier: !!settings.allegroOAuthCodeVerifier 
+      });
 
       // Validate state
-      if (!this.oauthService.validateState(state, settings.allegroOAuthState || '')) {
-        this.logger.error('OAuth state validation failed', { state, storedState: settings.allegroOAuthState });
-        console.error('[OAuth Callback] State validation failed', { state, storedState: settings.allegroOAuthState });
+      if (!this.oauthService.validateState(trimmedState, settings.allegroOAuthState || '')) {
+        this.logger.error('OAuth state validation failed', { 
+          receivedState: trimmedState, 
+          storedState: settings.allegroOAuthState,
+          statesMatch: trimmedState === settings.allegroOAuthState,
+        });
+        console.error('[OAuth Callback] State validation failed', { 
+          receivedState: trimmedState, 
+          storedState: settings.allegroOAuthState 
+        });
         return res.redirect(`${this.getFrontendUrl()}/auth/callback?error=state_mismatch`);
       }
 
@@ -250,9 +289,9 @@ export class OAuthController {
         return res.redirect(`${this.getFrontendUrl()}/auth/callback?error=decryption_failed`);
       }
 
-      // Exchange code for tokens - use normalized redirect URI
+      // Exchange code for tokens - use normalized redirect URI and trimmed code
       const tokenResponse = await this.oauthService.exchangeCodeForToken(
-        code,
+        trimmedCode,
         codeVerifier,
         normalizedRedirectUri,
         settings.allegroClientId || '',

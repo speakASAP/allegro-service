@@ -118,26 +118,38 @@ export class AllegroOAuthService {
     clientId: string,
     clientSecret: string,
   ): Promise<TokenResponse> {
+    // Validate required parameters
+    if (!code || !codeVerifier || !redirectUri || !clientId || !clientSecret) {
+      throw new Error('Missing required parameters for token exchange');
+    }
+
     // Normalize redirect URI - remove trailing slashes and ensure exact match
     const normalizedRedirectUri = redirectUri.trim().replace(/\/+$/, '');
     
+    // Build request parameters
+    const params = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code: code.trim(),
+      redirect_uri: normalizedRedirectUri,
+      code_verifier: codeVerifier.trim(),
+    });
+
+    // Log request details (without sensitive data)
+    const requestBody = params.toString();
     this.logger.debug('Exchanging authorization code for token', {
       redirectUri: normalizedRedirectUri,
       codeLength: code?.length,
       codeVerifierLength: codeVerifier?.length,
       clientId: clientId.substring(0, 8) + '...',
+      tokenUrl: this.tokenUrl,
+      requestBodyPreview: requestBody.substring(0, 100) + '...',
     });
 
     try {
       const response = await firstValueFrom(
         this.httpService.post<TokenResponse>(
           this.tokenUrl,
-          new URLSearchParams({
-            grant_type: 'authorization_code',
-            code: code,
-            redirect_uri: normalizedRedirectUri,
-            code_verifier: codeVerifier,
-          }),
+          params,
           {
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded',
