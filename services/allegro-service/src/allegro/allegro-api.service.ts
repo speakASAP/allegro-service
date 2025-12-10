@@ -191,9 +191,11 @@ export class AllegroApiService {
 
   /**
    * Update offer with OAuth token (for user-specific resources)
+   * Uses the new /sale/product-offers endpoint (replaces deprecated /sale/offers)
    */
   async updateOfferWithOAuthToken(accessToken: string, offerId: string, data: any) {
-    const endpoint = `/sale/offers/${offerId}`;
+    // Use new product-offers endpoint (replaces deprecated /sale/offers)
+    const endpoint = `/sale/product-offers/${offerId}`;
     const url = `${this.apiUrl}${endpoint}`;
 
     try {
@@ -205,7 +207,9 @@ export class AllegroApiService {
         },
       };
 
-      const response = await firstValueFrom(this.httpService.put(url, data, config));
+      // Use PATCH for partial updates (recommended by Allegro)
+      // For full updates, use PUT with complete offer data
+      const response = await firstValueFrom(this.httpService.patch(url, data, config));
       return response.data;
     } catch (error: any) {
       const errorData = error.response?.data || {};
