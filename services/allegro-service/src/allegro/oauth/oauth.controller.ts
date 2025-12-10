@@ -148,11 +148,12 @@ export class OAuthController {
       },
     });
 
-    // Now store the new state and code verifier
+    // Now store the new state and code verifier (trim state for consistency)
+    const trimmedState = state.trim();
     await this.prisma.userSettings.update({
       where: { userId },
       data: {
-        allegroOAuthState: state,
+        allegroOAuthState: trimmedState,
         allegroOAuthCodeVerifier: this.encrypt(codeVerifier),
       },
     });
@@ -367,15 +368,57 @@ export class OAuthController {
         clientSecret,
       );
 
+      // Encrypt tokens and check lengths before saving
+      const encryptedAccessToken = this.encrypt(tokenResponse.access_token);
+      const encryptedRefreshToken = this.encrypt(tokenResponse.refresh_token || '');
+      const scopes = tokenResponse.scope || '';
+      
+      // Log lengths for debugging
+      this.logger.log('Token lengths before database save', {
+        userId: settings.userId,
+        accessTokenLength: tokenResponse.access_token.length,
+        encryptedAccessTokenLength: encryptedAccessToken.length,
+        refreshTokenLength: (tokenResponse.refresh_token || '').length,
+        encryptedRefreshTokenLength: encryptedRefreshToken.length,
+        scopesLength: scopes.length,
+      });
+      console.log('[OAuth Callback] Token lengths before database save', {
+        userId: settings.userId,
+        accessTokenLength: tokenResponse.access_token.length,
+        encryptedAccessTokenLength: encryptedAccessToken.length,
+        refreshTokenLength: (tokenResponse.refresh_token || '').length,
+        encryptedRefreshTokenLength: encryptedRefreshToken.length,
+        scopesLength: scopes.length,
+      });
+
+      // Truncate scopes if they exceed database limit (safety check)
+      const maxScopesLength = 1000; // Will be updated in schema, but safety check here
+      const truncatedScopes = scopes.length > maxScopesLength 
+        ? scopes.substring(0, maxScopesLength) 
+        : scopes;
+      
+      if (scopes.length > maxScopesLength) {
+        this.logger.warn('Scopes truncated due to length limit', {
+          userId: settings.userId,
+          originalLength: scopes.length,
+          truncatedLength: truncatedScopes.length,
+        });
+        console.warn('[OAuth Callback] Scopes truncated due to length limit', {
+          userId: settings.userId,
+          originalLength: scopes.length,
+          truncatedLength: truncatedScopes.length,
+        });
+      }
+
       // Store tokens
       const expiresAt = new Date(Date.now() + tokenResponse.expires_in * 1000);
       await this.prisma.userSettings.update({
         where: { userId: settings.userId },
         data: {
-          allegroAccessToken: this.encrypt(tokenResponse.access_token),
-          allegroRefreshToken: this.encrypt(tokenResponse.refresh_token || ''),
+          allegroAccessToken: encryptedAccessToken,
+          allegroRefreshToken: encryptedRefreshToken,
           allegroTokenExpiresAt: expiresAt,
-          allegroTokenScopes: tokenResponse.scope,
+          allegroTokenScopes: truncatedScopes,
           allegroOAuthState: null,
           allegroOAuthCodeVerifier: null,
         },
