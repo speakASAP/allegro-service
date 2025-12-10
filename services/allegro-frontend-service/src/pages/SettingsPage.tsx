@@ -3,9 +3,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
 import { AxiosError } from 'axios';
-import api, { oauthApi } from '../services/api';
+import api from '../services/api';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
@@ -42,39 +41,9 @@ const SettingsPage: React.FC = () => {
   const [newSupplierKey, setNewSupplierKey] = useState('');
   const [showAddSupplier, setShowAddSupplier] = useState(false);
 
-  // OAuth state
-  const [oauthStatus, setOauthStatus] = useState<{
-    authorized: boolean;
-    expiresAt?: string;
-    scopes?: string;
-  } | null>(null);
-  const [loadingOAuth, setLoadingOAuth] = useState(false);
-  const location = useLocation();
-
   useEffect(() => {
     loadSettings();
-    loadOAuthStatus();
   }, []);
-
-  // Refresh OAuth status when navigating back to this page (e.g., after OAuth callback)
-  useEffect(() => {
-    // Reload OAuth status when the page is focused or location changes
-    const handleFocus = () => {
-      loadOAuthStatus();
-    };
-
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, []);
-
-  // Also reload when location changes (e.g., coming back from callback)
-  useEffect(() => {
-    loadOAuthStatus();
-    // If we have oauth_refresh parameter, remove it from URL after loading
-    if (location.search.includes('oauth_refresh=true')) {
-      window.history.replaceState({}, '', location.pathname);
-    }
-  }, [location.pathname, location.search]);
 
   const loadSettings = async () => {
     try {
@@ -244,93 +213,6 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  const loadOAuthStatus = async () => {
-    try {
-      const response = await oauthApi.getStatus();
-      if (response.data.success) {
-        setOauthStatus(response.data.data);
-      }
-    } catch (err) {
-      // Silently fail - OAuth might not be configured
-      console.error('Failed to load OAuth status', err);
-    }
-  };
-
-  const handleAuthorizeAllegro = async () => {
-    if (!allegroClientId) {
-      setError('Please configure Allegro Client ID first');
-      return;
-    }
-
-    setLoadingOAuth(true);
-    setError('');
-    setSuccess('');
-
-    try {
-      console.log('[OAuth] Starting authorization request...');
-      const response = await oauthApi.authorize();
-      console.log('[OAuth] Authorization response:', response.data);
-      if (response.data.success && response.data.data?.authorizationUrl) {
-        // Redirect to Allegro authorization page
-        console.log('[OAuth] Redirecting to:', response.data.data.authorizationUrl);
-        window.location.href = response.data.data.authorizationUrl;
-        // Don't set loading to false here as we're redirecting
-        return;
-      } else {
-        setError('Failed to generate authorization URL');
-        setLoadingOAuth(false);
-      }
-    } catch (err: unknown) {
-      console.error('[OAuth] Authorization error:', err);
-      if (err instanceof AxiosError) {
-        const axiosError = err as AxiosError & { isConnectionError?: boolean; serviceErrorMessage?: string };
-        if (axiosError.isConnectionError && axiosError.serviceErrorMessage) {
-          setError(axiosError.serviceErrorMessage);
-        } else {
-          const errorMessage = err.response?.data?.error?.message || 'Failed to start OAuth authorization';
-          setError(errorMessage);
-          console.error('[OAuth] Error details:', {
-            status: err.response?.status,
-            data: err.response?.data,
-            message: errorMessage,
-          });
-        }
-      } else {
-        setError('Failed to start OAuth authorization');
-        console.error('[OAuth] Unknown error:', err);
-      }
-      setLoadingOAuth(false);
-    }
-  };
-
-  const handleRevokeAllegro = async () => {
-    if (!confirm('Are you sure you want to revoke OAuth authorization? You will need to authorize again to access your offers.')) {
-      return;
-    }
-
-    setLoadingOAuth(true);
-    setError('');
-    setSuccess('');
-
-    try {
-      await oauthApi.revoke();
-      setSuccess('OAuth authorization revoked successfully');
-      await loadOAuthStatus();
-    } catch (err: unknown) {
-      if (err instanceof AxiosError) {
-        const axiosError = err as AxiosError & { isConnectionError?: boolean; serviceErrorMessage?: string };
-        if (axiosError.isConnectionError && axiosError.serviceErrorMessage) {
-          setError(axiosError.serviceErrorMessage);
-        } else {
-          setError(err.response?.data?.error?.message || 'Failed to revoke OAuth authorization');
-        }
-      } else {
-        setError('Failed to revoke OAuth authorization');
-      }
-    } finally {
-      setLoadingOAuth(false);
-    }
-  };
 
   if (loading) {
     return <div>Loading settings...</div>;
@@ -380,55 +262,6 @@ const SettingsPage: React.FC = () => {
               Validate Keys
             </Button>
           </div>
-        </div>
-      </Card>
-
-      {/* OAuth Authorization */}
-      <Card title="Allegro OAuth Authorization">
-        <div className="space-y-4">
-          {oauthStatus === null ? (
-            <p className="text-gray-600">Loading authorization status...</p>
-          ) : oauthStatus.authorized ? (
-            <div className="space-y-3">
-              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                <div className="flex items-center space-x-2">
-                  <span className="text-green-600 font-semibold">✓ Authorized</span>
-                </div>
-                {oauthStatus.expiresAt && (
-                  <p className="text-sm text-gray-600 mt-2">
-                    Token expires: {new Date(oauthStatus.expiresAt).toLocaleString()}
-                  </p>
-                )}
-                {oauthStatus.scopes && (
-                  <p className="text-sm text-gray-600 mt-1">
-                    Scopes: {oauthStatus.scopes}
-                  </p>
-                )}
-              </div>
-              <Button variant="danger" onClick={handleRevokeAllegro} disabled={loadingOAuth}>
-                {loadingOAuth ? 'Revoking...' : 'Revoke Authorization'}
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-yellow-800">
-                  <strong>Not Authorized</strong>
-                </p>
-                <p className="text-sm text-yellow-700 mt-1">
-                  To import offers from Allegro, you need to authorize the application. This will redirect you to Allegro's authorization page.
-                </p>
-              </div>
-              <Button onClick={handleAuthorizeAllegro} disabled={loadingOAuth || !allegroClientId}>
-                {loadingOAuth ? 'Authorizing...' : 'Authorize with Allegro'}
-              </Button>
-              {!allegroClientId && (
-                <p className="text-sm text-gray-600">
-                  Please configure your Allegro Client ID first above.
-                </p>
-              )}
-            </div>
-          )}
         </div>
       </Card>
 
