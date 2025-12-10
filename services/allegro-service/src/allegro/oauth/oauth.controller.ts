@@ -331,6 +331,58 @@ export class OAuthController {
   }
 
   /**
+   * Verify OAuth configuration
+   * GET /allegro/oauth/verify-config
+   * Returns configuration details for debugging (without sensitive data)
+   */
+  @Get('verify-config')
+  @UseGuards(JwtAuthGuard)
+  async verifyConfig(@Req() req: any) {
+    const userId = String(req.user.id);
+
+    try {
+      const settings = await this.prisma.userSettings.findUnique({
+        where: { userId },
+        select: {
+          allegroClientId: true,
+          allegroClientSecret: true,
+          allegroOAuthState: true,
+          allegroOAuthCodeVerifier: true,
+        },
+      });
+
+      const redirectUri = this.configService.get<string>('ALLEGRO_REDIRECT_URI');
+      const normalizedRedirectUri = redirectUri ? redirectUri.trim().replace(/\/+$/, '') : null;
+
+      return {
+        success: true,
+        data: {
+          hasClientId: !!settings?.allegroClientId,
+          clientIdPreview: settings?.allegroClientId ? settings.allegroClientId.substring(0, 8) + '...' : null,
+          hasClientSecret: !!settings?.allegroClientSecret,
+          hasOAuthState: !!settings?.allegroOAuthState,
+          hasCodeVerifier: !!settings?.allegroOAuthCodeVerifier,
+          redirectUri: normalizedRedirectUri,
+          redirectUriConfigured: !!redirectUri,
+          redirectUriNormalized: normalizedRedirectUri !== redirectUri,
+        },
+      };
+    } catch (error: any) {
+      this.logger.error('Failed to verify OAuth configuration', { userId, error: error.message });
+      throw new HttpException(
+        {
+          success: false,
+          error: {
+            code: 'VERIFICATION_ERROR',
+            message: 'Failed to verify OAuth configuration',
+          },
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
    * Get OAuth authorization status
    * GET /allegro/oauth/status
    */
