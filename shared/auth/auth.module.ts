@@ -24,5 +24,8 @@ import { ResilienceModule } from '../resilience/resilience.module';
   providers: [AuthService, JwtAuthGuard],
   exports: [AuthService, JwtAuthGuard],
 })
-export class AuthModule {}
+export class AuthModule {
+  // ConfigService is automatically available via ConfigModule
+  // JwtAuthGuard now uses ConfigService for JWT_SECRET
+}
 
