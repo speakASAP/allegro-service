@@ -185,23 +185,14 @@ export class OffersService {
       payload.name = existingOffer.rawData.name;
     }
 
-    // Description - only include if explicitly updating
-    // For PATCH requests, Allegro may not accept description in certain formats
-    // Only include if it's being updated, otherwise omit it
-    if (dto.description !== undefined) {
-      // If description is being updated, use the new value
-      // Ensure it's in the correct format (string or sections array)
-      if (typeof dto.description === 'string') {
-        payload.description = dto.description;
-      } else if (Array.isArray(dto.description)) {
-        // If it's an array (sections format), use as-is
-        payload.description = dto.description;
-      } else {
-        // If it's an object, convert to sections format if needed
-        payload.description = dto.description;
-      }
-    }
-    // Don't include description if not updating - let Allegro keep existing value
+    // Description - DO NOT include in PATCH requests
+    // Allegro API's /sale/product-offers endpoint does not accept description field in PATCH requests
+    // Description can only be updated via PUT with full offer data, not via PATCH
+    // Completely omit description from PATCH payload to avoid 422 errors
+    // if (dto.description !== undefined) {
+    //   // Description updates are not supported via PATCH
+    //   // This would require a full PUT request with complete offer data
+    // }
 
     // Category - always include (required)
     if (dto.categoryId !== undefined) {
