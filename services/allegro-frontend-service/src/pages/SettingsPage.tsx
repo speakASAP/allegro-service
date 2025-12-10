@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AxiosError } from 'axios';
-import api from '../services/api';
+import api, { oauthApi } from '../services/api';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
@@ -41,8 +41,25 @@ const SettingsPage: React.FC = () => {
   const [newSupplierKey, setNewSupplierKey] = useState('');
   const [showAddSupplier, setShowAddSupplier] = useState(false);
 
+  // OAuth state
+  const [oauthStatus, setOauthStatus] = useState<{
+    authorized: boolean;
+    expiresAt?: string;
+    scopes?: string;
+  } | null>(null);
+  const [oauthLoading, setOauthLoading] = useState(false);
+
   useEffect(() => {
     loadSettings();
+    loadOAuthStatus();
+
+    // Check if returning from OAuth callback
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('oauth_refresh') === 'true') {
+      loadOAuthStatus();
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   }, []);
 
   const loadSettings = async () => {
@@ -100,6 +117,8 @@ const SettingsPage: React.FC = () => {
       if (response.data.success) {
         setSuccess('Allegro settings saved successfully');
         loadSettings();
+        // Reload OAuth status in case credentials changed
+        loadOAuthStatus();
       }
     } catch (err: unknown) {
       const errorMessage =
@@ -213,6 +232,85 @@ const SettingsPage: React.FC = () => {
     }
   };
 
+  const loadOAuthStatus = async () => {
+    try {
+      const response = await oauthApi.getStatus();
+      if (response.data.success) {
+        setOauthStatus(response.data.data);
+      }
+    } catch (err: unknown) {
+      // Silently fail - OAuth status is optional
+      console.error('Failed to load OAuth status', err);
+    }
+  };
+
+  const handleAuthorizeOAuth = async () => {
+    if (!allegroClientId || !allegroClientSecret) {
+      setError('Please configure and save your Allegro Client ID and Client Secret first');
+      return;
+    }
+
+    setOauthLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const response = await oauthApi.authorize();
+      if (response.data.success && response.data.data?.authorizationUrl) {
+        // Redirect to Allegro authorization page
+        window.location.href = response.data.data.authorizationUrl;
+      } else {
+        setError('Failed to generate authorization URL');
+      }
+    } catch (err: unknown) {
+      if (err instanceof AxiosError) {
+        const axiosError = err as AxiosError & { isConnectionError?: boolean; serviceErrorMessage?: string };
+        if (axiosError.isConnectionError && axiosError.serviceErrorMessage) {
+          setError(axiosError.serviceErrorMessage);
+        } else {
+          setError(err.response?.data?.error?.message || 'Failed to start OAuth authorization');
+        }
+      } else {
+        setError('Failed to start OAuth authorization');
+      }
+    } finally {
+      setOauthLoading(false);
+    }
+  };
+
+  const handleRevokeOAuth = async () => {
+    if (!confirm('Are you sure you want to revoke OAuth authorization? You will need to re-authorize to import offers.')) {
+      return;
+    }
+
+    setOauthLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const response = await oauthApi.revoke();
+      if (response.data.success) {
+        setSuccess('OAuth authorization revoked successfully');
+        loadOAuthStatus();
+      } else {
+        setError('Failed to revoke OAuth authorization');
+      }
+    } catch (err: unknown) {
+      if (err instanceof AxiosError) {
+        const axiosError = err as AxiosError & { isConnectionError?: boolean; serviceErrorMessage?: string };
+        if (axiosError.isConnectionError && axiosError.serviceErrorMessage) {
+          setError(axiosError.serviceErrorMessage);
+        } else {
+          setError(err.response?.data?.error?.message || 'Failed to revoke OAuth authorization');
+        }
+      } else {
+        setError('Failed to revoke OAuth authorization');
+      }
+    } finally {
+      setOauthLoading(false);
+    }
+  };
+
 
   if (loading) {
     return <div>Loading settings...</div>;
@@ -262,6 +360,57 @@ const SettingsPage: React.FC = () => {
               Validate Keys
             </Button>
           </div>
+        </div>
+      </Card>
+
+      {/* OAuth Authorization */}
+      <Card title="OAuth Authorization">
+        <div className="space-y-4">
+          {oauthStatus === null ? (
+            <p className="text-gray-600">Loading OAuth status...</p>
+          ) : oauthStatus.authorized ? (
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                <span className="text-green-700 font-semibold">Authorized</span>
+              </div>
+              {oauthStatus.expiresAt && (
+                <div className="text-sm text-gray-600">
+                  <strong>Expires:</strong> {new Date(oauthStatus.expiresAt).toLocaleString()}
+                </div>
+              )}
+              {oauthStatus.scopes && (
+                <div className="text-sm text-gray-600">
+                  <strong>Scopes:</strong> {oauthStatus.scopes}
+                </div>
+              )}
+              <div className="pt-2">
+                <Button variant="danger" onClick={handleRevokeOAuth} disabled={oauthLoading}>
+                  {oauthLoading ? 'Revoking...' : 'Revoke Authorization'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                <span className="text-red-700 font-semibold">Not Authorized</span>
+              </div>
+              <p className="text-sm text-gray-600">
+                OAuth authorization is required to import offers from Allegro. Click the button below to authorize the application.
+              </p>
+              <div className="pt-2">
+                <Button onClick={handleAuthorizeOAuth} disabled={oauthLoading || !allegroClientId || !allegroClientSecret}>
+                  {oauthLoading ? 'Starting Authorization...' : 'Authorize with Allegro'}
+                </Button>
+              </div>
+              {(!allegroClientId || !allegroClientSecret) && (
+                <p className="text-sm text-yellow-600">
+                  Please configure and save your Allegro Client ID and Client Secret first.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </Card>
 
