@@ -195,6 +195,24 @@ export class AllegroOAuthService {
       const errorDescription = errorData.error_description || errorData.error || error.message;
       const errorCode = errorData.error || 'unknown_error';
       
+      // Log full error response for debugging
+      console.error('[OAuth Token Exchange] Full error details:', {
+        error: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        errorCode,
+        errorDescription,
+        errorData: JSON.stringify(errorData, null, 2),
+        errorHeaders: error.response?.headers,
+        redirectUri: normalizedRedirectUri,
+        originalRedirectUri: redirectUri,
+        clientId: clientId.substring(0, 8) + '...',
+        hasCodeVerifier: !!codeVerifier,
+        codeVerifierLength: codeVerifier?.length,
+        codeLength: code?.length,
+        tokenUrl: this.tokenUrl,
+      });
+
       this.logger.error('Failed to exchange authorization code for token', {
         error: error.message,
         status: error.response?.status,
