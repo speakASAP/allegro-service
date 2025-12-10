@@ -436,7 +436,7 @@ export class OffersService {
         // Check if error is specifically about OAuth being required
         if (oauthError.message && oauthError.message.includes('OAuth authorization required')) {
           this.logger.warn('OAuth authorization required for importing offers', { userId });
-          throw new Error('OAuth authorization required. Please authorize the application in Settings to access your Allegro offers.');
+          throw new Error('OAuth authorization required. To import offers from Allegro, you need to authorize the application. Please go to Settings and click "Authorize with Allegro" to grant access to your Allegro account.');
         }
         
         // OAuth not available or failed, fall back to client credentials
@@ -517,7 +517,7 @@ export class OffersService {
             errorStatus,
             errorData,
           });
-          throw new Error('OAuth authorization required. The /sale/offers endpoint requires OAuth authorization code flow. Please authorize the application in Settings to access your Allegro offers.');
+          throw new Error('OAuth authorization required. The Allegro API requires OAuth authorization to access your offers. Please go to Settings and click "Authorize with Allegro" to grant access to your Allegro account. After authorization, you will be able to import offers.');
         }
         
         // Re-throw other errors
