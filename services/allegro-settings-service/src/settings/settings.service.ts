@@ -37,8 +37,12 @@ export class SettingsService {
       const possiblePaths = [
         path.join(process.cwd(), '../../.env'), // From service directory
         path.join(process.cwd(), '.env'), // From project root if running from there
-        path.resolve(__dirname, '../../../.env'), // Absolute path from compiled code
       ];
+      
+      // Add __dirname path if available (for compiled code in production)
+      if (typeof __dirname !== 'undefined') {
+        possiblePaths.push(path.resolve(__dirname, '../../../.env'));
+      }
       
       for (const envPath of possiblePaths) {
         try {
