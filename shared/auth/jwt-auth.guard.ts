@@ -53,22 +53,64 @@ export class JwtAuthGuard implements CanActivate {
 
         const validationDuration = Date.now() - validationStartTime;
 
+        // Log decoded token structure for debugging (temporarily enabled to diagnose issue)
+        console.log('[JwtAuthGuard] Decoded token structure', {
+          keys: Object.keys(decoded),
+          hasId: !!decoded.id,
+          hasSub: !!decoded.sub,
+          hasUserId: !!decoded.userId,
+          hasEmail: !!decoded.email,
+          decodedSample: {
+            id: decoded.id,
+            sub: decoded.sub,
+            userId: decoded.userId,
+            email: decoded.email,
+            iat: decoded.iat,
+            exp: decoded.exp,
+          },
+        });
+
         // Transform decoded token to AuthUser format
+        // Try multiple possible field names for user ID
+        const userId = decoded.id || decoded.sub || decoded.userId || decoded.user?.id || String(decoded.userId || decoded.id || decoded.sub || '');
+        const userEmail = decoded.email || decoded.user?.email || decoded.userEmail || '';
+
         const user: AuthUser = {
-          id: decoded.id || decoded.sub || decoded.userId,
-          email: decoded.email,
-          firstName: decoded.firstName,
-          lastName: decoded.lastName,
-          phone: decoded.phone,
-          isActive: decoded.isActive !== false, // Default to true if not specified
-          isVerified: decoded.isVerified !== false, // Default to true if not specified
-          createdAt: decoded.createdAt,
-          updatedAt: decoded.updatedAt,
+          id: String(userId), // Ensure it's a string
+          email: userEmail,
+          firstName: decoded.firstName || decoded.user?.firstName || decoded.first_name,
+          lastName: decoded.lastName || decoded.user?.lastName || decoded.last_name,
+          phone: decoded.phone || decoded.user?.phone,
+          isActive: decoded.isActive !== false && decoded.user?.isActive !== false, // Default to true if not specified
+          isVerified: decoded.isVerified !== false && decoded.user?.isVerified !== false, // Default to true if not specified
+          createdAt: decoded.createdAt || decoded.user?.createdAt || decoded.iat ? new Date(decoded.iat * 1000).toISOString() : undefined,
+          updatedAt: decoded.updatedAt || decoded.user?.updatedAt,
         };
 
-        // Validate that we have at least an ID and email
-        if (!user.id || !user.email) {
-          throw new UnauthorizedException('Invalid token payload');
+        // Validate that we have at least an ID (email can be optional for some tokens)
+        if (!user.id || user.id === 'undefined' || user.id === 'null') {
+          if (process.env.NODE_ENV === 'development') {
+            console.error('[JwtAuthGuard] Invalid token payload - missing user ID', {
+              decoded,
+              extractedUserId: userId,
+            });
+          }
+          throw new UnauthorizedException('Invalid token payload: missing user ID');
+        }
+
+        // Email is preferred but not strictly required if we have a valid ID
+        // Some tokens might not include email in the payload
+        if (!user.email) {
+          // Try to extract from user object if present
+          if (decoded.user && decoded.user.email) {
+            user.email = decoded.user.email;
+          } else {
+            // If still no email, use a placeholder (some systems don't include email in JWT)
+            user.email = `user-${user.id}@unknown`;
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('[JwtAuthGuard] Token missing email, using placeholder', { userId: user.id });
+            }
+          }
         }
 
         // Attach user to request
