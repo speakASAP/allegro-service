@@ -832,7 +832,6 @@ export class OffersService {
                 stockQuantity: allegroOffer.stock?.available || 0,
                 status: allegroOffer.publication?.status || 'INACTIVE',
                 images: images,
-                // @ts-expect-error - rawData exists in Prisma schema but IDE types may not be reloaded
                 rawData: allegroOffer as any,
                 syncStatus: 'SYNCED',
                 syncSource: 'ALLEGRO_API',
@@ -849,7 +848,6 @@ export class OffersService {
                 stockQuantity: allegroOffer.stock?.available || 0,
                 status: allegroOffer.publication?.status || 'INACTIVE',
                 images: images,
-                // @ts-expect-error - rawData exists in Prisma schema but IDE types may not be reloaded
                 rawData: allegroOffer as any,
                 syncStatus: 'SYNCED',
                 syncSource: 'ALLEGRO_API',
@@ -1112,7 +1110,6 @@ export class OffersService {
                 status: allegroOffer.publication?.status || 'INACTIVE',
                 publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
                 images: images,
-                // @ts-expect-error - rawData exists in Prisma schema but IDE types may not be reloaded
                 rawData: allegroOffer as any,
                 syncStatus: 'SYNCED',
                 syncSource: 'SALES_CENTER',
@@ -1130,7 +1127,6 @@ export class OffersService {
                 status: allegroOffer.publication?.status || 'INACTIVE',
                 publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
                 images: images,
-                // @ts-expect-error - rawData exists in Prisma schema but IDE types may not be reloaded
                 rawData: allegroOffer as any,
                 syncStatus: 'SYNCED',
                 syncSource: 'SALES_CENTER',
@@ -1311,7 +1307,6 @@ export class OffersService {
               status: allegroOffer.publication?.status || 'INACTIVE',
               publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
               images: images,
-              // @ts-expect-error - rawData exists in Prisma schema but IDE types may not be reloaded
               rawData: allegroOffer as any,
               syncStatus: 'SYNCED',
               syncSource: 'SALES_CENTER',
@@ -1329,7 +1324,6 @@ export class OffersService {
               status: allegroOffer.publication?.status || 'INACTIVE',
               publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
               images: images,
-              // @ts-expect-error - rawData exists in Prisma schema but IDE types may not be reloaded
               rawData: allegroOffer as any,
               syncStatus: 'SYNCED',
               syncSource: 'SALES_CENTER',
