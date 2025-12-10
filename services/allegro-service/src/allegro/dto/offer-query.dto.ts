@@ -7,5 +7,6 @@ export class OfferQueryDto {
   limit?: number;
   status?: string;
   search?: string;
+  categoryId?: string;
 }
 
