@@ -20,6 +20,7 @@ const Dashboard: React.FC = () => {
   const navigation = [
     { name: 'Settings', path: '/dashboard/settings', icon: '⚙️' },
     { name: 'Import Jobs', path: '/dashboard/import', icon: '📥' },
+    { name: 'Offers', path: '/dashboard/offers', icon: '🛍️' },
     { name: 'Orders', path: '/dashboard/orders', icon: '📦' },
   ];
 

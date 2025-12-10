@@ -113,6 +113,9 @@ model AllegroOffer {
   // Images
   images Json? // Array of image URLs
 
+  // Full raw payload from Allegro API
+  rawData Json? // Complete Allegro /sale/offers payload for full fidelity
+
   // Sync metadata
   lastSyncedAt DateTime? @db.Timestamp(6)
   syncStatus   String    @default("PENDING") @db.VarChar(50) // PENDING, SYNCED, ERROR

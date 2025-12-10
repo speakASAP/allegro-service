@@ -14,6 +14,12 @@
 - Serve from our DB (no live passthrough) and render inside the existing dashboard in the frontend service.
 - Current iteration: Allegro only; keep design extensible for future platforms (Aukro, Heureka, Bazos, etc.).
 
+## Iteration Boundaries
+
+- Now: Allegro view/read-only (inspect stored data, no live passthrough).
+- Next: Allegro edit + publish back to Allegro (reuse sync jobs).
+- Later: Extend projections/mappers to Aukro/Heureka/Bazos with platform-specific validation and export.
+
 ## Current Baseline (Allegro)
 
 - Services kept: **api-gateway**, **allegro-service**, **import-service**, **allegro-settings-service**, **allegro-frontend-service**.
@@ -71,6 +77,41 @@
 - All credentials/tokens in DB (encrypted) and `.env`-driven; no hardcoded secrets.
 - `.env` is source of truth; add missing keys to `.env.example` (no secret values).
 - Use centralized logger (`utils/logger.js` per project conventions) for all flows.
+
+## Schema / Storage Notes
+
+- Allegro: add `rawData` JSON on `allegro_offers` to store full `/sale/offers` payload; keep existing indexed fields (title, price, stock, status/publicationStatus, images, delivery/payment, lastSyncedAt, syncStatus).
+- Consider per-sync snapshots or lastSync metadata (source: Allegro import vs Sales Center) to surface provenance in UI.
+- Future: per-platform projection tables (Aukro/Heureka/Bazos) linked to `Product` with platform IDs, validation state, media ordering, errors, and sync metadata.
+
+## API Contract (Allegro view, DB-backed)
+
+- `GET /allegro/offers`: pagination (page, limit), filters (status, search in title, optional category), returns items with core fields + `rawData` (or selected subsets), `product` link, and pagination meta; no live Allegro calls.
+- `GET /allegro/offers/:id`: returns single offer with full stored payload (`rawData`), core mapped fields, linked product info; DB-only.
+- Keep existing import/export endpoints unchanged; list/detail consume stored data to ensure deterministic auditing and offline review.
+
+## Frontend Acceptance (Offers view)
+
+- Route: `/dashboard/offers`; sidebar entry “Offers”.
+- List columns: title, price + currency, stock quantity, status/publicationStatus, lastSyncedAt, linked product code/name (if present).
+- Filters: status, text search (title), optional category.
+- Detail view (drawer/page): core fields; description rendered safely; media gallery from stored URLs; attributes/parameters/variations from `rawData`; delivery/payment; publication; product link; raw JSON tab (read-only) for debugging.
+
+## Sync Provenance & Validation
+
+- Track last sync time and source (Allegro import vs Sales Center) per offer; display in UI.
+- Add simple readiness/validation flag on projection (e.g., missing media/attributes) to prepare for future publish flows.
+
+## Logging & Metrics
+
+- Log offers list/detail API calls via centralized logger; include filters, pagination, userId.
+- Basic counters/metrics: list requests, detail requests, errors; reuse existing health/logging conventions.
+
+## Platform Discovery Checklist (future)
+
+- Aukro: auth model, category tree, media limits, attribute dictionaries, price/fee rules.
+- Heureka: feed vs API choice, category/attribute requirements, shipping/payment tables, image URL constraints, availability flags.
+- Bazos: API vs form automation, category/image limits, structured attributes support, templating needs.
 
 ## Next Steps (Implementation-Oriented, not executed now)
 
