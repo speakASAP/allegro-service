@@ -76,6 +76,7 @@ export class OffersController {
       const result = await this.offersService.previewOffersFromAllegro(userId);
       return { success: true, data: result };
     } catch (error: any) {
+      this.metricsService.incrementErrors();
       const errorStatus = error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR;
       const errorData = error.response?.data || {};
       const errorMessage = errorData.error_description || errorData.error || errorData.message || error.message || 'Failed to preview offers from Allegro API';
@@ -138,6 +139,7 @@ export class OffersController {
 
       return { success: true, data: result };
     } catch (error: any) {
+      this.metricsService.incrementErrors();
       const errorStatus = error.response?.status || error.status || HttpStatus.INTERNAL_SERVER_ERROR;
       const errorData = error.response?.data || {};
       const errorMessage = errorData.error_description || errorData.error || errorData.message || error.message || 'Failed to import approved offers';
@@ -187,6 +189,7 @@ export class OffersController {
       const result = await this.offersService.importAllOffers(userId);
       return { success: true, data: result };
     } catch (error: any) {
+      this.metricsService.incrementErrors();
       const errorStatus = error.response?.status || 500;
       const errorMessage = error.message || 'Failed to import offers from Allegro';
       
@@ -229,6 +232,7 @@ export class OffersController {
       const result = await this.offersService.previewOffersFromSalesCenter(userId);
       return { success: true, data: result };
     } catch (error: any) {
+      this.metricsService.incrementErrors();
       const errorStatus = error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR;
       const errorData = error.response?.data || {};
       const errorMessage = errorData.error_description || errorData.error || errorData.message || error.message || 'Failed to preview offers from Allegro Sales Center';
@@ -302,6 +306,7 @@ export class OffersController {
 
       return { success: true, data: result };
     } catch (error: any) {
+      this.metricsService.incrementErrors();
       const errorStatus = error.response?.status || error.status || HttpStatus.INTERNAL_SERVER_ERROR;
       const errorData = error.response?.data || {};
       const errorMessage = errorData.error_description || errorData.error || errorData.message || error.message || 'Failed to import approved offers from Sales Center';

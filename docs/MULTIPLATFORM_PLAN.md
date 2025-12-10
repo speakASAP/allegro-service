@@ -105,7 +105,7 @@
 ## Logging & Metrics
 
 - ✅ Log offers list/detail API calls via centralized logger; include filters, pagination, userId.
-- ⏳ Basic counters/metrics: list requests, detail requests, errors; reuse existing health/logging conventions.
+- ✅ Basic counters/metrics: MetricsService tracks list requests, detail requests, validation requests, errors; GET /allegro/offers/metrics endpoint; in-memory counters with reset capability.
 
 ## Platform Discovery Checklist (future)
 
