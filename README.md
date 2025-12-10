@@ -142,6 +142,14 @@ All ports are configured in `allegro/.env`. The values shown are defaults:
 - `NOTIFICATION_STOCK_LOW` - Send notifications on low stock (true)
 - `NOTIFICATION_EMAIL_TO` - Admin email for notifications
 
+### JWT Configuration
+
+- `JWT_SECRET` - **REQUIRED**: Shared JWT secret key for token validation (must match `auth-microservice` JWT_SECRET)
+  - **Important**: This secret must be identical across all services that validate JWT tokens
+  - **Source**: Copy from `auth-microservice/.env` file
+  - **Purpose**: Enables fast local JWT validation without HTTP calls to auth-microservice
+  - **Security**: Keep this secret secure and never commit it to version control
+
 For a complete list of all environment variables, see the `.env.example` file in the root directory or check `docs/IMPLEMENTATION_PLAN.md` section "Environment Configuration".
 
 **Important**: All configuration values must be set in the `.env` file. The application will fail to start if required variables are missing. No hardcoded defaults are used in the codebase.
