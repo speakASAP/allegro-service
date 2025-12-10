@@ -245,11 +245,10 @@ const SettingsPage: React.FC = () => {
   };
 
   const handleAuthorizeOAuth = async () => {
-    // Check if credentials are saved (either in form state or in saved settings)
+    // Check if Client ID is configured (Client Secret might not be returned by API for security)
     const hasClientId = allegroClientId || settings?.allegroClientId;
-    const hasClientSecret = allegroClientSecret || settings?.allegroClientSecret;
     
-    if (!hasClientId || !hasClientSecret) {
+    if (!hasClientId) {
       setError('Please configure and save your Allegro Client ID and Client Secret first');
       return;
     }
@@ -272,6 +271,7 @@ const SettingsPage: React.FC = () => {
         if (axiosError.isConnectionError && axiosError.serviceErrorMessage) {
           setError(axiosError.serviceErrorMessage);
         } else {
+          // Backend will return specific error if credentials are missing
           setError(err.response?.data?.error?.message || 'Failed to start OAuth authorization');
         }
       } else {
@@ -406,12 +406,12 @@ const SettingsPage: React.FC = () => {
               <div className="pt-2">
                 <Button 
                   onClick={handleAuthorizeOAuth} 
-                  disabled={oauthLoading || !(allegroClientId || settings?.allegroClientId) || !(allegroClientSecret || settings?.allegroClientSecret)}
+                  disabled={oauthLoading || !(allegroClientId || settings?.allegroClientId)}
                 >
                   {oauthLoading ? 'Starting Authorization...' : 'Authorize with Allegro'}
                 </Button>
               </div>
-              {(!(allegroClientId || settings?.allegroClientId) || !(allegroClientSecret || settings?.allegroClientSecret)) && (
+              {!(allegroClientId || settings?.allegroClientId) && (
                 <p className="text-sm text-yellow-600">
                   Please configure and save your Allegro Client ID and Client Secret first.
                 </p>
