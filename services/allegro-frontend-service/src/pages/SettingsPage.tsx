@@ -245,7 +245,11 @@ const SettingsPage: React.FC = () => {
   };
 
   const handleAuthorizeOAuth = async () => {
-    if (!allegroClientId || !allegroClientSecret) {
+    // Check if credentials are saved (either in form state or in saved settings)
+    const hasClientId = allegroClientId || settings?.allegroClientId;
+    const hasClientSecret = allegroClientSecret || settings?.allegroClientSecret;
+    
+    if (!hasClientId || !hasClientSecret) {
       setError('Please configure and save your Allegro Client ID and Client Secret first');
       return;
     }
@@ -400,11 +404,14 @@ const SettingsPage: React.FC = () => {
                 OAuth authorization is required to import offers from Allegro. Click the button below to authorize the application.
               </p>
               <div className="pt-2">
-                <Button onClick={handleAuthorizeOAuth} disabled={oauthLoading || !allegroClientId || !allegroClientSecret}>
+                <Button 
+                  onClick={handleAuthorizeOAuth} 
+                  disabled={oauthLoading || !(allegroClientId || settings?.allegroClientId) || !(allegroClientSecret || settings?.allegroClientSecret)}
+                >
                   {oauthLoading ? 'Starting Authorization...' : 'Authorize with Allegro'}
                 </Button>
               </div>
-              {(!allegroClientId || !allegroClientSecret) && (
+              {(!(allegroClientId || settings?.allegroClientId) || !(allegroClientSecret || settings?.allegroClientSecret)) && (
                 <p className="text-sm text-yellow-600">
                   Please configure and save your Allegro Client ID and Client Secret first.
                 </p>
