@@ -1,5 +1,26 @@
 # Offers View – Allegro Full Payload
 
+## Implementation Status
+
+### ✅ Completed
+
+- ✅ Database schema: Added `rawData` JSONB column to `allegro_offers` table
+- ✅ Backend storage: All import functions store full Allegro payload in `rawData`
+- ✅ Image extraction: Helper function extracts and stores images in `images` field
+- ✅ Backend API: `GET /allegro/offers` returns offers with pagination, filters (status, search, category), and `rawData`
+- ✅ Backend API: `GET /allegro/offers/:id` returns single offer with full `rawData`
+- ✅ Frontend: OffersPage component created with list view, filters, pagination
+- ✅ Frontend: Detail modal with core fields, images, attributes, variations, selling mode, publication details, delivery/payment, after-sales services, raw JSON
+- ✅ Frontend: Routing added (`/dashboard/offers`) and navigation entry in sidebar
+- ✅ TypeScript: All `any` types replaced with proper interfaces
+- ✅ Production: Migration applied, code deployed
+
+### 🔄 In Progress / Next Steps
+
+- ⏳ Add logging for offers API calls (list/detail requests)
+- ⏳ Add sync provenance tracking (source: import vs Sales Center)
+- ⏳ Add validation/readiness flags for future publish flows
+
 ## Goal
 
 - Provide a single-source-of-truth offers view for all Allegro items imported/exported into our database.

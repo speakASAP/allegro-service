@@ -277,7 +277,8 @@ const ImportJobsPage: React.FC = () => {
     setError(null);
 
     try {
-      const response = await api.get('/allegro/offers?limit=1000');
+      // Preview only first 10 offers
+      const response = await api.get('/allegro/offers?limit=10&page=1');
       
       if (response.data.success) {
         const items = response.data.data.items || [];
@@ -306,21 +307,108 @@ const ImportJobsPage: React.FC = () => {
     }
   };
 
-  const handleApproveExport = async () => {
-    if (selectedExportIds.size === 0) {
-      setError('Please select at least one item to export');
-      return;
-    }
+  /**
+   * Generate CSV from offers data
+   */
+  const generateCsvFromOffers = (offers: any[]): string => {
+    const headers = [
+      'Allegro Offer ID',
+      'Title',
+      'Price',
+      'Currency',
+      'Stock Quantity',
+      'Status',
+      'Publication Status',
+      'Category ID',
+      'Product Code',
+      'Product Name',
+      'Created At',
+      'Last Synced At',
+    ];
 
+    const rows = offers.map((offer) => [
+      offer.allegroOfferId || offer.id || '',
+      offer.title || '',
+      String(offer.price || 0),
+      offer.currency || 'CZK',
+      String(offer.stockQuantity || offer.quantity || 0),
+      offer.status || '',
+      offer.publicationStatus || '',
+      offer.categoryId || '',
+      offer.product?.code || '',
+      offer.product?.name || '',
+      offer.createdAt ? new Date(offer.createdAt).toISOString() : '',
+      offer.lastSyncedAt ? new Date(offer.lastSyncedAt).toISOString() : '',
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+    ].join('\n');
+
+    return csvContent;
+  };
+
+  const handleApproveExport = async () => {
     setProcessingExport(true);
     setError(null);
 
     try {
-      const response = await api.get('/allegro/offers/export/csv', {
-        responseType: 'blob',
-      });
+      // First, get total count
+      const countResponse = await api.get('/allegro/offers?limit=1&page=1');
+      if (!countResponse.data.success) {
+        throw new Error('Failed to get offers count');
+      }
+
+      const total = countResponse.data.data.pagination?.total || 0;
+      if (total === 0) {
+        setError('No offers to export');
+        setProcessingExport(false);
+        return;
+      }
+
+      // Calculate batches: 100 offers per batch, max 10 parallel batches
+      const batchSize = 100;
+      const maxParallelBatches = 10;
+      let batches: Array<{ page: number; limit: number }> = [];
+
+      if (total <= 1000) {
+        // If total <= 1000, use batches of 100
+        const numBatches = Math.ceil(total / batchSize);
+        batches = Array.from({ length: numBatches }, (_, i) => ({
+          page: i + 1,
+          limit: batchSize,
+        }));
+      } else {
+        // If total > 1000, divide into 10 equal pieces
+        const itemsPerBatch = Math.ceil(total / maxParallelBatches);
+        batches = Array.from({ length: maxParallelBatches }, (_, i) => ({
+          page: i + 1,
+          limit: itemsPerBatch,
+        }));
+      }
+
+      // Make parallel requests for all batches
+      const batchPromises = batches.map((batch) =>
+        api.get(`/allegro/offers?limit=${batch.limit}&page=${batch.page}`)
+      );
+
+      const batchResponses = await Promise.all(batchPromises);
       
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      // Combine all offers
+      const allOffers: any[] = [];
+      for (const response of batchResponses) {
+        if (response.data.success && response.data.data.items) {
+          allOffers.push(...response.data.data.items);
+        }
+      }
+
+      // Generate CSV client-side
+      const csvContent = generateCsvFromOffers(allOffers);
+      
+      // Download CSV
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       const filename = `offers_${new Date().toISOString().split('T')[0]}.csv`;
@@ -330,7 +418,7 @@ const ImportJobsPage: React.FC = () => {
       link.remove();
       window.URL.revokeObjectURL(url);
       
-      setSuccess('Offers exported successfully');
+      setSuccess(`Successfully exported ${allOffers.length} offers`);
       setShowExportPreview(false);
       setExportPreviewData([]);
       setSelectedExportIds(new Set());
@@ -634,36 +722,20 @@ const ImportJobsPage: React.FC = () => {
           setExportPreviewData([]);
           setSelectedExportIds(new Set());
         }}
-        title="Review Export - Offers"
+        title="Export Offers - Preview"
         size="xlarge"
       >
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <p className="text-sm text-gray-600">
-              Select items to export. {selectedExportIds.size} of {exportPreviewData.length} selected.
+              Preview of first 10 offers. All offers will be exported to CSV.
             </p>
-            <div className="flex space-x-2">
-              <Button onClick={selectAllExports} variant="secondary" size="small">
-                Select All
-              </Button>
-              <Button onClick={deselectAllExports} variant="secondary" size="small">
-                Deselect All
-              </Button>
-            </div>
           </div>
 
           <div className="max-h-96 overflow-y-auto border rounded">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50 sticky top-0">
                 <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase w-12">
-                    <input
-                      type="checkbox"
-                      checked={selectedExportIds.size === exportPreviewData.length && exportPreviewData.length > 0}
-                      onChange={(e) => e.target.checked ? selectAllExports() : deselectAllExports()}
-                      className="rounded"
-                    />
-                  </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Stock</th>
@@ -675,14 +747,6 @@ const ImportJobsPage: React.FC = () => {
                   const id = item.id || item.allegroOfferId;
                   return (
                     <tr key={id}>
-                      <td className="px-4 py-2">
-                        <input
-                          type="checkbox"
-                          checked={selectedExportIds.has(id)}
-                          onChange={() => toggleExportSelection(id)}
-                          className="rounded"
-                        />
-                      </td>
                       <td className="px-4 py-2 text-sm text-gray-900">{item.title}</td>
                       <td className="px-4 py-2 text-sm text-gray-900">{item.price} {item.currency || 'CZK'}</td>
                       <td className="px-4 py-2 text-sm text-gray-900">{item.stockQuantity || 0}</td>
@@ -707,9 +771,9 @@ const ImportJobsPage: React.FC = () => {
             </Button>
             <Button
               onClick={handleApproveExport}
-              disabled={selectedExportIds.size === 0 || processingExport}
+              disabled={processingExport}
             >
-              {processingExport ? 'Exporting...' : `Export ${selectedExportIds.size} Selected`}
+              {processingExport ? 'Exporting...' : 'Export All Offers'}
             </Button>
           </div>
         </div>

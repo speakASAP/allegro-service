@@ -38,8 +38,26 @@ export class OffersController {
 
   @Get()
   @UseGuards(JwtAuthGuard)
-  async getOffers(@Query() query: OfferQueryDto): Promise<{ success: boolean; data: any }> {
+  async getOffers(@Query() query: OfferQueryDto, @Request() req: any): Promise<{ success: boolean; data: any }> {
+    const userId = String(req.user?.id || 'unknown');
+    this.logger.log('Getting offers list', {
+      userId,
+      filters: {
+        status: query.status,
+        search: query.search,
+        categoryId: query.categoryId,
+      },
+      pagination: {
+        page: query.page || 1,
+        limit: query.limit || 20,
+      },
+    });
     const result = await this.offersService.getOffers(query);
+    this.logger.log('Offers list retrieved', {
+      userId,
+      total: result.pagination?.total || 0,
+      returned: result.items?.length || 0,
+    });
     return { success: true, data: result };
   }
 
@@ -257,12 +275,65 @@ export class OffersController {
     @Request() req: any,
     @Body() body: { offerIds: string[] },
   ): Promise<{ success: boolean; data: any }> {
-    const userId = String(req.user.id);
-    const result = await this.offersService.importApprovedOffersFromSalesCenter(
-      userId,
-      body.offerIds,
-    );
-    return { success: true, data: result };
+    try {
+      const userId = String(req.user.id);
+      this.logger.log('[importApprovedOffersFromSalesCenter] Controller received request', {
+        userId,
+        offerIdsCount: body.offerIds?.length || 0,
+        offerIds: body.offerIds?.slice(0, 5), // Log first 5 for debugging
+      });
+
+      const result = await this.offersService.importApprovedOffersFromSalesCenter(
+        userId,
+        body.offerIds,
+      );
+
+      this.logger.log('[importApprovedOffersFromSalesCenter] Controller completed successfully', {
+        userId,
+        totalImported: result.totalImported,
+      });
+
+      return { success: true, data: result };
+    } catch (error: any) {
+      const errorStatus = error.response?.status || error.status || HttpStatus.INTERNAL_SERVER_ERROR;
+      const errorData = error.response?.data || {};
+      const errorMessage = errorData.error_description || errorData.error || errorData.message || error.message || 'Failed to import approved offers from Sales Center';
+
+      this.logger.error('[importApprovedOffersFromSalesCenter] Controller error', {
+        error: error.message,
+        status: errorStatus,
+        userId: req.user?.id,
+        errorData: JSON.stringify(errorData, null, 2),
+        errorStack: error.stack,
+      });
+
+      // Check if error is OAuth-related
+      const isOAuthError = errorMessage.toLowerCase().includes('oauth') ||
+                          errorMessage.toLowerCase().includes('authorization required') ||
+                          errorStatus === 403 ||
+                          errorStatus === 401 ||
+                          error.code === 'OAUTH_REQUIRED';
+
+      let userFriendlyMessage = errorMessage;
+      if (isOAuthError) {
+        userFriendlyMessage = 'OAuth authorization required or token expired. Please go to Settings and re-authorize the application to access your Allegro Sales Center offers.';
+      }
+
+      throw new HttpException(
+        {
+          success: false,
+          error: {
+            code: isOAuthError ? 'OAUTH_REQUIRED' : 'IMPORT_ERROR',
+            message: userFriendlyMessage,
+            status: errorStatus,
+            requiresOAuth: isOAuthError,
+            oauthSettingsUrl: '/dashboard/settings',
+            details: errorData,
+          },
+        },
+        errorStatus,
+      );
+    }
   }
 
   @Post('import/sales-center')
@@ -284,8 +355,19 @@ export class OffersController {
 
   @Get(':id')
   @UseGuards(JwtAuthGuard)
-  async getOffer(@Param('id') id: string): Promise<{ success: boolean; data: any }> {
+  async getOffer(@Param('id') id: string, @Request() req: any): Promise<{ success: boolean; data: any }> {
+    const userId = String(req.user?.id || 'unknown');
+    this.logger.log('Getting offer details', {
+      userId,
+      offerId: id,
+    });
     const offer = await this.offersService.getOffer(id);
+    this.logger.log('Offer details retrieved', {
+      userId,
+      offerId: id,
+      allegroOfferId: offer.allegroOfferId,
+      hasRawData: !!offer.rawData,
+    });
     return { success: true, data: offer };
   }
 
