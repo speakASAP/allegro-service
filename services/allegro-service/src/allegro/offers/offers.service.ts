@@ -1584,13 +1584,15 @@ export class OffersService {
       errors.push({ type: 'MISSING_CATEGORY', message: 'Category is required', severity: 'error' });
     }
 
-    // Check delivery options
-    if (!offer.deliveryOptions || (Array.isArray(offer.deliveryOptions) && offer.deliveryOptions.length === 0)) {
+    // Check delivery options - check both direct field and rawData
+    const deliveryOptions = offer.deliveryOptions || offer.rawData?.delivery;
+    if (!deliveryOptions || (Array.isArray(deliveryOptions) && deliveryOptions.length === 0)) {
       errors.push({ type: 'MISSING_DELIVERY', message: 'At least one delivery option is recommended', severity: 'warning' });
     }
 
-    // Check payment options
-    if (!offer.paymentOptions || (Array.isArray(offer.paymentOptions) && offer.paymentOptions.length === 0)) {
+    // Check payment options - check both direct field and rawData
+    const paymentOptions = offer.paymentOptions || offer.rawData?.payments;
+    if (!paymentOptions || (Array.isArray(paymentOptions) && paymentOptions.length === 0)) {
       errors.push({ type: 'MISSING_PAYMENT', message: 'At least one payment option is recommended', severity: 'warning' });
     }
 
