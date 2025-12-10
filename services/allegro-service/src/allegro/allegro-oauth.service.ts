@@ -165,6 +165,23 @@ export class AllegroOAuthService {
       requestBodyPreview: requestBody.substring(0, 100) + '...',
     });
 
+    // Log full request details for debugging
+    const requestLog = {
+      tokenUrl: this.tokenUrl,
+      grant_type: 'authorization_code',
+      codeLength: code?.length,
+      codeFirstChars: code?.substring(0, 20) + '...',
+      redirectUri: normalizedRedirectUri,
+      codeVerifierLength: codeVerifier?.length,
+      codeVerifierFirstChars: codeVerifier?.substring(0, 20) + '...',
+      clientId: clientId.substring(0, 8) + '...',
+      clientSecretLength: clientSecret?.length,
+      requestBody: params.toString().substring(0, 200) + '...',
+      timestamp: new Date().toISOString(),
+    };
+    console.log('[AllegroOAuthService] exchangeCodeForToken - Full request details', JSON.stringify(requestLog, null, 2));
+    this.logger.log('Exchanging authorization code for token - Full details', requestLog);
+
     try {
       const response = await firstValueFrom(
         this.httpService.post<TokenResponse>(
@@ -182,12 +199,14 @@ export class AllegroOAuthService {
         ),
       );
 
-      this.logger.log('Successfully exchanged authorization code for token', {
+      const successLog = {
         tokenType: response.data.token_type,
         expiresIn: response.data.expires_in,
         hasRefreshToken: !!response.data.refresh_token,
         scopes: response.data.scope,
-      });
+      };
+      this.logger.log('Successfully exchanged authorization code for token', successLog);
+      console.log('[AllegroOAuthService] Successfully exchanged authorization code for token', JSON.stringify(successLog, null, 2));
 
       return response.data;
     } catch (error: any) {
@@ -195,8 +214,7 @@ export class AllegroOAuthService {
       const errorDescription = errorData.error_description || errorData.error || error.message;
       const errorCode = errorData.error || 'unknown_error';
       
-      // Log full error response for debugging
-      console.error('[OAuth Token Exchange] Full error details:', {
+      const errorLog = {
         error: error.message,
         status: error.response?.status,
         statusText: error.response?.statusText,
@@ -210,21 +228,15 @@ export class AllegroOAuthService {
         hasCodeVerifier: !!codeVerifier,
         codeVerifierLength: codeVerifier?.length,
         codeLength: code?.length,
+        codeFirstChars: code?.substring(0, 20) + '...',
         tokenUrl: this.tokenUrl,
-      });
-
-      this.logger.error('Failed to exchange authorization code for token', {
-        error: error.message,
-        status: error.response?.status,
-        errorCode,
-        errorDescription,
-        errorData: JSON.stringify(errorData),
-        redirectUri: normalizedRedirectUri,
-        originalRedirectUri: redirectUri,
-        clientId: clientId.substring(0, 8) + '...',
-        hasCodeVerifier: !!codeVerifier,
-        codeVerifierLength: codeVerifier?.length,
-      });
+        requestBody: params.toString().substring(0, 200) + '...',
+        timestamp: new Date().toISOString(),
+      };
+      
+      // Log full error response for debugging
+      console.error('[AllegroOAuthService] Failed to exchange authorization code - Full error details', JSON.stringify(errorLog, null, 2));
+      this.logger.error('Failed to exchange authorization code for token', errorLog);
       
       throw new Error(
         `Failed to exchange authorization code: ${errorDescription} (${errorCode})`,

@@ -175,13 +175,26 @@ export class OAuthController {
    */
   @Get('callback')
   async callback(@Query('code') code: string, @Query('state') state: string, @Res() res: Response) {
+    const callbackReceivedLog = {
+      hasCode: !!code,
+      codeLength: code?.length,
+      codeFirstChars: code?.substring(0, 20) + '...',
+      hasState: !!state,
+      stateLength: state?.length,
+      stateFirstChars: state?.substring(0, 20) + '...',
+      timestamp: new Date().toISOString(),
+    };
+    console.log('[OAuth Callback] Received callback', JSON.stringify(callbackReceivedLog, null, 2));
+    
     if (!code || !state) {
-      this.logger.error('OAuth callback missing code or state', { 
+      const errorLog = { 
         hasCode: !!code, 
         hasState: !!state,
         codeLength: code?.length,
         stateLength: state?.length,
-      });
+      };
+      this.logger.error('OAuth callback missing code or state', errorLog);
+      console.error('[OAuth Callback] Missing code or state', JSON.stringify(errorLog, null, 2));
       return res.redirect(`${this.getFrontendUrl()}/auth/callback?error=missing_parameters`);
     }
 
@@ -190,18 +203,26 @@ export class OAuthController {
     const trimmedState = state.trim();
 
     if (!trimmedCode || !trimmedState) {
-      this.logger.error('OAuth callback code or state is empty after trimming', { 
+      const errorLog = { 
         codeLength: trimmedCode?.length,
         stateLength: trimmedState?.length,
-      });
+        originalCodeLength: code?.length,
+        originalStateLength: state?.length,
+      };
+      this.logger.error('OAuth callback code or state is empty after trimming', errorLog);
+      console.error('[OAuth Callback] Code or state empty after trimming', JSON.stringify(errorLog, null, 2));
       return res.redirect(`${this.getFrontendUrl()}/auth/callback?error=invalid_parameters`);
     }
 
-    this.logger.log('Processing OAuth callback', { 
-      state: trimmedState, 
-      code: trimmedCode.substring(0, 10) + '...',
+    const processingLog = { 
+      state: trimmedState.substring(0, 20) + '...',
+      stateLength: trimmedState.length,
+      code: trimmedCode.substring(0, 20) + '...',
       codeLength: trimmedCode.length,
-    });
+      timestamp: new Date().toISOString(),
+    };
+    this.logger.log('Processing OAuth callback', processingLog);
+    console.log('[OAuth Callback] Processing callback', JSON.stringify(processingLog, null, 2));
 
     try {
       // Find user by OAuth state (use trimmed state)
