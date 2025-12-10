@@ -28,6 +28,15 @@ interface Parameter {
   value?: string;
 }
 
+interface AttributeInput {
+  id?: string;
+  values?: string[];
+  property?: {
+    id?: string;
+    values?: string[];
+  };
+}
+
 interface Price {
   amount: string;
   currency: string;
@@ -271,19 +280,129 @@ const OffersPage: React.FC = () => {
     try {
       const updateData: Record<string, unknown> = {};
       
-      if (editedOffer.title !== undefined) updateData.title = editedOffer.title;
-      if (editedOffer.description !== undefined) updateData.description = editedOffer.description;
-      if (editedOffer.price !== undefined) updateData.price = editedOffer.price;
-      if (editedOffer.currency !== undefined) updateData.currency = editedOffer.currency;
-      if (editedOffer.stockQuantity !== undefined) updateData.stockQuantity = editedOffer.stockQuantity;
-      if (editedOffer.status !== undefined) updateData.status = editedOffer.status;
-      if (editedOffer.publicationStatus !== undefined) updateData.publicationStatus = editedOffer.publicationStatus;
-      if (editedOffer.categoryId !== undefined) updateData.categoryId = editedOffer.categoryId;
-      if (editedOffer.images !== undefined) updateData.images = editedOffer.images;
-      if (editedOffer.deliveryOptions !== undefined) updateData.deliveryOptions = editedOffer.deliveryOptions;
-      if (editedOffer.paymentOptions !== undefined) updateData.paymentOptions = editedOffer.paymentOptions;
-      if (editedOffer.attributes !== undefined && Array.isArray(editedOffer.attributes)) {
-        updateData.attributes = editedOffer.attributes;
+      // Track which fields are actually being changed
+      const changedFields = new Set<string>();
+      
+      if (editedOffer.title !== undefined && editedOffer.title !== selectedOffer.title) {
+        updateData.title = editedOffer.title;
+        changedFields.add('title');
+      }
+      if (editedOffer.description !== undefined && editedOffer.description !== selectedOffer.description) {
+        updateData.description = editedOffer.description;
+        changedFields.add('description');
+      }
+      if (editedOffer.price !== undefined && editedOffer.price !== selectedOffer.price) {
+        updateData.price = editedOffer.price;
+        changedFields.add('price');
+      }
+      if (editedOffer.currency !== undefined && editedOffer.currency !== selectedOffer.currency) {
+        updateData.currency = editedOffer.currency;
+        changedFields.add('currency');
+      }
+      if (editedOffer.stockQuantity !== undefined && editedOffer.stockQuantity !== selectedOffer.stockQuantity) {
+        updateData.stockQuantity = editedOffer.stockQuantity;
+        changedFields.add('stockQuantity');
+      }
+      if (editedOffer.status !== undefined && editedOffer.status !== selectedOffer.status) {
+        updateData.status = editedOffer.status;
+        changedFields.add('status');
+      }
+      if (editedOffer.publicationStatus !== undefined && editedOffer.publicationStatus !== selectedOffer.publicationStatus) {
+        updateData.publicationStatus = editedOffer.publicationStatus;
+        changedFields.add('publicationStatus');
+      }
+      if (editedOffer.categoryId !== undefined && editedOffer.categoryId !== selectedOffer.categoryId) {
+        updateData.categoryId = editedOffer.categoryId;
+        changedFields.add('categoryId');
+      }
+      if (editedOffer.images !== undefined) {
+        const currentImages = Array.isArray(selectedOffer.images) 
+          ? selectedOffer.images.map((img: string | ImageItem) => typeof img === 'string' ? img : (img.url || img.path || ''))
+          : [];
+        const newImages = Array.isArray(editedOffer.images) ? editedOffer.images : [];
+        if (JSON.stringify(currentImages) !== JSON.stringify(newImages)) {
+          updateData.images = editedOffer.images;
+          changedFields.add('images');
+        }
+      }
+      if (editedOffer.deliveryOptions !== undefined) {
+        updateData.deliveryOptions = editedOffer.deliveryOptions;
+        changedFields.add('deliveryOptions');
+      }
+      if (editedOffer.paymentOptions !== undefined) {
+        updateData.paymentOptions = editedOffer.paymentOptions;
+        changedFields.add('paymentOptions');
+      }
+      
+      // If only stockQuantity is being updated, use the dedicated stock endpoint to avoid attribute validation issues
+      if (changedFields.size === 1 && changedFields.has('stockQuantity')) {
+        try {
+          const response = await api.put(`/allegro/offers/${selectedOffer.id}/stock`, {
+            quantity: editedOffer.stockQuantity,
+          });
+          if (response.data.success) {
+            // Reload offer details to get updated data
+            const detailResponse = await api.get(`/allegro/offers/${selectedOffer.id}`);
+            if (detailResponse.data.success) {
+              setSelectedOffer(detailResponse.data.data);
+              setIsEditMode(false);
+              setEditedOffer(null);
+              // Refresh offers list to show updated data
+              loadOffers();
+            }
+          }
+        } catch (err) {
+          console.error('Failed to update stock', err);
+          const axiosError = err as AxiosError & { response?: { data?: { error?: { message?: string } } } };
+          const errorMessage = axiosError.response?.data?.error?.message || (err as Error).message || 'Failed to update stock';
+          setError(errorMessage);
+        } finally {
+          setSaving(false);
+        }
+        return;
+      }
+      
+      // Only include attributes if they were explicitly modified (not just initialized from rawData)
+      // This prevents validation errors when attributes have nested structures that don't match the DTO
+      // Only send attributes if other fields besides stockQuantity are being changed, or if attributes were explicitly edited
+      if (editedOffer.attributes !== undefined && Array.isArray(editedOffer.attributes) && editedOffer.attributes.length > 0) {
+        // Check if attributes were actually modified (not just initialized)
+        const originalAttributes = selectedOffer.rawData?.parameters?.map((p: Parameter) => ({
+          id: p.id || '',
+          values: Array.isArray(p.values) ? p.values.map((v: ParameterValue | string) => typeof v === 'string' ? v : (v as ParameterValue).name || '') : [],
+        })) || [];
+        
+        const attributesChanged = JSON.stringify(originalAttributes) !== JSON.stringify(editedOffer.attributes);
+        
+        // Only include attributes if they were changed AND other fields are being updated (not just stockQuantity)
+        // OR if we're updating categoryId (which might require attributes)
+        if (attributesChanged && (changedFields.size > 1 || changedFields.has('categoryId') || changedFields.has('title'))) {
+          // Filter out any attributes with nested 'property' structure and ensure correct format
+          const validAttributes = editedOffer.attributes
+            .map((attr: AttributeInput): { id: string; values: string[] } | null => {
+              // If attribute has nested 'property' object, extract id and values from it
+              if (attr.property && typeof attr.property === 'object') {
+                return {
+                  id: attr.property.id || attr.id || '',
+                  values: Array.isArray(attr.property.values) ? attr.property.values : (attr.values || []),
+                };
+              }
+              // Otherwise, use the attribute as-is if it has the correct structure
+              if (attr.id && Array.isArray(attr.values)) {
+                return {
+                  id: attr.id,
+                  values: attr.values,
+                };
+              }
+              return null;
+            })
+            .filter((attr): attr is { id: string; values: string[] } => attr !== null && attr.id !== undefined && Array.isArray(attr.values));
+          
+          // Only include attributes if we have valid ones
+          if (validAttributes.length > 0) {
+            updateData.attributes = validAttributes;
+          }
+        }
       }
 
       const response = await api.put(`/allegro/offers/${selectedOffer.id}`, updateData);
@@ -439,16 +558,17 @@ const OffersPage: React.FC = () => {
     if (!hasServices) return null;
 
     // Helper to safely render value (handles strings, objects, arrays)
-    const renderValue = (value: any): string => {
+    const renderValue = (value: unknown): string => {
       if (value === null || value === undefined) return '-';
       if (typeof value === 'string') return value;
       if (typeof value === 'number' || typeof value === 'boolean') return String(value);
       if (Array.isArray(value)) return value.map(v => renderValue(v)).join(', ');
-      if (typeof value === 'object') {
+      if (typeof value === 'object' && value !== null) {
         // For objects, try to extract meaningful fields
-        if (value.type) return value.type;
-        if (value.period) return value.period;
-        if (value.name) return value.name;
+        const obj = value as Record<string, unknown>;
+        if (obj.type) return String(obj.type);
+        if (obj.period) return String(obj.period);
+        if (obj.name) return String(obj.name);
         // Fallback to JSON string
         return JSON.stringify(value, null, 2);
       }
