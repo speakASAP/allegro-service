@@ -119,8 +119,28 @@ export class AllegroOAuthService {
     clientSecret: string,
   ): Promise<TokenResponse> {
     // Validate required parameters
-    if (!code || !codeVerifier || !redirectUri || !clientId || !clientSecret) {
-      throw new Error('Missing required parameters for token exchange');
+    const missingParams: string[] = [];
+    if (!code || code.trim().length === 0) missingParams.push('code');
+    if (!codeVerifier || codeVerifier.trim().length === 0) missingParams.push('codeVerifier');
+    if (!redirectUri || redirectUri.trim().length === 0) missingParams.push('redirectUri');
+    if (!clientId || clientId.trim().length === 0) missingParams.push('clientId');
+    if (!clientSecret || clientSecret.trim().length === 0) missingParams.push('clientSecret');
+    
+    if (missingParams.length > 0) {
+      this.logger.error('Missing required parameters for token exchange', {
+        missingParams,
+        hasCode: !!code,
+        codeLength: code?.length,
+        hasCodeVerifier: !!codeVerifier,
+        codeVerifierLength: codeVerifier?.length,
+        hasRedirectUri: !!redirectUri,
+        redirectUriLength: redirectUri?.length,
+        hasClientId: !!clientId,
+        clientIdLength: clientId?.length,
+        hasClientSecret: !!clientSecret,
+        clientSecretLength: clientSecret?.length,
+      });
+      throw new Error(`Missing required parameters for token exchange: ${missingParams.join(', ')}`);
     }
 
     // Normalize redirect URI - remove trailing slashes and ensure exact match
