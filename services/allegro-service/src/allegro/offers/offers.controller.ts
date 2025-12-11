@@ -501,5 +501,121 @@ export class OffersController {
       data: this.metricsService.getMetrics(),
     };
   }
+
+  @Post('publish-all')
+  @UseGuards(JwtAuthGuard)
+  async publishAllOffers(
+    @Request() req: any,
+    @Body() body: { offerIds?: string[] },
+    @Query() query: OfferQueryDto,
+  ): Promise<{ success: boolean; data: any }> {
+    const userId = String(req.user?.id || 'unknown');
+    try {
+      this.logger.log('[publishAllOffers] Publish all request received', {
+        userId,
+        offerIdsProvided: !!body.offerIds,
+        offerIdsCount: body.offerIds?.length || 0,
+        hasFilters: !!(query.status || query.search || query.categoryId),
+      });
+
+      let offerIds: string[] = [];
+
+      if (body.offerIds && body.offerIds.length > 0) {
+        // Use provided offer IDs
+        offerIds = body.offerIds;
+      } else {
+        // Use same filters as GET /allegro/offers to get filtered offers
+        const where: any = {};
+        if (query.status) {
+          where.status = query.status;
+        }
+        if (query.categoryId) {
+          where.categoryId = query.categoryId;
+        }
+        if (query.search) {
+          where.title = {
+            contains: query.search,
+            mode: 'insensitive',
+          };
+        }
+
+        const offers = await this.offersService.getOffers({
+          ...query,
+          limit: 1000, // Get all matching offers
+          page: 1,
+        });
+
+        offerIds = offers.items.map((offer: any) => offer.id);
+      }
+
+      if (offerIds.length === 0) {
+        return {
+          success: true,
+          data: {
+            total: 0,
+            successful: 0,
+            failed: 0,
+            results: [],
+            message: 'No offers to publish',
+          },
+        };
+      }
+
+      this.logger.log('[publishAllOffers] Publishing offers', {
+        userId,
+        offerCount: offerIds.length,
+      });
+
+      const result = await this.offersService.publishOffersToAllegro(userId, offerIds);
+
+      this.logger.log('[publishAllOffers] Publish completed', {
+        userId,
+        total: result.total,
+        successful: result.successful,
+        failed: result.failed,
+      });
+
+      return { success: true, data: result };
+    } catch (error: any) {
+      this.metricsService.incrementErrors();
+      const errorStatus = error.response?.status || error.status || HttpStatus.INTERNAL_SERVER_ERROR;
+      const errorData = error.response?.data || {};
+      const errorMessage = errorData.error_description || errorData.error || errorData.message || error.message || 'Failed to publish offers';
+
+      this.logger.error('[publishAllOffers] Failed to publish offers', {
+        error: error.message,
+        status: errorStatus,
+        userId: req.user?.id,
+        errorData: JSON.stringify(errorData, null, 2),
+      });
+
+      // Check if error is OAuth-related
+      const isOAuthError = errorMessage.toLowerCase().includes('oauth') ||
+                          errorMessage.toLowerCase().includes('authorization required') ||
+                          errorStatus === 403 ||
+                          errorStatus === 401 ||
+                          error.code === 'OAUTH_REQUIRED';
+
+      let userFriendlyMessage = errorMessage;
+      if (isOAuthError) {
+        userFriendlyMessage = 'OAuth authorization required or token expired. Please go to Settings and re-authorize the application to access your Allegro offers.';
+      }
+
+      throw new HttpException(
+        {
+          success: false,
+          error: {
+            code: isOAuthError ? 'OAUTH_REQUIRED' : 'PUBLISH_ERROR',
+            message: userFriendlyMessage,
+            status: errorStatus,
+            requiresOAuth: isOAuthError,
+            oauthSettingsUrl: '/dashboard/settings',
+            details: errorData,
+          },
+        },
+        errorStatus,
+      );
+    }
+  }
 }
 

@@ -160,6 +160,16 @@ const OffersPage: React.FC = () => {
   const [syncingToAllegro, setSyncingToAllegro] = useState(false);
   const [syncingFromAllegro, setSyncingFromAllegro] = useState(false);
   
+  // Publish all states
+  const [publishing, setPublishing] = useState(false);
+  const [publishResults, setPublishResults] = useState<{
+    total: number;
+    successful: number;
+    failed: number;
+    results: Array<{ offerId: string; status: 'success' | 'failed'; error?: string; allegroOfferId?: string }>;
+  } | null>(null);
+  const [showPublishResultsModal, setShowPublishResultsModal] = useState(false);
+  
   // Create offer states
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creatingOffer, setCreatingOffer] = useState(false);
@@ -941,6 +951,66 @@ const OffersPage: React.FC = () => {
     }
   };
 
+  // Publish all offers
+  const handlePublishAll = async () => {
+    if (total === 0) {
+      setError('No offers to publish');
+      return;
+    }
+
+    setPublishing(true);
+    setError(null);
+    try {
+      // Get IDs of all filtered offers (use allOffers which contains all filtered results)
+      const filteredOffers = allOffers.filter((offer) => {
+        // Apply same filters as the client-side filtering
+        if (searchQuery && searchQuery.trim()) {
+          const query = searchQuery.toLowerCase().trim();
+          if (!offer.title?.toLowerCase().includes(query)) {
+            return false;
+          }
+        }
+        if (statusFilter && statusFilter.trim()) {
+          if (offer.status !== statusFilter) {
+            return false;
+          }
+        }
+        if (categoryFilter && categoryFilter.trim()) {
+          if (offer.categoryId !== categoryFilter) {
+            return false;
+          }
+        }
+        return true;
+      });
+
+      const offerIds = filteredOffers.map((offer) => offer.id);
+
+      const response = await api.post('/allegro/offers/publish-all', {
+        offerIds,
+      });
+
+      if (response.data.success) {
+        setPublishResults(response.data.data);
+        setShowPublishResultsModal(true);
+        // Refresh offers list
+        await loadAllOffers();
+      } else {
+        setError(response.data.error?.message || 'Failed to publish offers');
+      }
+    } catch (err) {
+      console.error('Failed to publish offers', err);
+      const axiosErr = err as AxiosError & { response?: { data?: { error?: { message?: string } } } };
+      const errorMessage =
+        axiosErr.response?.data?.error?.message ||
+        (axiosErr as any).serviceErrorMessage ||
+        axiosErr.message ||
+        'Failed to publish offers';
+      setError(errorMessage);
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   if (loading && offers.length === 0) {
     return <div>Loading offers...</div>;
   }
@@ -953,6 +1023,13 @@ const OffersPage: React.FC = () => {
           <div className="text-sm text-gray-600">
             Total: {total} offers
           </div>
+          <Button
+            onClick={handlePublishAll}
+            disabled={publishing || total === 0}
+            variant="primary"
+          >
+            {publishing ? 'Publishing...' : `🚀 Publish All (${total})`}
+          </Button>
           <Button onClick={openCreateOffer}>Add Offer</Button>
         </div>
       </div>
@@ -1742,6 +1819,86 @@ const OffersPage: React.FC = () => {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Publish Results Modal */}
+      <Modal
+        isOpen={showPublishResultsModal}
+        onClose={() => {
+          setShowPublishResultsModal(false);
+          setPublishResults(null);
+        }}
+        title="Publish Results"
+      >
+        {publishResults && (
+          <div className="space-y-4">
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <div className="text-lg font-semibold mb-2">Summary</div>
+              <div className="space-y-1">
+                <div>
+                  <span className="font-medium">Total:</span> {publishResults.total} offers
+                </div>
+                <div className="text-green-600">
+                  <span className="font-medium">Successful:</span> {publishResults.successful} offers
+                </div>
+                {publishResults.failed > 0 && (
+                  <div className="text-red-600">
+                    <span className="font-medium">Failed:</span> {publishResults.failed} offers
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {publishResults.failed > 0 && (
+              <div>
+                <div className="text-sm font-semibold mb-2 text-red-600">Failed Offers:</div>
+                <div className="max-h-64 overflow-y-auto space-y-2">
+                  {publishResults.results
+                    .filter((r) => r.status === 'failed')
+                    .map((result) => (
+                      <div key={result.offerId} className="p-2 bg-red-50 border border-red-200 rounded text-sm">
+                        <div className="font-medium">Offer ID: {result.offerId}</div>
+                        {result.allegroOfferId && (
+                          <div className="text-xs text-gray-600">Allegro ID: {result.allegroOfferId}</div>
+                        )}
+                        <div className="text-red-700 mt-1">{result.error}</div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {publishResults.successful > 0 && (
+              <div>
+                <div className="text-sm font-semibold mb-2 text-green-600">Successful Offers:</div>
+                <div className="max-h-64 overflow-y-auto space-y-1">
+                  {publishResults.results
+                    .filter((r) => r.status === 'success')
+                    .map((result) => (
+                      <div key={result.offerId} className="p-2 bg-green-50 border border-green-200 rounded text-sm">
+                        <div className="font-medium">Offer ID: {result.offerId}</div>
+                        {result.allegroOfferId && (
+                          <div className="text-xs text-gray-600">Allegro ID: {result.allegroOfferId}</div>
+                        )}
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowPublishResultsModal(false);
+                  setPublishResults(null);
+                }}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

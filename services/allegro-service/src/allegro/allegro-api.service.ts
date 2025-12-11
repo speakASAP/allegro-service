@@ -259,10 +259,131 @@ export class AllegroApiService {
   }
 
   /**
+   * Search products in Allegro catalog with OAuth token
+   * Searches by EAN, manufacturer code, or product name
+   */
+  async searchProductsWithOAuthToken(
+    accessToken: string,
+    query: { ean?: string; manufacturerCode?: string; name?: string },
+  ) {
+    const params: any = {};
+    if (query.ean) {
+      params.ean = query.ean;
+    }
+    if (query.manufacturerCode) {
+      params['manufacturerCode'] = query.manufacturerCode;
+    }
+    if (query.name) {
+      params.name = query.name;
+    }
+
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = `/sale/products${queryString ? `?${queryString}` : ''}`;
+    const url = `${this.apiUrl}${endpoint}`;
+
+    try {
+      const config = {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.allegro.public.v1+json',
+        },
+        timeout: 10000,
+      };
+
+      const response = await firstValueFrom(this.httpService.get(url, config));
+      return response.data;
+    } catch (error: any) {
+      const errorData = error.response?.data || {};
+      this.logger.error('Allegro API request failed when searching products with OAuth token', {
+        endpoint,
+        query,
+        error: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        errorData,
+        responseHeaders: error.response?.headers,
+        isTimeout: error.code === 'ECONNABORTED' || error.message?.includes('timeout'),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Create product in Allegro catalog with OAuth token
+   * Requires mandatory fields: brand, model, manufacturer code, category, parameters
+   */
+  async createProductWithOAuthToken(accessToken: string, productData: any) {
+    const endpoint = `/sale/products`;
+    const url = `${this.apiUrl}${endpoint}`;
+
+    try {
+      const config = {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/vnd.allegro.public.v1+json',
+          Accept: 'application/vnd.allegro.public.v1+json',
+        },
+        timeout: 30000, // 30 seconds timeout for product creation
+      };
+
+      const response = await firstValueFrom(this.httpService.post(url, productData, config));
+      return response.data;
+    } catch (error: any) {
+      const errorData = error.response?.data || {};
+      this.logger.error('Allegro API request failed when creating product with OAuth token', {
+        endpoint,
+        error: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        errorData,
+        responseHeaders: error.response?.headers,
+        isTimeout: error.code === 'ECONNABORTED' || error.message?.includes('timeout'),
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Create offer
+   * @deprecated Use createOfferWithOAuthToken instead. This endpoint uses deprecated /sale/offers
    */
   async createOffer(data: any) {
     return this.request('POST', '/sale/offers', data);
+  }
+
+  /**
+   * Create offer with OAuth token (for user-specific resources)
+   * Uses the new /sale/product-offers endpoint (replaces deprecated /sale/offers)
+   */
+  async createOfferWithOAuthToken(accessToken: string, data: any) {
+    const endpoint = `/sale/product-offers`;
+    const url = `${this.apiUrl}${endpoint}`;
+
+    try {
+      const config = {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/vnd.allegro.public.v1+json',
+          'Accept': 'application/vnd.allegro.public.v1+json',
+        },
+        timeout: 60000, // 60 seconds timeout for creating offer (Allegro API can be slow)
+      };
+
+      const response = await firstValueFrom(this.httpService.post(url, data, config));
+      return response.data;
+    } catch (error: any) {
+      const errorData = error.response?.data || {};
+      this.logger.error('Allegro API request failed when creating offer with OAuth token', {
+        endpoint,
+        error: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        errorData: errorData,
+        responseHeaders: error.response?.headers,
+        isTimeout: error.code === 'ECONNABORTED' || error.message?.includes('timeout'),
+      });
+      throw error;
+    }
   }
 
   /**
