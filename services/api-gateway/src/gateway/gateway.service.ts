@@ -114,8 +114,8 @@ export class GatewayService {
       return parseInt(timeout);
     })();
     
-    // Use longer timeout for bulk operations (5 minutes = 300000ms)
-    const timeout = isBulkOperation ? 300000 : defaultTimeout;
+    // Use longer timeout for bulk operations (60 seconds = 60000ms)
+    const timeout = isBulkOperation ? 60000 : defaultTimeout;
     
     const config: AxiosRequestConfig = {
       headers: {
@@ -129,6 +129,17 @@ export class GatewayService {
 
     // Log request details
     const requestId = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Log timeout configuration for debugging bulk operations
+    if (isBulkOperation) {
+      this.sharedLogger.log(`[${requestId}] Using extended timeout for bulk operation`, {
+        path,
+        timeout,
+        isBulkOperation,
+        defaultTimeout,
+      });
+    }
+    
     this.sharedLogger.info(`[${requestId}] Forwarding request`, {
       serviceName,
       method,
@@ -136,10 +147,19 @@ export class GatewayService {
       path,
       baseUrl,
       hasBody: !!body,
+      bodySize: body ? JSON.stringify(body).length : 0,
+      bodyKeys: body && typeof body === 'object' ? Object.keys(body) : [],
       headers: Object.keys(headers || {}),
+      authorizationHeader: headers?.Authorization ? 'present' : 'missing',
+      timeout: config.timeout,
+      isBulkOperation,
+      timestamp: new Date().toISOString(),
+    });
+    this.logger.debug(`[${requestId}] Forwarding ${method} ${url}`, {
+      path,
+      serviceName,
       timeout: config.timeout,
     });
-    this.logger.debug(`[${requestId}] Forwarding ${method} ${url}`);
 
     const startTime = Date.now();
     try {
@@ -165,17 +185,34 @@ export class GatewayService {
       }
 
       const duration = Date.now() - startTime;
+      const responseData = response.data;
+      const responseSize = JSON.stringify(responseData).length;
+      const responseKeys = responseData && typeof responseData === 'object' ? Object.keys(responseData) : [];
+      
       this.sharedLogger.info(`[${requestId}] Request successful`, {
         serviceName,
         method,
         url,
+        path,
         statusCode: response.status,
+        statusText: response.statusText,
         duration: `${duration}ms`,
-        responseSize: JSON.stringify(response.data).length,
+        durationMs: duration,
+        responseSize,
+        responseSizeKB: Math.round(responseSize / 1024 * 100) / 100,
+        responseKeys,
+        hasData: !!responseData,
+        dataType: responseData ? typeof responseData : 'null',
         isRedirect: response.status >= 300 && response.status < 400,
         location: response.headers?.location,
+        responseHeaders: Object.keys(response.headers || {}),
+        timestamp: new Date().toISOString(),
+        throughput: responseSize > 0 ? `${Math.round((responseSize / duration) * 1000)} bytes/sec` : 'N/A',
       });
-      this.logger.debug(`[${requestId}] ${method} ${url} - ${response.status} (${duration}ms)`);
+      this.logger.debug(`[${requestId}] ${method} ${url} - ${response.status} (${duration}ms)`, {
+        responseSize,
+        responseKeys: responseKeys.slice(0, 10), // First 10 keys
+      });
 
       // If it's a redirect, return the full response object
       if (response.status >= 300 && response.status < 400) {
@@ -190,6 +227,8 @@ export class GatewayService {
       return response.data;
     } catch (error: any) {
       const duration = Date.now() - startTime;
+      const errorResponse = error.response;
+      const errorData = errorResponse?.data;
       const errorDetails = {
         serviceName,
         method,
@@ -197,17 +236,27 @@ export class GatewayService {
         path,
         baseUrl,
         duration: `${duration}ms`,
+        durationMs: duration,
         errorCode: error.code,
         errorMessage: error.message,
-        errorStatus: error.response?.status,
-        errorStatusText: error.response?.statusText,
-        errorData: error.response?.data,
+        errorName: error.name,
+        errorStatus: errorResponse?.status,
+        errorStatusText: errorResponse?.statusText,
+        errorData: errorData ? (typeof errorData === 'object' ? JSON.stringify(errorData, null, 2) : String(errorData)) : null,
+        errorDataKeys: errorData && typeof errorData === 'object' ? Object.keys(errorData) : [],
+        errorResponseHeaders: errorResponse?.headers ? Object.keys(errorResponse.headers) : [],
         errorStack: error.stack,
         axiosError: error.isAxiosError,
         timeout: error.code === 'ECONNABORTED' || error.message?.includes('timeout'),
         connectionRefused: error.code === 'ECONNREFUSED',
         dnsError: error.code === 'ENOTFOUND',
         timedOut: error.code === 'ETIMEDOUT',
+        configUrl: error.config?.url,
+        configMethod: error.config?.method,
+        configTimeout: error.config?.timeout,
+        configHeaders: error.config?.headers ? Object.keys(error.config.headers) : [],
+        timestamp: new Date().toISOString(),
+        requestBody: body ? (typeof body === 'object' ? JSON.stringify(body, null, 2).substring(0, 1000) : String(body).substring(0, 1000)) : null,
       };
 
       this.sharedLogger.error(`[${requestId}] Error forwarding request to ${serviceName}`, errorDetails);

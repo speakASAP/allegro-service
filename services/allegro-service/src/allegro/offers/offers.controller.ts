@@ -403,9 +403,55 @@ export class OffersController {
   @Post()
   @UseGuards(JwtAuthGuard)
   async createOffer(@Body() dto: CreateOfferDto, @Request() req: any): Promise<{ success: boolean; data: any }> {
-    const userId = req.user?.id || req.user?.sub;
-    const offer = await this.offersService.createOffer(dto, userId);
-    return { success: true, data: offer };
+    const startTime = Date.now();
+    const requestId = `create-offer-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const userId = String(req.user?.id || req.user?.sub || 'unknown');
+    
+    this.logger.log(`[${requestId}] [createOffer] Create offer request received`, {
+      userId,
+      hasTitle: !!dto.title,
+      hasCategoryId: !!dto.categoryId,
+      hasPrice: dto.price !== undefined,
+      hasQuantity: dto.quantity !== undefined,
+      syncToAllegro: dto.syncToAllegro,
+      hasAllegroProductId: !!dto.allegroProductId,
+      dtoKeys: Object.keys(dto),
+      timestamp: new Date().toISOString(),
+    });
+
+    try {
+      const offer = await this.offersService.createOffer(dto, userId);
+      const duration = Date.now() - startTime;
+      
+      this.logger.log(`[${requestId}] [createOffer] Offer created successfully`, {
+        userId,
+        offerId: offer.id,
+        allegroOfferId: offer.allegroOfferId,
+        syncStatus: offer.syncStatus,
+        duration: `${duration}ms`,
+        timestamp: new Date().toISOString(),
+      });
+      
+      this.metricsService.incrementCreateRequests();
+      return { success: true, data: offer };
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      this.metricsService.incrementErrors();
+      
+      this.logger.error(`[${requestId}] [createOffer] Failed to create offer`, {
+        userId,
+        error: error.message,
+        errorCode: error.code,
+        errorStack: error.stack,
+        errorStatus: error.status || error.response?.status,
+        errorData: error.response?.data,
+        duration: `${duration}ms`,
+        dtoKeys: Object.keys(dto),
+        timestamp: new Date().toISOString(),
+      });
+      
+      throw error;
+    }
   }
 
   @Put(':id')
