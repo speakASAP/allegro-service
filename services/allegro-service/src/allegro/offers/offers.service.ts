@@ -94,7 +94,7 @@ export class OffersService {
               parameters: true,
             },
           },
-        },
+        } as any,
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.allegroOffer.count({ where }),
@@ -134,8 +134,8 @@ export class OffersService {
             parameters: true,
           },
         },
-      },
-    });
+      } as any,
+    }) as any;
 
     if (!offer) {
       this.logger.warn('[getOffer] Offer not found', { offerId: id });
@@ -2277,14 +2277,16 @@ export class OffersService {
         rawData: productSet,
       };
 
-      const allegroProduct = await this.prisma.allegroProduct.upsert({
+      const prismaAny = this.prisma as any;
+
+      const allegroProduct = await prismaAny.allegroProduct.upsert({
         where: { allegroProductId: String(product.id) },
         update: baseData as any,
         create: baseData as any,
       });
 
       if (parameters.length > 0) {
-        await this.prisma.allegroProductParameter.deleteMany({
+        await prismaAny.allegroProductParameter.deleteMany({
           where: { allegroProductId: allegroProduct.id },
         });
 
@@ -2300,7 +2302,7 @@ export class OffersService {
           };
         });
 
-        await this.prisma.allegroProductParameter.createMany({
+        await prismaAny.allegroProductParameter.createMany({
           data: paramsData as any,
           skipDuplicates: true,
         });
@@ -2586,13 +2588,32 @@ export class OffersService {
     }
 
     const oauthToken = await this.getUserOAuthToken(userId);
+    this.logger.log('[syncOfferFromAllegro] Got OAuth token, fetching offer', {
+      offerId,
+      allegroOfferId: offer.allegroOfferId,
+      timeoutMs: 10000,
+    });
     const fullOffer = await this.allegroApi.getOfferWithOAuthToken(oauthToken, offer.allegroOfferId);
+    this.logger.log('[syncOfferFromAllegro] Offer fetched from Allegro', {
+      offerId,
+      allegroOfferId: offer.allegroOfferId,
+      hasName: !!fullOffer?.name,
+      hasImages: Array.isArray(fullOffer?.images) ? fullOffer.images.length : 0,
+    });
 
     if (!fullOffer) {
       throw new HttpException('Failed to fetch offer from Allegro', HttpStatus.BAD_GATEWAY);
     }
 
     const offerData = this.sanitizeOfferDataForPrisma(this.extractOfferData(fullOffer));
+    this.logger.log('[syncOfferFromAllegro] Offer data extracted', {
+      offerId,
+      allegroOfferId: offer.allegroOfferId,
+      extractedKeys: Object.keys(offerData),
+      hasRawData: !!offerData.rawData,
+      imagesCount: Array.isArray(offerData.images) ? offerData.images.length : 0,
+      descriptionLen: offerData.description ? String(offerData.description).length : 0,
+    });
     const updated = await this.prisma.allegroOffer.update({
       where: { id: offerId },
       data: {
@@ -2604,6 +2625,13 @@ export class OffersService {
     });
 
     const validation = this.validateOfferReadiness(updated);
+    this.logger.log('[syncOfferFromAllegro] Validation result', {
+      offerId,
+      allegroOfferId: offer.allegroOfferId,
+      status: validation.status,
+      errorCount: validation.errors.filter(e => e.severity === 'error').length,
+      warningCount: validation.errors.filter(e => e.severity === 'warning').length,
+    });
     return await this.prisma.allegroOffer.update({
       where: { id: offerId },
       data: {

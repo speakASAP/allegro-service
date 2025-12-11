@@ -183,6 +183,12 @@ export class AllegroApiService {
     const url = `${this.apiUrl}${endpoint}`;
 
     try {
+      this.logger.log('[getOfferWithOAuthToken] Fetching offer', {
+        endpoint,
+        offerId,
+        timeoutMs: 10000,
+      });
+
       const config = {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -192,6 +198,12 @@ export class AllegroApiService {
       };
 
       const response = await firstValueFrom(this.httpService.get(url, config));
+      this.logger.log('[getOfferWithOAuthToken] Response received', {
+        endpoint,
+        offerId,
+        status: response.status,
+        contentLength: response.headers?.['content-length'],
+      });
       return response.data;
     } catch (error: any) {
       const errorData = error.response?.data || {};
@@ -203,6 +215,11 @@ export class AllegroApiService {
         errorData: errorData,
         responseHeaders: error.response?.headers,
         isTimeout: error.code === 'ECONNABORTED' || error.message?.includes('timeout'),
+        requestConfig: {
+          timeout: error.config?.timeout,
+          url: error.config?.url,
+          method: error.config?.method,
+        },
       });
       throw error;
     }
