@@ -38,6 +38,77 @@ export class ProductsService {
     this.logger.setContext('ProductsService');
   }
 
+  private extractSummaryFromRaw(
+    rawData: any,
+    payload: ProductPayload = {},
+    existing?: {
+      allegroProductId?: string | null;
+      name?: string | null;
+      brand?: string | null;
+      manufacturerCode?: string | null;
+      ean?: string | null;
+      publicationStatus?: string | null;
+      isAiCoCreated?: boolean | null;
+      marketedBeforeGPSR?: boolean | null;
+      rawData?: any;
+    },
+  ) {
+    const product = rawData?.product || rawData || {};
+    const params = Array.isArray(product?.parameters) ? product.parameters : [];
+    const findParamValue = (id: string, name?: string): string | undefined => {
+      const param = params.find((p: any) => String(p?.id) === id || (name && p?.name === name));
+      if (!param) return undefined;
+      if (Array.isArray(param.values) && param.values.length > 0) {
+        const first = param.values[0] as any;
+        if (typeof first === 'string') return first;
+        return first?.name;
+      }
+      if (typeof param.value === 'string') return param.value;
+      return undefined;
+    };
+
+    return {
+      allegroProductId:
+        payload.allegroProductId ??
+        existing?.allegroProductId ??
+        product?.id ??
+        rawData?.id ??
+        null,
+      name: payload.name ?? product?.name ?? existing?.name ?? null,
+      brand:
+        payload.brand ??
+        findParamValue('248811', 'Značka') ??
+        product?.brand ??
+        existing?.brand ??
+        null,
+      manufacturerCode:
+        payload.manufacturerCode ??
+        findParamValue('224017', 'Kód výrobce') ??
+        product?.manufacturerCode ??
+        existing?.manufacturerCode ??
+        null,
+      ean:
+        payload.ean ??
+        findParamValue('225693', 'EAN (GTIN)') ??
+        product?.ean ??
+        existing?.ean ??
+        null,
+      publicationStatus:
+        payload.publicationStatus ??
+        product?.publication?.status ??
+        existing?.publicationStatus ??
+        null,
+      isAiCoCreated:
+        payload.isAiCoCreated ?? product?.isAiCoCreated ?? existing?.isAiCoCreated ?? false,
+      marketedBeforeGPSR:
+        payload.marketedBeforeGPSR ??
+        rawData?.marketedBeforeGPSRObligation ??
+        existing?.marketedBeforeGPSR ??
+        null,
+      rawData: payload.rawData ?? rawData ?? existing?.rawData ?? null,
+    };
+  }
+
   async getProducts(query: ProductQuery & { includeRaw?: string }) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 20;
@@ -128,18 +199,19 @@ export class ProductsService {
     }
 
     const prisma = this.prisma as any;
+    const summary = this.extractSummaryFromRaw(payload.rawData, payload);
 
     const created = await prisma.allegroProduct.create({
       data: {
-        allegroProductId: payload.allegroProductId || payload.rawData?.product?.id || payload.rawData?.id || undefined,
-        name: payload.name ?? payload.rawData?.product?.name ?? null,
-        brand: payload.brand ?? payload.rawData?.product?.brand ?? null,
-        manufacturerCode: payload.manufacturerCode ?? payload.rawData?.product?.manufacturerCode ?? null,
-        ean: payload.ean ?? payload.rawData?.product?.ean ?? null,
-        publicationStatus: payload.publicationStatus ?? payload.rawData?.product?.publication?.status ?? null,
-        isAiCoCreated: payload.isAiCoCreated ?? !!payload.rawData?.product?.isAiCoCreated,
-        marketedBeforeGPSR: payload.marketedBeforeGPSR ?? payload.rawData?.marketedBeforeGPSRObligation ?? null,
-        rawData: payload.rawData,
+        allegroProductId: summary.allegroProductId || undefined,
+        name: summary.name,
+        brand: summary.brand,
+        manufacturerCode: summary.manufacturerCode,
+        ean: summary.ean,
+        publicationStatus: summary.publicationStatus,
+        isAiCoCreated: summary.isAiCoCreated,
+        marketedBeforeGPSR: summary.marketedBeforeGPSR,
+        rawData: summary.rawData,
       } as any,
       include: { parameters: true },
     });
@@ -160,18 +232,21 @@ export class ProductsService {
       throw new HttpException('Product not found', HttpStatus.NOT_FOUND);
     }
 
+    const rawData = payload.rawData ?? existing.rawData;
+    const summary = this.extractSummaryFromRaw(rawData, payload, existing);
+
     await prisma.allegroProduct.update({
       where: { id },
       data: {
-        allegroProductId: payload.allegroProductId ?? existing.allegroProductId,
-        name: payload.name ?? existing.name,
-        brand: payload.brand ?? existing.brand,
-        manufacturerCode: payload.manufacturerCode ?? existing.manufacturerCode,
-        ean: payload.ean ?? existing.ean,
-        publicationStatus: payload.publicationStatus ?? existing.publicationStatus,
-        isAiCoCreated: payload.isAiCoCreated ?? existing.isAiCoCreated,
-        marketedBeforeGPSR: payload.marketedBeforeGPSR ?? existing.marketedBeforeGPSR,
-        rawData: payload.rawData ?? existing.rawData,
+        allegroProductId: summary.allegroProductId ?? existing.allegroProductId,
+        name: summary.name ?? existing.name,
+        brand: summary.brand ?? existing.brand,
+        manufacturerCode: summary.manufacturerCode ?? existing.manufacturerCode,
+        ean: summary.ean ?? existing.ean,
+        publicationStatus: summary.publicationStatus ?? existing.publicationStatus,
+        isAiCoCreated: summary.isAiCoCreated ?? existing.isAiCoCreated,
+        marketedBeforeGPSR: summary.marketedBeforeGPSR ?? existing.marketedBeforeGPSR,
+        rawData: summary.rawData ?? existing.rawData,
       } as any,
     });
 
