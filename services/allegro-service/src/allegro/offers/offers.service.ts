@@ -3990,8 +3990,43 @@ export class OffersService {
             });
           } catch (error: any) {
             const errorData = error.response?.data || {};
-            const errorMessage = this.extractErrorMessage(error);
+            let errorMessage = this.extractErrorMessage(error);
             const errorDetails = JSON.stringify(errorData, null, 2);
+
+            // If errorMessage is still generic, try to get more details
+            if (!errorMessage || errorMessage === 'Unknown error occurred. Please check logs for details.' || errorMessage.length < 10) {
+              // Try to construct a more detailed message
+              if (error.response?.status) {
+                errorMessage = `HTTP ${error.response.status}: ${error.message || 'Request failed'}`;
+              } else if (error.code) {
+                errorMessage = `${error.code}: ${error.message || 'Request failed'}`;
+              } else if (error.message) {
+                errorMessage = error.message;
+              } else {
+                // Last resort - at least include the error type
+                errorMessage = `Error: ${error.name || 'Unknown error'} - ${error.message || 'No error message available'}`;
+              }
+              
+              // Add error data details if available
+              if (errorData && typeof errorData === 'object') {
+                const errorDetailsList: string[] = [];
+                if (errorData.userMessage) errorDetailsList.push(errorData.userMessage);
+                if (errorData.message) errorDetailsList.push(errorData.message);
+                if (errorData.errors && Array.isArray(errorData.errors) && errorData.errors.length > 0) {
+                  const firstErr = errorData.errors[0];
+                  if (typeof firstErr === 'string') {
+                    errorDetailsList.push(firstErr);
+                  } else if (firstErr?.userMessage) {
+                    errorDetailsList.push(firstErr.userMessage);
+                  } else if (firstErr?.message) {
+                    errorDetailsList.push(firstErr.message);
+                  }
+                }
+                if (errorDetailsList.length > 0) {
+                  errorMessage = errorDetailsList.join('; ');
+                }
+              }
+            }
 
             const offerDuration = Date.now() - offerStartTime;
             this.logger.error(`[${finalRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: ❌ FAILED - Failed to create offer`, {
@@ -4002,7 +4037,7 @@ export class OffersService {
               errorStatusText: error.response?.statusText,
               extractedErrorMessage: errorMessage,
               offerDuration: `${offerDuration}ms`,
-              errorData: errorData,
+              errorData: JSON.stringify(errorData, null, 2),
               errorDetails: errorDetails,
               errorHeaders: error.response?.headers ? JSON.stringify(error.response.headers) : undefined,
               errorResponseKeys: errorData ? Object.keys(errorData) : [],
@@ -4013,6 +4048,7 @@ export class OffersService {
               message: errorData.message,
               code: errorData.code,
               path: errorData.path,
+              fullError: JSON.stringify(error, Object.getOwnPropertyNames(error), 2).substring(0, 2000),
               timestamp: new Date().toISOString(),
             });
 
@@ -4028,11 +4064,13 @@ export class OffersService {
               offerId,
               status: 'failed',
               error: errorMessage,
+              allegroOfferId: offer.allegroOfferId,
             });
             failed++;
 
             this.logger.warn(`[${finalRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Create failed summary`, {
               offerId,
+              allegroOfferId: offer.allegroOfferId,
               error: errorMessage,
               offerDuration: `${offerDuration}ms`,
               progress: `${processedCount}/${offerIds.length}`,
