@@ -10,7 +10,6 @@ import {
   ExecutionContext,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import * as jwt from 'jsonwebtoken';
 import { AuthService } from './auth.service';
 import { AuthUser } from './auth.interface';
@@ -20,10 +19,10 @@ export class JwtAuthGuard implements CanActivate {
   private readonly jwtSecret: string;
 
   constructor(
-    private readonly configService: ConfigService,
     private readonly authService: AuthService, // Keep for potential fallback
   ) {
-    this.jwtSecret = this.configService.get<string>('JWT_SECRET') || this.throwConfigError('JWT_SECRET');
+    // Get JWT_SECRET from environment directly (ConfigModule is global, but this is more reliable)
+    this.jwtSecret = process.env.JWT_SECRET || this.throwConfigError('JWT_SECRET');
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
