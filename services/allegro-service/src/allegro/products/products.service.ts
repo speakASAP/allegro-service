@@ -127,7 +127,17 @@ export class ProductsService {
       ];
     }
 
-    this.logger.log('[getProducts] Fetching products', { page, limit, search });
+    const startTime = Date.now();
+    const requestId = `get-products-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    this.logger.log(`[${requestId}] [getProducts] Fetching products`, {
+      page,
+      limit,
+      search,
+      hasSearch: !!search,
+      includeRaw,
+      timestamp: new Date().toISOString(),
+    });
 
     const prisma = this.prisma as any; // fallback to allow newer Prisma models
 
@@ -167,6 +177,18 @@ export class ProductsService {
       prisma.allegroProduct.count({ where }),
     ]);
 
+    const duration = Date.now() - startTime;
+    this.logger.log(`[${requestId}] [getProducts] Products fetched successfully`, {
+      page,
+      limit,
+      total,
+      itemsCount: items.length,
+      totalPages: Math.ceil(total / limit),
+      duration: `${duration}ms`,
+      hasSearch: !!search,
+      timestamp: new Date().toISOString(),
+    });
+
     return {
       items,
       pagination: {
@@ -179,6 +201,11 @@ export class ProductsService {
   }
 
   async getProduct(id: string) {
+    const startTime = Date.now();
+    const requestId = `get-product-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    this.logger.log(`[${requestId}] [getProduct] Fetching product`, { id });
+
     const prisma = this.prisma as any;
 
     const product = await prisma.allegroProduct.findUnique({
@@ -186,15 +213,43 @@ export class ProductsService {
       include: { parameters: true },
     });
 
+    const duration = Date.now() - startTime;
+
     if (!product) {
+      this.logger.warn(`[${requestId}] [getProduct] Product not found`, {
+        id,
+        duration: `${duration}ms`,
+      });
       throw new HttpException('Product not found', HttpStatus.NOT_FOUND);
     }
+
+    this.logger.log(`[${requestId}] [getProduct] Product fetched successfully`, {
+      id,
+      allegroProductId: product.allegroProductId,
+      name: product.name,
+      parametersCount: product.parameters?.length || 0,
+      duration: `${duration}ms`,
+    });
 
     return product;
   }
 
   async createProduct(payload: ProductPayload) {
+    const startTime = Date.now();
+    const requestId = `create-product-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    this.logger.log(`[${requestId}] [createProduct] Creating product`, {
+      hasRawData: !!payload.rawData,
+      hasParameters: !!payload.parameters?.length,
+      parametersCount: payload.parameters?.length || 0,
+      payloadKeys: Object.keys(payload),
+      timestamp: new Date().toISOString(),
+    });
+
     if (!payload.rawData) {
+      this.logger.error(`[${requestId}] [createProduct] rawData is required`, {
+        payloadKeys: Object.keys(payload),
+      });
       throw new HttpException('rawData is required', HttpStatus.BAD_REQUEST);
     }
 
@@ -209,6 +264,15 @@ export class ProductsService {
       payload.rawData?.id || 
       `local-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
+    this.logger.log(`[${requestId}] [createProduct] Creating product in database`, {
+      allegroProductId,
+      name: summary.name,
+      brand: summary.brand,
+      ean: summary.ean,
+      isGeneratedId: allegroProductId.startsWith('local-'),
+    });
+
+    const dbStartTime = Date.now();
     const created = await prisma.allegroProduct.create({
       data: {
         allegroProductId: String(allegroProductId),
@@ -223,26 +287,68 @@ export class ProductsService {
       } as any,
       include: { parameters: true },
     });
+    const dbDuration = Date.now() - dbStartTime;
+
+    this.logger.log(`[${requestId}] [createProduct] Product created in database`, {
+      id: created.id,
+      allegroProductId: created.allegroProductId,
+      dbDuration: `${dbDuration}ms`,
+    });
 
     if (payload.parameters?.length) {
+      this.logger.log(`[${requestId}] [createProduct] Replacing parameters from payload`, {
+        productId: created.id,
+        parametersCount: payload.parameters.length,
+      });
       await this.replaceParameters(created.id, payload.parameters);
     } else if (Array.isArray(payload.rawData?.product?.parameters)) {
+      this.logger.log(`[${requestId}] [createProduct] Replacing parameters from rawData`, {
+        productId: created.id,
+        parametersCount: payload.rawData.product.parameters.length,
+      });
       await this.replaceParameters(created.id, payload.rawData.product.parameters);
     }
+
+    const totalDuration = Date.now() - startTime;
+    this.logger.log(`[${requestId}] [createProduct] Product creation completed`, {
+      id: created.id,
+      allegroProductId: created.allegroProductId,
+      totalDuration: `${totalDuration}ms`,
+    });
 
     return this.getProduct(created.id);
   }
 
   async updateProduct(id: string, payload: ProductPayload) {
+    const startTime = Date.now();
+    const requestId = `update-product-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    this.logger.log(`[${requestId}] [updateProduct] Updating product`, {
+      id,
+      payloadKeys: Object.keys(payload),
+      hasRawData: !!payload.rawData,
+      hasParameters: !!payload.parameters,
+      timestamp: new Date().toISOString(),
+    });
+
     const prisma = this.prisma as any;
     const existing = await prisma.allegroProduct.findUnique({ where: { id } });
+    
     if (!existing) {
+      this.logger.warn(`[${requestId}] [updateProduct] Product not found`, { id });
       throw new HttpException('Product not found', HttpStatus.NOT_FOUND);
     }
+
+    this.logger.log(`[${requestId}] [updateProduct] Product found, extracting summary`, {
+      id,
+      existingAllegroProductId: existing.allegroProductId,
+      existingName: existing.name,
+    });
 
     const rawData = payload.rawData ?? existing.rawData;
     const summary = this.extractSummaryFromRaw(rawData, payload, existing);
 
+    const dbStartTime = Date.now();
     await prisma.allegroProduct.update({
       where: { id },
       data: {
@@ -257,26 +363,89 @@ export class ProductsService {
         rawData: summary.rawData ?? existing.rawData,
       } as any,
     });
+    const dbDuration = Date.now() - dbStartTime;
+
+    this.logger.log(`[${requestId}] [updateProduct] Product updated in database`, {
+      id,
+      dbDuration: `${dbDuration}ms`,
+    });
 
     if (payload.parameters) {
+      this.logger.log(`[${requestId}] [updateProduct] Replacing parameters`, {
+        productId: id,
+        parametersCount: payload.parameters.length,
+      });
       await this.replaceParameters(id, payload.parameters);
     }
+
+    const totalDuration = Date.now() - startTime;
+    this.logger.log(`[${requestId}] [updateProduct] Product update completed`, {
+      id,
+      totalDuration: `${totalDuration}ms`,
+    });
 
     return this.getProduct(id);
   }
 
   async deleteProduct(id: string) {
+    const startTime = Date.now();
+    const requestId = `delete-product-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    this.logger.log(`[${requestId}] [deleteProduct] Deleting product`, { id });
+
     const prisma = this.prisma as any;
+    
+    // Check if product exists first
+    const existing = await prisma.allegroProduct.findUnique({
+      where: { id },
+      select: { id: true, allegroProductId: true, name: true },
+    });
+
+    if (!existing) {
+      this.logger.warn(`[${requestId}] [deleteProduct] Product not found`, { id });
+      throw new HttpException('Product not found', HttpStatus.NOT_FOUND);
+    }
+
+    this.logger.log(`[${requestId}] [deleteProduct] Product found, deleting`, {
+      id,
+      allegroProductId: existing.allegroProductId,
+      name: existing.name,
+    });
+
     await prisma.allegroProduct.delete({ where: { id } });
+    
+    const duration = Date.now() - startTime;
+    this.logger.log(`[${requestId}] [deleteProduct] Product deleted successfully`, {
+      id,
+      duration: `${duration}ms`,
+    });
+
     return { success: true };
   }
 
   private async replaceParameters(productId: string, parameters: any[]) {
+    const startTime = Date.now();
+    this.logger.log('[replaceParameters] Replacing product parameters', {
+      productId,
+      parametersCount: parameters.length,
+    });
+
     const prisma = this.prisma as any;
+    
+    const deleteStartTime = Date.now();
     await prisma.allegroProductParameter.deleteMany({ where: { allegroProductId: productId } });
+    const deleteDuration = Date.now() - deleteStartTime;
+    
+    this.logger.log('[replaceParameters] Existing parameters deleted', {
+      productId,
+      deleteDuration: `${deleteDuration}ms`,
+    });
+
     if (parameters.length === 0) {
+      this.logger.log('[replaceParameters] No parameters to add', { productId });
       return;
     }
+    
     const data = parameters.map((param: any, index: number) => ({
       allegroProductId: productId,
       parameterId: param.parameterId || param.id || `param-${index}`,
@@ -285,9 +454,20 @@ export class ProductsService {
       valuesIds: param.valuesIds || null,
       rangeValue: param.rangeValue || null,
     }));
+    
+    const createStartTime = Date.now();
     await prisma.allegroProductParameter.createMany({
       data: data as any,
       skipDuplicates: true,
+    });
+    const createDuration = Date.now() - createStartTime;
+    
+    const totalDuration = Date.now() - startTime;
+    this.logger.log('[replaceParameters] Parameters replaced successfully', {
+      productId,
+      parametersCount: parameters.length,
+      createDuration: `${createDuration}ms`,
+      totalDuration: `${totalDuration}ms`,
     });
   }
 }
