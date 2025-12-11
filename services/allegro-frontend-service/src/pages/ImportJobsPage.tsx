@@ -37,7 +37,7 @@ interface PreviewOffer {
 const ImportJobsPage: React.FC = () => {
   const navigate = useNavigate();
   const [jobs, setJobs] = useState<ImportJob[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingJobs, setLoadingJobs] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [requiresOAuth, setRequiresOAuth] = useState(false);
@@ -88,6 +88,7 @@ const ImportJobsPage: React.FC = () => {
   }, []);
 
   const loadJobs = async () => {
+    setLoadingJobs(true);
     try {
       const response = await api.get('/import/jobs');
       if (response.data.success) {
@@ -111,7 +112,7 @@ const ImportJobsPage: React.FC = () => {
         setError('Failed to load import jobs. Please try again later.');
       }
     } finally {
-      setLoading(false);
+      setLoadingJobs(false);
     }
   };
 
@@ -533,10 +534,6 @@ const ImportJobsPage: React.FC = () => {
     }
   };
 
-  if (loading) {
-    return <div>Loading import jobs...</div>;
-  }
-
   return (
     <div className="space-y-6">
       <div className="space-y-4">
@@ -643,7 +640,9 @@ const ImportJobsPage: React.FC = () => {
       )}
 
       <Card title="CSV Import Jobs">
-        {jobs.length === 0 ? (
+        {loadingJobs ? (
+          <p className="text-gray-600">Loading import jobs...</p>
+        ) : jobs.length === 0 ? (
           <p className="text-gray-600">No import jobs found.</p>
         ) : (
           <div className="overflow-x-auto">

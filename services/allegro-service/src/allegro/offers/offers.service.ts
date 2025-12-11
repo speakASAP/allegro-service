@@ -268,10 +268,15 @@ export class OffersService {
       payload.name = existingOffer.title;
     }
 
-    // Description - DO NOT include in PATCH requests
-    // Allegro API's /sale/product-offers endpoint does not accept description field in PATCH requests
-    // Description can only be updated via PUT with full offer data, not via PATCH
-    // Completely omit description from PATCH payload to avoid 422 errors
+    // Description - Include in PUT requests (full updates)
+    // PUT requests can include description, unlike PATCH which doesn't accept it
+    if (dto.description !== undefined) {
+      payload.description = dto.description;
+    } else if (rawData.description) {
+      payload.description = rawData.description;
+    } else if (existingOffer.description) {
+      payload.description = existingOffer.description;
+    }
 
     // Category - ALWAYS REQUIRED - must be included
     if (dto.categoryId !== undefined) {
@@ -3564,11 +3569,11 @@ export class OffersService {
             });
 
             const apiCallStartTime = Date.now();
-            this.logger.log(`[${finalRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Calling Allegro API PATCH`, {
+            this.logger.log(`[${finalRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Calling Allegro API PUT`, {
               offerId,
               allegroOfferId: offer.allegroOfferId,
               endpoint: `/sale/product-offers/${offer.allegroOfferId}`,
-              method: 'PATCH',
+              method: 'PUT',
               payloadSize: `${payloadSize} bytes`,
               timestamp: new Date().toISOString(),
             });
@@ -3576,7 +3581,7 @@ export class OffersService {
             const updateResponse = await this.allegroApi.updateOfferWithOAuthToken(oauthToken, offer.allegroOfferId, updatePayload);
             const apiCallDuration = Date.now() - apiCallStartTime;
             
-            this.logger.log(`[${finalRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Allegro API PATCH response received`, {
+            this.logger.log(`[${finalRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Allegro API PUT response received`, {
               offerId,
               allegroOfferId: offer.allegroOfferId,
               apiCallDuration: `${apiCallDuration}ms`,

@@ -482,7 +482,7 @@ export class AllegroApiService {
       const payloadSize = JSON.stringify(data).length;
       this.logger.log(`[${requestId}] [updateOfferWithOAuthToken] ========== ALLEGRO API REQUEST ==========`, {
         endpoint,
-        method: 'PATCH',
+        method: 'PUT',
         url,
         offerId,
         payloadSize: `${payloadSize} bytes`,
@@ -514,21 +514,21 @@ export class AllegroApiService {
         timeout: 60000, // 60 seconds timeout for updating offer (Allegro API can be slow)
       };
 
-      this.logger.log(`[${requestId}] [updateOfferWithOAuthToken] Sending HTTP PATCH request`, {
+      this.logger.log(`[${requestId}] [updateOfferWithOAuthToken] Sending HTTP PUT request`, {
         url,
         headers: Object.keys(config.headers),
         timeout: config.timeout,
         timestamp: new Date().toISOString(),
       });
 
-      // Use PATCH for partial updates (recommended by Allegro)
-      // For full updates, use PUT with complete offer data
-      const response = await firstValueFrom(this.httpService.patch(url, data, config));
+      // Use PUT for full updates (when updating multiple fields like price, stock, title, category)
+      // PATCH is for single-field updates, but we're updating multiple fields so use PUT
+      const response = await firstValueFrom(this.httpService.put(url, data, config));
       const requestDuration = Date.now() - requestStartTime;
       
       this.logger.log(`[${requestId}] [updateOfferWithOAuthToken] ========== ALLEGRO API RESPONSE SUCCESS ==========`, {
         endpoint,
-        method: 'PATCH',
+        method: 'PUT',
         offerId,
         status: response.status,
         statusText: response.statusText,
@@ -548,7 +548,7 @@ export class AllegroApiService {
       
       this.logger.error(`[${requestId}] [updateOfferWithOAuthToken] ========== ALLEGRO API RESPONSE ERROR ==========`, {
         endpoint,
-        method: 'PATCH',
+        method: 'PUT',
         url,
         offerId,
         error: error.message,
