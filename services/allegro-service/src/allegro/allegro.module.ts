@@ -19,6 +19,8 @@ import { InventoryService } from './inventory/inventory.service';
 import { EventsController } from './events/events.controller';
 import { EventsService } from './events/events.service';
 import { OAuthController } from './oauth/oauth.controller';
+import { ProductsController } from './products/products.controller';
+import { ProductsService } from './products/products.service';
 
 @Module({
   imports: [
@@ -38,6 +40,7 @@ import { OAuthController } from './oauth/oauth.controller';
     CategoriesController,
     EventsController,
     OAuthController,
+    ProductsController,
   ],
   providers: [
     AllegroApiService,
@@ -48,6 +51,7 @@ import { OAuthController } from './oauth/oauth.controller';
     CategoriesService,
     InventoryService,
     EventsService,
+    ProductsService,
   ],
   exports: [AllegroApiService, OffersService, OrdersService, CategoriesService, InventoryService, EventsService],
 })

@@ -2,7 +2,7 @@
  * Update Offer DTO
  */
 
-import { IsOptional, IsString, IsNumber, IsArray, ValidateNested } from 'class-validator';
+import { IsOptional, IsString, IsNumber, IsArray, ValidateNested, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export interface AttributeUpdate {
@@ -66,5 +66,9 @@ export class UpdateOfferDto {
   @ValidateNested({ each: true })
   @Type(() => Object)
   attributes?: AttributeUpdate[];
+
+  @IsOptional()
+  @IsBoolean()
+  syncToAllegro?: boolean;
 }
 

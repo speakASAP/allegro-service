@@ -432,6 +432,10 @@ export class OffersService {
   async updateOffer(id: string, dto: any, userId?: string): Promise<any> {
     this.logger.log('Updating Allegro offer', { id, fields: Object.keys(dto), userId });
 
+    const syncToAllegro = dto.syncToAllegro === true;
+    const updateDto = { ...dto };
+    delete updateDto.syncToAllegro;
+
     const offer = await this.prisma.allegroOffer.findUnique({
       where: { id },
     });
@@ -441,19 +445,19 @@ export class OffersService {
     }
 
     // Check if this is a local-only update (faster path)
-    const requiresAllegroApi = this.requiresAllegroApiUpdate(dto);
-    const isStockOnlyUpdate = dto.stockQuantity !== undefined && !requiresAllegroApi;
+    const requiresAllegroApi = this.requiresAllegroApiUpdate(updateDto);
+    const isStockOnlyUpdate = updateDto.stockQuantity !== undefined && !requiresAllegroApi;
     const isLocalOnlyUpdate = !requiresAllegroApi && !isStockOnlyUpdate && (
-      dto.status !== undefined ||
-      dto.publicationStatus !== undefined ||
-      dto.quantity !== undefined
+      updateDto.status !== undefined ||
+      updateDto.publicationStatus !== undefined ||
+      updateDto.quantity !== undefined
     );
 
     // Fast path: Update database only for local-only fields
     if (isLocalOnlyUpdate) {
       this.logger.log('Fast path: Local-only update (database only)', {
         id,
-        fields: Object.keys(dto),
+        fields: Object.keys(updateDto),
       });
 
       const dbUpdateData: any = {
@@ -461,11 +465,11 @@ export class OffersService {
         lastSyncedAt: new Date(),
       };
 
-      if (dto.status !== undefined) dbUpdateData.status = dto.status;
-      if (dto.publicationStatus !== undefined) dbUpdateData.publicationStatus = dto.publicationStatus;
-      if (dto.quantity !== undefined) {
-        dbUpdateData.quantity = dto.quantity;
-        dbUpdateData.stockQuantity = dto.quantity;
+      if (updateDto.status !== undefined) dbUpdateData.status = updateDto.status;
+      if (updateDto.publicationStatus !== undefined) dbUpdateData.publicationStatus = updateDto.publicationStatus;
+      if (updateDto.quantity !== undefined) {
+        dbUpdateData.quantity = updateDto.quantity;
+        dbUpdateData.stockQuantity = updateDto.quantity;
       }
 
       const updated = await this.prisma.allegroOffer.update({
@@ -479,62 +483,65 @@ export class OffersService {
 
     // Stock-only update uses dedicated fast endpoint
     if (isStockOnlyUpdate) {
-      this.logger.log('Fast path: Stock-only update', { id, stockQuantity: dto.stockQuantity });
-      return await this.updateOfferStock(id, dto.stockQuantity, userId);
+      this.logger.log('Fast path: Stock-only update', { id, stockQuantity: updateDto.stockQuantity });
+      return await this.updateOfferStock(id, updateDto.stockQuantity, userId);
     }
 
-    // Full update: Requires Allegro API call
+    // Full update: Requires Allegro API call (optional)
     try {
-      // Get user's OAuth token for updating offers (required for user-specific operations)
-      let oauthToken: string;
-      if (userId) {
-        oauthToken = await this.getUserOAuthToken(userId);
-      } else {
-        // Fallback to client credentials token (may not work for all operations)
-        oauthToken = await this.allegroAuth.getAccessToken();
-      }
-
-      // Skip fetching from Allegro API if we have good rawData (faster)
-      // Only fetch if rawData is missing or incomplete
+      let oauthToken: string | undefined;
       let currentAllegroOffer: any = null;
-      const hasGoodRawData = offer.rawData && 
-        typeof offer.rawData === 'object' && 
-        (offer.rawData as any).parameters && 
-        Array.isArray((offer.rawData as any).parameters);
 
-      if (!hasGoodRawData) {
+      if (syncToAllegro) {
+        // Get user's OAuth token for updating offers (required for user-specific operations)
+        if (userId) {
+          oauthToken = await this.getUserOAuthToken(userId);
+        } else {
+          // Fallback to client credentials token (may not work for all operations)
+          oauthToken = await this.allegroAuth.getAccessToken();
+        }
+
+        // Skip fetching from Allegro API if we have good rawData (faster)
         // Only fetch if rawData is missing or incomplete
-        try {
-          const fetchPromise = this.allegroApi.getOfferWithOAuthToken(oauthToken, offer.allegroOfferId);
-          const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Timeout: Fetching current offer took too long')), 5000); // 5 second timeout (reduced)
-          });
-          currentAllegroOffer = await Promise.race([fetchPromise, timeoutPromise]) as any;
-          this.logger.log('Fetched current offer from Allegro API', {
+        const hasGoodRawData = offer.rawData && 
+          typeof offer.rawData === 'object' && 
+          (offer.rawData as any).parameters && 
+          Array.isArray((offer.rawData as any).parameters);
+
+        if (!hasGoodRawData) {
+          // Only fetch if rawData is missing or incomplete
+          try {
+            const fetchPromise = this.allegroApi.getOfferWithOAuthToken(oauthToken, offer.allegroOfferId);
+            const timeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => reject(new Error('Timeout: Fetching current offer took too long')), 5000); // 5 second timeout (reduced)
+            });
+            currentAllegroOffer = await Promise.race([fetchPromise, timeoutPromise]) as any;
+            this.logger.log('Fetched current offer from Allegro API', {
+              allegroOfferId: offer.allegroOfferId,
+              hasParameters: !!currentAllegroOffer?.parameters,
+              parametersCount: currentAllegroOffer?.parameters?.length || 0,
+            });
+          } catch (error: any) {
+            this.logger.warn('Failed to fetch current offer from Allegro API, using stored rawData', {
+              allegroOfferId: offer.allegroOfferId,
+              error: error.message,
+              isTimeout: error.message?.includes('Timeout') || error.code === 'ECONNABORTED',
+            });
+          }
+        } else {
+          this.logger.log('Using stored rawData (skipping API fetch for speed)', {
             allegroOfferId: offer.allegroOfferId,
-            hasParameters: !!currentAllegroOffer?.parameters,
-            parametersCount: currentAllegroOffer?.parameters?.length || 0,
-          });
-        } catch (error: any) {
-          this.logger.warn('Failed to fetch current offer from Allegro API, using stored rawData', {
-            allegroOfferId: offer.allegroOfferId,
-            error: error.message,
-            isTimeout: error.message?.includes('Timeout') || error.code === 'ECONNABORTED',
+            hasParameters: !!(offer.rawData as any)?.parameters,
+            parametersCount: Array.isArray((offer.rawData as any)?.parameters) ? (offer.rawData as any).parameters.length : 0,
           });
         }
-      } else {
-        this.logger.log('Using stored rawData (skipping API fetch for speed)', {
-          allegroOfferId: offer.allegroOfferId,
-          hasParameters: !!(offer.rawData as any)?.parameters,
-          parametersCount: Array.isArray((offer.rawData as any)?.parameters) ? (offer.rawData as any).parameters.length : 0,
-        });
       }
 
       // Use current offer from API if available, otherwise use stored rawData
       const sourceOffer = currentAllegroOffer || offer.rawData || offer;
 
       // Transform DTO to Allegro API format
-      const allegroPayload = this.transformDtoToAllegroFormat(dto, { ...offer, rawData: sourceOffer });
+      const allegroPayload = this.transformDtoToAllegroFormat(updateDto, { ...offer, rawData: sourceOffer });
 
       // Log parameter details for debugging
       this.logger.log('Preparing Allegro API payload', {
@@ -549,13 +556,13 @@ export class OffersService {
         hasDescription: !!allegroPayload.description,
         descriptionType: typeof allegroPayload.description,
         descriptionLength: typeof allegroPayload.description === 'string' ? allegroPayload.description.length : 'N/A',
-        dtoHasDescription: dto.description !== undefined,
+        dtoHasDescription: updateDto.description !== undefined,
         usingOAuthToken: !!userId,
         fullPayload: JSON.stringify(allegroPayload, null, 2),
       });
 
       // Merge updates into rawData (before API call)
-      const updatedRawData = this.mergeRawDataUpdates(offer.rawData as any, allegroPayload, dto);
+      const updatedRawData = this.mergeRawDataUpdates(offer.rawData as any, allegroPayload, updateDto);
 
       // Prepare database update data (update DB first for fast response)
       const dbUpdateData: any = {
@@ -566,33 +573,33 @@ export class OffersService {
       };
 
       // Update fields that changed
-      if (dto.title !== undefined) dbUpdateData.title = dto.title;
-      if (dto.description !== undefined) dbUpdateData.description = dto.description;
-      if (dto.categoryId !== undefined) dbUpdateData.categoryId = dto.categoryId;
-      if (dto.price !== undefined) dbUpdateData.price = dto.price;
-      if (dto.currency !== undefined) dbUpdateData.currency = dto.currency;
-      if (dto.stockQuantity !== undefined) {
-        dbUpdateData.stockQuantity = dto.stockQuantity;
-        dbUpdateData.quantity = dto.stockQuantity;
-      } else if (dto.quantity !== undefined) {
-        dbUpdateData.quantity = dto.quantity;
-        dbUpdateData.stockQuantity = dto.quantity;
+      if (updateDto.title !== undefined) dbUpdateData.title = updateDto.title;
+      if (updateDto.description !== undefined) dbUpdateData.description = updateDto.description;
+      if (updateDto.categoryId !== undefined) dbUpdateData.categoryId = updateDto.categoryId;
+      if (updateDto.price !== undefined) dbUpdateData.price = updateDto.price;
+      if (updateDto.currency !== undefined) dbUpdateData.currency = updateDto.currency;
+      if (updateDto.stockQuantity !== undefined) {
+        dbUpdateData.stockQuantity = updateDto.stockQuantity;
+        dbUpdateData.quantity = updateDto.stockQuantity;
+      } else if (updateDto.quantity !== undefined) {
+        dbUpdateData.quantity = updateDto.quantity;
+        dbUpdateData.stockQuantity = updateDto.quantity;
       }
-      if (dto.images !== undefined) dbUpdateData.images = dto.images;
-      if (dto.status !== undefined) dbUpdateData.status = dto.status;
-      if (dto.publicationStatus !== undefined) dbUpdateData.publicationStatus = dto.publicationStatus;
-      if (dto.deliveryOptions !== undefined) dbUpdateData.deliveryOptions = dto.deliveryOptions;
-      if (dto.paymentOptions !== undefined) dbUpdateData.paymentOptions = dto.paymentOptions;
+      if (updateDto.images !== undefined) dbUpdateData.images = updateDto.images;
+      if (updateDto.status !== undefined) dbUpdateData.status = updateDto.status;
+      if (updateDto.publicationStatus !== undefined) dbUpdateData.publicationStatus = updateDto.publicationStatus;
+      if (updateDto.deliveryOptions !== undefined) dbUpdateData.deliveryOptions = updateDto.deliveryOptions;
+      if (updateDto.paymentOptions !== undefined) dbUpdateData.paymentOptions = updateDto.paymentOptions;
 
       // Extract delivery and payment from updated rawData if not explicitly updated
-      if (dto.deliveryOptions === undefined && updatedRawData?.delivery) {
+      if (updateDto.deliveryOptions === undefined && updatedRawData?.delivery) {
         dbUpdateData.deliveryOptions = updatedRawData.delivery;
       }
-      if (dto.paymentOptions === undefined && updatedRawData?.payments) {
+      if (updateDto.paymentOptions === undefined && updatedRawData?.payments) {
         dbUpdateData.paymentOptions = updatedRawData.payments;
       }
       // Extract images from updated rawData if not explicitly updated
-      if (dto.images === undefined && updatedRawData?.images && Array.isArray(updatedRawData.images)) {
+      if (updateDto.images === undefined && updatedRawData?.images && Array.isArray(updatedRawData.images)) {
         dbUpdateData.images = this.extractImages({ rawData: updatedRawData });
       }
 
@@ -606,17 +613,17 @@ export class OffersService {
         allegroOfferId: offer.allegroOfferId,
         updateFields: Object.keys(dbUpdateData),
         images: {
-          updating: dto.images !== undefined,
-          newCount: dto.images ? dto.images.length : 0,
-          newUrls: dto.images ? dto.images.map((url: string) => url.substring(0, 80)) : [],
-          extractedFromRawData: dto.images === undefined && !!dbUpdateData.images,
+          updating: updateDto.images !== undefined,
+          newCount: updateDto.images ? updateDto.images.length : 0,
+          newUrls: updateDto.images ? updateDto.images.map((url: string) => url.substring(0, 80)) : [],
+          extractedFromRawData: updateDto.images === undefined && !!dbUpdateData.images,
           extractedCount: dbUpdateData.images ? (Array.isArray(dbUpdateData.images) ? dbUpdateData.images.length : 0) : 0,
         },
         description: {
-          updating: dto.description !== undefined,
-          newType: dto.description ? typeof dto.description : 'null',
-          newLength: dto.description ? (typeof dto.description === 'string' ? dto.description.length : 'non-string') : 0,
-          newPreview: dto.description && typeof dto.description === 'string' ? dto.description.substring(0, 200) : 'N/A',
+          updating: updateDto.description !== undefined,
+          newType: updateDto.description ? typeof updateDto.description : 'null',
+          newLength: updateDto.description ? (typeof updateDto.description === 'string' ? updateDto.description.length : 'non-string') : 0,
+          newPreview: updateDto.description && typeof updateDto.description === 'string' ? updateDto.description.substring(0, 200) : 'N/A',
         },
       });
       
@@ -625,6 +632,15 @@ export class OffersService {
         where: { id },
         data: dbUpdateData,
       });
+
+      if (!syncToAllegro) {
+        this.logger.log('[updateOffer] Skipping Allegro API sync (syncToAllegro=false)', {
+          offerId: id,
+          allegroOfferId: offer.allegroOfferId,
+          updateFields: Object.keys(dbUpdateData),
+        });
+        return updated;
+      }
 
       // Update via Allegro API asynchronously (don't block response)
       this.logger.log('[updateOffer] Updating offer via Allegro API (async, non-blocking)', {
@@ -2551,6 +2567,51 @@ export class OffersService {
     });
     
     return null;
+  }
+
+  /**
+   * Pull latest data from Allegro into our database
+   */
+  async syncOfferFromAllegro(offerId: string, userId?: string): Promise<any> {
+    const offer = await this.prisma.allegroOffer.findUnique({
+      where: { id: offerId },
+    });
+
+    if (!offer) {
+      throw new HttpException('Offer not found', HttpStatus.NOT_FOUND);
+    }
+
+    if (!userId) {
+      throw new HttpException('User id is required for Allegro sync', HttpStatus.BAD_REQUEST);
+    }
+
+    const oauthToken = await this.getUserOAuthToken(userId);
+    const fullOffer = await this.allegroApi.getOfferWithOAuthToken(oauthToken, offer.allegroOfferId);
+
+    if (!fullOffer) {
+      throw new HttpException('Failed to fetch offer from Allegro', HttpStatus.BAD_GATEWAY);
+    }
+
+    const offerData = this.extractOfferData(fullOffer);
+    const updated = await this.prisma.allegroOffer.update({
+      where: { id: offerId },
+      data: {
+        ...offerData,
+        syncStatus: 'SYNCED',
+        syncSource: 'ALLEGRO_API',
+        lastSyncedAt: new Date(),
+      } as any,
+    });
+
+    const validation = this.validateOfferReadiness(updated);
+    return await this.prisma.allegroOffer.update({
+      where: { id: offerId },
+      data: {
+        validationStatus: validation.status,
+        validationErrors: validation.errors as any,
+        lastValidatedAt: new Date(),
+      } as any,
+    });
   }
 
   /**
