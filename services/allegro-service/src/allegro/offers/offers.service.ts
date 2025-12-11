@@ -2110,9 +2110,20 @@ export class OffersService {
         offset: offset.toString(),
       };
       
+      // Get OAuth token for API calls
+      let oauthToken: string | undefined;
+      try {
+        oauthToken = await this.allegroAuth.getUserAccessToken(userId);
+      } catch (tokenError: any) {
+        this.logger.error('Failed to get OAuth token for Sales Center import', {
+          userId,
+          error: tokenError.message,
+        });
+        throw new Error('OAuth authorization required. Please authorize the application in Settings to access your Allegro offers.');
+      }
+      
       let response;
       try {
-        const oauthToken = await this.allegroAuth.getUserAccessToken(userId);
         response = await this.allegroApi.getOffersWithOAuthToken(oauthToken, queryParams);
       } catch (error: any) {
         const errorStatus = error.response?.status;
