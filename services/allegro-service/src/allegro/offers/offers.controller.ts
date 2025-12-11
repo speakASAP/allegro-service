@@ -402,8 +402,9 @@ export class OffersController {
 
   @Post()
   @UseGuards(JwtAuthGuard)
-  async createOffer(@Body() dto: CreateOfferDto): Promise<{ success: boolean; data: any }> {
-    const offer = await this.offersService.createOffer(dto);
+  async createOffer(@Body() dto: CreateOfferDto, @Request() req: any): Promise<{ success: boolean; data: any }> {
+    const userId = req.user?.id || req.user?.sub;
+    const offer = await this.offersService.createOffer(dto, userId);
     return { success: true, data: offer };
   }
 
