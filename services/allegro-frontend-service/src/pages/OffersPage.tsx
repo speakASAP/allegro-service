@@ -991,8 +991,11 @@ const OffersPage: React.FC = () => {
 
       const offerIds = filteredOffers.map((offer) => offer.id);
 
+      // Use longer timeout for bulk publish operation (90 seconds)
       const response = await api.post('/allegro/offers/publish-all', {
         offerIds,
+      }, {
+        timeout: 90000, // 90 seconds for bulk operations
       });
 
       if (response.data.success) {

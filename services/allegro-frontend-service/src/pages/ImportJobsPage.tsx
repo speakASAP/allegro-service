@@ -166,7 +166,10 @@ const ImportJobsPage: React.FC = () => {
     setRequiresOAuth(false);
 
     try {
-      const response = await api.post('/allegro/offers/import-and-fix-titles');
+      // Use longer timeout for bulk import and fix operation (120 seconds)
+      const response = await api.post('/allegro/offers/import-and-fix-titles', {}, {
+        timeout: 120000, // 120 seconds for import + fix + publish
+      });
       if (response.data.success) {
         const data = response.data.data;
         const importCount = data.importResult?.totalImported || 0;
