@@ -2929,5 +2929,542 @@ export class OffersService {
 
     return validation;
   }
+
+  /**
+   * Search for product on Allegro catalog
+   * Searches by EAN first, then manufacturer code, then product name
+   * Returns Allegro product ID if found, null if not found
+   */
+  private async searchProductOnAllegro(oauthToken: string, offer: any): Promise<string | null> {
+    try {
+      // Extract identifiers from offer
+      const ean = offer.product?.ean || offer.allegroProduct?.ean || (offer.rawData as any)?.ean || null;
+      const manufacturerCode = offer.product?.manufacturerCode || offer.allegroProduct?.manufacturerCode || null;
+      const productName = offer.product?.name || offer.allegroProduct?.name || offer.title || null;
+
+      // Search by EAN first (most reliable)
+      if (ean) {
+        try {
+          this.logger.log('[searchProductOnAllegro] Searching by EAN', { ean, offerId: offer.id });
+          const result = await this.allegroApi.searchProductsWithOAuthToken(oauthToken, { ean });
+          if (result?.products && Array.isArray(result.products) && result.products.length > 0) {
+            const productId = result.products[0]?.id;
+            if (productId) {
+              this.logger.log('[searchProductOnAllegro] Product found by EAN', { ean, productId, offerId: offer.id });
+              return String(productId);
+            }
+          }
+        } catch (error: any) {
+          this.logger.warn('[searchProductOnAllegro] EAN search failed', {
+            ean,
+            error: error.message,
+            offerId: offer.id,
+          });
+        }
+      }
+
+      // Fallback to manufacturer code
+      if (manufacturerCode) {
+        try {
+          this.logger.log('[searchProductOnAllegro] Searching by manufacturer code', {
+            manufacturerCode,
+            offerId: offer.id,
+          });
+          const result = await this.allegroApi.searchProductsWithOAuthToken(oauthToken, {
+            manufacturerCode,
+          });
+          if (result?.products && Array.isArray(result.products) && result.products.length > 0) {
+            const productId = result.products[0]?.id;
+            if (productId) {
+              this.logger.log('[searchProductOnAllegro] Product found by manufacturer code', {
+                manufacturerCode,
+                productId,
+                offerId: offer.id,
+              });
+              return String(productId);
+            }
+          }
+        } catch (error: any) {
+          this.logger.warn('[searchProductOnAllegro] Manufacturer code search failed', {
+            manufacturerCode,
+            error: error.message,
+            offerId: offer.id,
+          });
+        }
+      }
+
+      // Fallback to product name (less precise)
+      if (productName) {
+        try {
+          this.logger.log('[searchProductOnAllegro] Searching by product name', {
+            productName,
+            offerId: offer.id,
+          });
+          const result = await this.allegroApi.searchProductsWithOAuthToken(oauthToken, {
+            name: productName,
+          });
+          if (result?.products && Array.isArray(result.products) && result.products.length > 0) {
+            // Try to match by name similarity
+            const matched = result.products.find((p: any) =>
+              p.name?.toLowerCase() === productName.toLowerCase(),
+            );
+            const productId = matched?.id || result.products[0]?.id;
+            if (productId) {
+              this.logger.log('[searchProductOnAllegro] Product found by name', {
+                productName,
+                productId,
+                offerId: offer.id,
+              });
+              return String(productId);
+            }
+          }
+        } catch (error: any) {
+          this.logger.warn('[searchProductOnAllegro] Product name search failed', {
+            productName,
+            error: error.message,
+            offerId: offer.id,
+          });
+        }
+      }
+
+      this.logger.log('[searchProductOnAllegro] Product not found', {
+        offerId: offer.id,
+        hasEAN: !!ean,
+        hasManufacturerCode: !!manufacturerCode,
+        hasProductName: !!productName,
+      });
+      return null;
+    } catch (error: any) {
+      this.logger.error('[searchProductOnAllegro] Failed to search product', {
+        error: error.message,
+        offerId: offer.id,
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Create product on Allegro catalog
+   * Extracts product data from offer and creates product with required fields
+   * Returns Allegro product ID
+   */
+  private async createProductOnAllegro(oauthToken: string, offer: any): Promise<string> {
+    try {
+      // Extract product data from offer
+      const productName = offer.product?.name || offer.allegroProduct?.name || offer.title || 'Product';
+      const brand =
+        offer.product?.brand ||
+        offer.allegroProduct?.brand ||
+        (offer.rawData as any)?.parameters?.find((p: any) => p.id === '248811' || p.name === 'Značka')?.values?.[0] ||
+        null;
+      const manufacturerCode =
+        offer.product?.manufacturerCode ||
+        offer.allegroProduct?.manufacturerCode ||
+        (offer.rawData as any)?.parameters?.find((p: any) => p.id === '224017' || p.name === 'Kód výrobce')
+          ?.values?.[0] ||
+        null;
+      const ean =
+        offer.product?.ean ||
+        offer.allegroProduct?.ean ||
+        (offer.rawData as any)?.parameters?.find((p: any) => p.id === '225693' || p.name === 'EAN (GTIN)')
+          ?.values?.[0] ||
+        null;
+      const categoryId = offer.categoryId || (offer.rawData as any)?.category?.id || null;
+
+      // Extract parameters from offer
+      const parameters =
+        (offer.rawData as any)?.parameters ||
+        offer.allegroProduct?.parameters?.map((p: any) => ({
+          id: p.parameterId,
+          name: p.name,
+          values: p.values,
+          valuesIds: p.valuesIds,
+          rangeValue: p.rangeValue,
+        })) ||
+        [];
+
+      // Build product payload
+      const productPayload: any = {
+        name: productName,
+        category: categoryId ? { id: categoryId } : null,
+        parameters: parameters.map((p: any) => ({
+          id: String(p.id || p.parameterId),
+          values: Array.isArray(p.values) ? p.values : p.valuesIds ? p.valuesIds : [],
+          valuesIds: Array.isArray(p.valuesIds) ? p.valuesIds : [],
+          rangeValue: p.rangeValue || null,
+        })),
+      };
+
+      // Add EAN if available
+      if (ean) {
+        const eanParam = parameters.find((p: any) => String(p.id) === '225693' || p.name === 'EAN (GTIN)');
+        if (!eanParam) {
+          productPayload.parameters.push({
+            id: '225693',
+            values: [ean],
+          });
+        }
+      }
+
+      // Add manufacturer code if available
+      if (manufacturerCode) {
+        const manufacturerCodeParam = parameters.find(
+          (p: any) => String(p.id) === '224017' || p.name === 'Kód výrobce',
+        );
+        if (!manufacturerCodeParam) {
+          productPayload.parameters.push({
+            id: '224017',
+            values: [manufacturerCode],
+          });
+        }
+      }
+
+      // Add brand if available
+      if (brand) {
+        const brandParam = parameters.find((p: any) => String(p.id) === '248811' || p.name === 'Značka');
+        if (!brandParam) {
+          productPayload.parameters.push({
+            id: '248811',
+            values: [brand],
+          });
+        }
+      }
+
+      // Validate required fields
+      if (!categoryId) {
+        throw new Error('Category ID is required to create product');
+      }
+
+      this.logger.log('[createProductOnAllegro] Creating product on Allegro', {
+        offerId: offer.id,
+        productName,
+        categoryId,
+        hasBrand: !!brand,
+        hasManufacturerCode: !!manufacturerCode,
+        hasEAN: !!ean,
+        parametersCount: productPayload.parameters.length,
+      });
+
+      const createdProduct = await this.allegroApi.createProductWithOAuthToken(oauthToken, productPayload);
+
+      if (!createdProduct?.id) {
+        throw new Error('Product creation succeeded but no product ID returned');
+      }
+
+      this.logger.log('[createProductOnAllegro] Product created successfully', {
+        offerId: offer.id,
+        productId: createdProduct.id,
+      });
+
+      return String(createdProduct.id);
+    } catch (error: any) {
+      this.logger.error('[createProductOnAllegro] Failed to create product', {
+        error: error.message,
+        offerId: offer.id,
+        errorData: error.response?.data,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Publish multiple offers to Allegro
+   * For each offer:
+   * - If offer exists on Allegro: update it
+   * - If offer doesn't exist: search for product, create if needed, then create offer
+   * Returns summary with success/failure results
+   */
+  async publishOffersToAllegro(userId: string, offerIds: string[]): Promise<any> {
+    this.logger.log('[publishOffersToAllegro] Starting bulk publish', {
+      userId,
+      offerCount: offerIds.length,
+    });
+
+    const results: Array<{ offerId: string; status: 'success' | 'failed'; error?: string; allegroOfferId?: string }> = [];
+    let successful = 0;
+    let failed = 0;
+
+    // Get OAuth token once for all operations
+    let oauthToken: string;
+    try {
+      oauthToken = await this.getUserOAuthToken(userId);
+    } catch (error: any) {
+      this.logger.error('[publishOffersToAllegro] Failed to get OAuth token', {
+        userId,
+        error: error.message,
+      });
+      throw error;
+    }
+
+    // Process each offer
+    for (const offerId of offerIds) {
+      try {
+        this.logger.log('[publishOffersToAllegro] Processing offer', { offerId, userId });
+
+        // Load offer from database with relations
+        const offer = await this.prisma.allegroOffer.findUnique({
+          where: { id: offerId },
+          include: {
+            product: true,
+            allegroProduct: {
+              include: {
+                parameters: true,
+              },
+            },
+          } as any,
+        });
+
+        if (!offer) {
+          throw new Error(`Offer not found: ${offerId}`);
+        }
+
+        // Check if offer already exists on Allegro
+        if (offer.allegroOfferId && !offer.allegroOfferId.startsWith('local-')) {
+          // Offer exists on Allegro - update it
+          try {
+            this.logger.log('[publishOffersToAllegro] Updating existing offer', {
+              offerId,
+              allegroOfferId: offer.allegroOfferId,
+            });
+
+            // Transform offer data for update
+            const updatePayload = this.transformDtoToAllegroFormat(
+              {
+                title: offer.title,
+                description: offer.description,
+                categoryId: offer.categoryId,
+                price: Number(offer.price),
+                currency: offer.currency,
+                stockQuantity: offer.stockQuantity,
+                images: offer.images as any,
+                attributes: (offer.rawData as any)?.parameters || [],
+                deliveryOptions: offer.deliveryOptions as any,
+                paymentOptions: offer.paymentOptions as any,
+              },
+              { ...offer, rawData: offer.rawData },
+            );
+
+            await this.allegroApi.updateOfferWithOAuthToken(oauthToken, offer.allegroOfferId, updatePayload);
+
+            // Update sync status in database
+            await this.prisma.allegroOffer.update({
+              where: { id: offerId },
+              data: {
+                syncStatus: 'SYNCED',
+                syncSource: 'MANUAL',
+                lastSyncedAt: new Date(),
+                syncError: null,
+              } as any,
+            });
+
+            results.push({
+              offerId,
+              status: 'success',
+              allegroOfferId: offer.allegroOfferId,
+            });
+            successful++;
+
+            this.logger.log('[publishOffersToAllegro] Offer updated successfully', {
+              offerId,
+              allegroOfferId: offer.allegroOfferId,
+            });
+          } catch (error: any) {
+            this.logger.error('[publishOffersToAllegro] Failed to update offer', {
+              offerId,
+              allegroOfferId: offer.allegroOfferId,
+              error: error.message,
+            });
+
+            await this.prisma.allegroOffer.update({
+              where: { id: offerId },
+              data: {
+                syncStatus: 'ERROR',
+                syncError: error.message,
+              } as any,
+            });
+
+            results.push({
+              offerId,
+              status: 'failed',
+              error: error.message,
+              allegroOfferId: offer.allegroOfferId,
+            });
+            failed++;
+          }
+        } else {
+          // Offer doesn't exist on Allegro - create it
+          try {
+            this.logger.log('[publishOffersToAllegro] Creating new offer', { offerId });
+
+            // Search for product on Allegro
+            let allegroProductId: string | null = await this.searchProductOnAllegro(oauthToken, offer);
+
+            // If product not found, create it
+            if (!allegroProductId) {
+              this.logger.log('[publishOffersToAllegro] Product not found, creating new product', { offerId });
+              allegroProductId = await this.createProductOnAllegro(oauthToken, offer);
+            }
+
+            // Build offer payload
+            const offerPayload: any = {
+              name: offer.title,
+              category: { id: offer.categoryId },
+              sellingMode: {
+                format: 'BUY_NOW',
+                price: {
+                  amount: String(offer.price),
+                  currency: offer.currency || this.getDefaultCurrency(),
+                },
+              },
+              stock: {
+                available: offer.stockQuantity || offer.quantity || 0,
+              },
+              publication: {
+                duration: 'P30D', // 30 days
+              },
+            };
+
+            // Add description if available
+            if (offer.description) {
+              offerPayload.description = offer.description;
+            }
+
+            // Add images if available
+            if (offer.images && Array.isArray(offer.images) && offer.images.length > 0) {
+              offerPayload.images = offer.images.map((img: any) => ({
+                url: typeof img === 'string' ? img : img.url || img.path,
+              }));
+            } else if ((offer.rawData as any)?.images && Array.isArray((offer.rawData as any).images)) {
+              offerPayload.images = (offer.rawData as any).images.map((img: any) => ({
+                url: typeof img === 'string' ? img : img.url || img.path,
+              }));
+            }
+
+            // Add parameters if available
+            const parameters =
+              (offer.rawData as any)?.parameters ||
+              offer.allegroProduct?.parameters?.map((p: any) => ({
+                id: p.parameterId,
+                values: Array.isArray(p.values) ? p.values : p.valuesIds || [],
+                valuesIds: Array.isArray(p.valuesIds) ? p.valuesIds : [],
+              })) ||
+              [];
+
+            if (parameters.length > 0) {
+              offerPayload.parameters = parameters.map((p: any) => ({
+                id: String(p.id || p.parameterId),
+                values: Array.isArray(p.values) ? p.values : [],
+                valuesIds: Array.isArray(p.valuesIds) ? p.valuesIds : [],
+              }));
+            }
+
+            // Add product reference
+            if (allegroProductId) {
+              offerPayload.productSet = [
+                {
+                  product: {
+                    id: allegroProductId,
+                  },
+                },
+              ];
+            }
+
+            // Add delivery and payment options if available
+            if (offer.deliveryOptions) {
+              offerPayload.delivery = offer.deliveryOptions;
+            } else if ((offer.rawData as any)?.delivery) {
+              offerPayload.delivery = (offer.rawData as any).delivery;
+            }
+
+            if (offer.paymentOptions) {
+              offerPayload.payments = offer.paymentOptions;
+            } else if ((offer.rawData as any)?.payments) {
+              offerPayload.payments = (offer.rawData as any).payments;
+            }
+
+            // Create offer on Allegro
+            const createdOffer = await this.allegroApi.createOfferWithOAuthToken(oauthToken, offerPayload);
+
+            if (!createdOffer?.id) {
+              throw new Error('Offer creation succeeded but no offer ID returned');
+            }
+
+            // Update offer in database with Allegro offer ID
+            await this.prisma.allegroOffer.update({
+              where: { id: offerId },
+              data: {
+                allegroOfferId: String(createdOffer.id),
+                syncStatus: 'SYNCED',
+                syncSource: 'MANUAL',
+                lastSyncedAt: new Date(),
+                syncError: null,
+                rawData: createdOffer,
+                publicationStatus: createdOffer.publication?.status || 'INACTIVE',
+              } as any,
+            });
+
+            results.push({
+              offerId,
+              status: 'success',
+              allegroOfferId: String(createdOffer.id),
+            });
+            successful++;
+
+            this.logger.log('[publishOffersToAllegro] Offer created successfully', {
+              offerId,
+              allegroOfferId: createdOffer.id,
+            });
+          } catch (error: any) {
+            this.logger.error('[publishOffersToAllegro] Failed to create offer', {
+              offerId,
+              error: error.message,
+              errorData: error.response?.data,
+            });
+
+            await this.prisma.allegroOffer.update({
+              where: { id: offerId },
+              data: {
+                syncStatus: 'ERROR',
+                syncError: error.message,
+              } as any,
+            });
+
+            results.push({
+              offerId,
+              status: 'failed',
+              error: error.message,
+            });
+            failed++;
+          }
+        }
+      } catch (error: any) {
+        this.logger.error('[publishOffersToAllegro] Failed to process offer', {
+          offerId,
+          error: error.message,
+        });
+
+        results.push({
+          offerId,
+          status: 'failed',
+          error: error.message,
+        });
+        failed++;
+      }
+    }
+
+    const summary = {
+      total: offerIds.length,
+      successful,
+      failed,
+      results,
+    };
+
+    this.logger.log('[publishOffersToAllegro] Bulk publish completed', {
+      userId,
+      summary,
+    });
+
+    return summary;
+  }
 }
 
