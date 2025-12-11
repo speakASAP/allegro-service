@@ -911,11 +911,15 @@ const OffersPage: React.FC = () => {
 
   // Create offer
   const handleCreateOffer = async () => {
+    console.log('[handleCreateOffer] Called', { newOffer });
+    
     if (!newOffer.title.trim()) {
+      console.log('[handleCreateOffer] Validation failed: Title is required');
       setError('Title is required');
       return;
     }
 
+    console.log('[handleCreateOffer] Starting creation...');
     setCreatingOffer(true);
     setError(null);
     try {
@@ -939,11 +943,13 @@ const OffersPage: React.FC = () => {
         syncToAllegro: newOffer.syncToAllegro,
       };
 
+      console.log('[handleCreateOffer] Sending payload:', payload);
       await api.post('/allegro/offers', payload);
+      console.log('[handleCreateOffer] Success!');
       setShowCreateModal(false);
       await loadAllOffers();
     } catch (err) {
-      console.error('Failed to create offer', err);
+      console.error('[handleCreateOffer] Failed to create offer', err);
       const axiosErr = err as AxiosError & { serviceErrorMessage?: string };
       setError(axiosErr.serviceErrorMessage || axiosErr.message || 'Failed to create offer');
     } finally {
@@ -1811,10 +1817,10 @@ const OffersPage: React.FC = () => {
           </div>
 
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setShowCreateModal(false)} disabled={creatingOffer}>
+            <Button variant="secondary" onClick={() => setShowCreateModal(false)} disabled={creatingOffer} type="button">
               Cancel
             </Button>
-            <Button onClick={handleCreateOffer} disabled={creatingOffer}>
+            <Button onClick={handleCreateOffer} disabled={creatingOffer} type="button">
               {creatingOffer ? 'Creating...' : 'Create Offer'}
             </Button>
           </div>
