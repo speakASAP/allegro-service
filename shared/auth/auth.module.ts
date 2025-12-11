@@ -13,10 +13,7 @@ import { ResilienceModule } from '../resilience/resilience.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      // Make ConfigModule available for JwtAuthGuard to access JWT_SECRET
-      isGlobal: false, // Don't make it global, just available in this module
-    }),
+    ConfigModule, // ConfigModule is already global in AppModule, just import it here for type safety
     HttpModule.register({
       timeout: 10000,
       maxRedirects: 5,
@@ -28,7 +25,7 @@ import { ResilienceModule } from '../resilience/resilience.module';
   exports: [AuthService, JwtAuthGuard],
 })
 export class AuthModule {
-  // ConfigService is available via ConfigModule.forRoot()
+  // ConfigService is available globally via ConfigModule in AppModule
   // JwtAuthGuard uses ConfigService to get JWT_SECRET from environment
 }
 
