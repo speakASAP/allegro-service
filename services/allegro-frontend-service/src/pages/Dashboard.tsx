@@ -22,6 +22,7 @@ const Dashboard: React.FC = () => {
     { name: 'Import Jobs', path: '/dashboard/import', icon: '📥' },
     { name: 'Offers', path: '/dashboard/offers', icon: '🛍️' },
     { name: 'Orders', path: '/dashboard/orders', icon: '📦' },
+    { name: 'Products', path: '/dashboard/products', icon: '📇' },
   ];
 
   return (

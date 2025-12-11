@@ -68,6 +68,13 @@
 - Edits would update DB first, then push via existing Allegro sync (price/stock/offer update) flows.
 - Cross-platform exports (Aukro, Heureka, Bazos, etc.) would map from the same DB source using platform-specific transformers.
 
+## Manual Sync Controls (Allegro)
+
+- Save in the offer editor now updates only our database by default (faster).
+- To push DB changes to Allegro, either check “Also sync to Allegro on save” in the editor or click “Sync to Allegro” in the offer detail modal.
+- To pull the latest data from Allegro into our DB, click “Sync from Allegro” in the offer detail modal.
+- Validation status refreshes after sync/pull when the offer detail is reloaded.
+
 ## Testing Approach
 
 - API contract checks: `GET /allegro/offers` pagination/filters and `GET /allegro/offers/:id` detail include `rawData`.

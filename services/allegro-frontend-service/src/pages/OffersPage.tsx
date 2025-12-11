@@ -156,6 +156,9 @@ const OffersPage: React.FC = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editedOffer, setEditedOffer] = useState<Partial<Offer> | null>(null);
   const [saving, setSaving] = useState(false);
+  const [syncOnSave, setSyncOnSave] = useState(false);
+  const [syncingToAllegro, setSyncingToAllegro] = useState(false);
+  const [syncingFromAllegro, setSyncingFromAllegro] = useState(false);
   
   // Load saved filters from localStorage
   const loadSavedFilters = (): { statusFilter: string; searchQuery: string; categoryFilter: string; page: number } => {
@@ -356,12 +359,61 @@ const OffersPage: React.FC = () => {
       })) || [],
     });
     setIsEditMode(true);
+    setSyncOnSave(false);
   };
 
   const handleCancelEdit = () => {
     setIsEditMode(false);
     setEditedOffer(null);
     setError(null);
+  };
+
+  const handleSyncToAllegro = async () => {
+    if (!selectedOffer) return;
+
+    setSyncingToAllegro(true);
+    setError(null);
+    try {
+      const response = await api.post(`/allegro/offers/${selectedOffer.id}/sync-to-allegro`);
+      if (response.data.success) {
+        const detailResponse = await api.get(`/allegro/offers/${selectedOffer.id}`);
+        if (detailResponse.data.success) {
+          setSelectedOffer(detailResponse.data.data);
+          loadAllOffers();
+        }
+      }
+    } catch (err) {
+      console.error('Failed to sync to Allegro', err);
+      const axiosError = err as AxiosError & { response?: { data?: { error?: { message?: string } } } };
+      const errorMessage = axiosError.response?.data?.error?.message || (err as Error).message || 'Failed to sync to Allegro';
+      setError(errorMessage);
+    } finally {
+      setSyncingToAllegro(false);
+    }
+  };
+
+  const handleSyncFromAllegro = async () => {
+    if (!selectedOffer) return;
+
+    setSyncingFromAllegro(true);
+    setError(null);
+    try {
+      const response = await api.post(`/allegro/offers/${selectedOffer.id}/sync-from-allegro`);
+      if (response.data.success) {
+        const detailResponse = await api.get(`/allegro/offers/${selectedOffer.id}`);
+        if (detailResponse.data.success) {
+          setSelectedOffer(detailResponse.data.data);
+          loadAllOffers();
+        }
+      }
+    } catch (err) {
+      console.error('Failed to sync from Allegro', err);
+      const axiosError = err as AxiosError & { response?: { data?: { error?: { message?: string } } } };
+      const errorMessage = axiosError.response?.data?.error?.message || (err as Error).message || 'Failed to sync from Allegro';
+      setError(errorMessage);
+    } finally {
+      setSyncingFromAllegro(false);
+    }
   };
 
   const handleSaveOffer = async () => {
@@ -495,6 +547,10 @@ const OffersPage: React.FC = () => {
             updateData.attributes = validAttributes;
           }
         }
+      }
+
+      if (syncOnSave) {
+        updateData.syncToAllegro = true;
       }
 
       const response = await api.put(`/allegro/offers/${selectedOffer.id}`, updateData);
@@ -1004,7 +1060,7 @@ const OffersPage: React.FC = () => {
             {/* Edit/View Mode Toggle */}
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-semibold text-lg">{isEditMode ? 'Edit Offer' : 'Offer Details'}</h3>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2 justify-end">
                 {!isEditMode ? (
                   <Button
                     variant="primary"
@@ -1033,6 +1089,22 @@ const OffersPage: React.FC = () => {
                     </Button>
                   </>
                 )}
+                <Button
+                  variant="secondary"
+                  size="small"
+                  onClick={handleSyncFromAllegro}
+                  disabled={syncingFromAllegro || saving}
+                >
+                  {syncingFromAllegro ? 'Syncing from Allegro...' : 'Sync from Allegro'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="small"
+                  onClick={handleSyncToAllegro}
+                  disabled={syncingToAllegro || saving}
+                >
+                  {syncingToAllegro ? 'Syncing to Allegro...' : 'Sync to Allegro'}
+                </Button>
               </div>
             </div>
 
@@ -1045,6 +1117,18 @@ const OffersPage: React.FC = () => {
             {isEditMode && editedOffer ? (
               /* Edit Form */
               <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="syncOnSave"
+                    className="h-4 w-4"
+                    checked={syncOnSave}
+                    onChange={(e) => setSyncOnSave(e.target.checked)}
+                  />
+                  <label htmlFor="syncOnSave" className="text-sm text-gray-700">
+                    Also sync to Allegro on save
+                  </label>
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
                   <Input

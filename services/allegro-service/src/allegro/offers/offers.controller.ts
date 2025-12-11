@@ -451,6 +451,22 @@ export class OffersController {
     return { success: true, data: result };
   }
 
+  @Post(':id/sync-to-allegro')
+  @UseGuards(JwtAuthGuard)
+  async syncToAllegro(@Param('id') id: string, @Request() req: any): Promise<{ success: boolean; data: any }> {
+    const userId = String(req.user?.id || 'unknown');
+    const result = await this.offersService.updateOffer(id, { syncToAllegro: true }, userId);
+    return { success: true, data: result };
+  }
+
+  @Post(':id/sync-from-allegro')
+  @UseGuards(JwtAuthGuard)
+  async syncFromAllegro(@Param('id') id: string, @Request() req: any): Promise<{ success: boolean; data: any }> {
+    const userId = String(req.user?.id || 'unknown');
+    const result = await this.offersService.syncOfferFromAllegro(id, userId);
+    return { success: true, data: result };
+  }
+
   @Post(':id/validate')
   @UseGuards(JwtAuthGuard)
   async validateOffer(@Param('id') id: string, @Request() req: any): Promise<{ success: boolean; data: any }> {

@@ -14,6 +14,7 @@ import ImportJobsPage from './pages/ImportJobsPage';
 import OrdersPage from './pages/OrdersPage';
 import OffersPage from './pages/OffersPage';
 import AllegroOAuthCallbackPage from './pages/AllegroOAuthCallbackPage';
+import ProductsPage from './pages/ProductsPage';
 
 function App() {
   return (
@@ -42,6 +43,7 @@ function App() {
             <Route path="import" element={<ImportJobsPage />} />
             <Route path="offers" element={<OffersPage />} />
             <Route path="orders" element={<OrdersPage />} />
+            <Route path="products" element={<ProductsPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
