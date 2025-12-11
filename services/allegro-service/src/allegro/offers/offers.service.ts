@@ -3227,22 +3227,76 @@ export class OffersService {
               allegroOfferId: offer.allegroOfferId,
             });
 
-            // Transform offer data for update
+            // Fetch current offer from Allegro to get all required fields
+            let currentAllegroOffer: any = null;
+            try {
+              currentAllegroOffer = await this.allegroApi.getOfferWithOAuthToken(oauthToken, offer.allegroOfferId);
+              this.logger.log('[publishOffersToAllegro] Fetched current offer from Allegro', {
+                offerId,
+                hasParameters: !!currentAllegroOffer?.parameters,
+                parametersCount: currentAllegroOffer?.parameters?.length || 0,
+              });
+            } catch (fetchError: any) {
+              this.logger.warn('[publishOffersToAllegro] Failed to fetch current offer, using stored rawData', {
+                offerId,
+                error: fetchError.message,
+              });
+              // Use stored rawData as fallback
+              currentAllegroOffer = offer.rawData;
+            }
+
+            // Use current offer from API if available, otherwise use stored rawData
+            const sourceOffer = currentAllegroOffer || offer.rawData || offer;
+
+            // Transform offer data for update - use database values but preserve all required fields from Allegro
+            // We explicitly pass all database values to ensure Allegro is updated with our data
             const updatePayload = this.transformDtoToAllegroFormat(
               {
-                title: offer.title,
-                description: offer.description,
-                categoryId: offer.categoryId,
-                price: Number(offer.price),
-                currency: offer.currency,
-                stockQuantity: offer.stockQuantity,
-                images: offer.images as any,
-                attributes: (offer.rawData as any)?.parameters || [],
-                deliveryOptions: offer.deliveryOptions as any,
-                paymentOptions: offer.paymentOptions as any,
+                title: offer.title, // Use database title
+                description: offer.description, // Use database description (will be omitted in PATCH)
+                categoryId: offer.categoryId, // Use database category
+                price: Number(offer.price), // Use database price
+                currency: offer.currency, // Use database currency
+                stockQuantity: offer.stockQuantity, // Use database stock
+                images: (offer.images as any) || (sourceOffer as any)?.images, // Use database images or fallback
+                attributes: (offer.rawData as any)?.parameters || (sourceOffer as any)?.parameters || [], // Preserve parameters
+                deliveryOptions: offer.deliveryOptions as any || (sourceOffer as any)?.delivery, // Use database or fallback
+                paymentOptions: offer.paymentOptions as any || (sourceOffer as any)?.payments, // Use database or fallback
               },
-              { ...offer, rawData: offer.rawData },
+              { ...offer, rawData: sourceOffer },
             );
+
+            // Ensure we're updating with database values - override with our data
+            // This ensures Allegro is updated with values from our database
+            if (offer.title) updatePayload.name = offer.title;
+            if (offer.categoryId) updatePayload.category = { id: offer.categoryId };
+            if (offer.price !== undefined) {
+              updatePayload.sellingMode = {
+                price: {
+                  amount: String(offer.price),
+                  currency: offer.currency || this.getDefaultCurrency(),
+                },
+              };
+            }
+            if (offer.stockQuantity !== undefined) {
+              updatePayload.stock = {
+                available: offer.stockQuantity,
+              };
+            }
+
+            // Log payload before sending
+            this.logger.log('[publishOffersToAllegro] Sending update payload', {
+              offerId,
+              allegroOfferId: offer.allegroOfferId,
+              payloadKeys: Object.keys(updatePayload),
+              hasImages: !!updatePayload.images,
+              imagesCount: updatePayload.images?.length || 0,
+              hasParameters: !!updatePayload.parameters,
+              parametersCount: updatePayload.parameters?.length || 0,
+              hasCategory: !!updatePayload.category,
+              hasSellingMode: !!updatePayload.sellingMode,
+              hasStock: !!updatePayload.stock,
+            });
 
             await this.allegroApi.updateOfferWithOAuthToken(oauthToken, offer.allegroOfferId, updatePayload);
 
@@ -3269,24 +3323,31 @@ export class OffersService {
               allegroOfferId: offer.allegroOfferId,
             });
           } catch (error: any) {
+            const errorData = error.response?.data || {};
+            const errorMessage = errorData.errors?.[0]?.message || errorData.message || error.message || 'Unknown error';
+            const errorDetails = JSON.stringify(errorData, null, 2);
+
             this.logger.error('[publishOffersToAllegro] Failed to update offer', {
               offerId,
               allegroOfferId: offer.allegroOfferId,
               error: error.message,
+              status: error.response?.status,
+              errorData,
+              errorDetails,
             });
 
             await this.prisma.allegroOffer.update({
               where: { id: offerId },
               data: {
                 syncStatus: 'ERROR',
-                syncError: error.message,
+                syncError: errorMessage,
               } as any,
             });
 
             results.push({
               offerId,
               status: 'failed',
-              error: error.message,
+              error: errorMessage,
               allegroOfferId: offer.allegroOfferId,
             });
             failed++;
@@ -3329,16 +3390,22 @@ export class OffersService {
               offerPayload.description = offer.description;
             }
 
-            // Add images if available
+            // Add images - REQUIRED field, must have at least one
+            let images: any[] = [];
             if (offer.images && Array.isArray(offer.images) && offer.images.length > 0) {
-              offerPayload.images = offer.images.map((img: any) => ({
+              images = offer.images.map((img: any) => ({
                 url: typeof img === 'string' ? img : img.url || img.path,
-              }));
+              })).filter((img: any) => img.url); // Filter out invalid images
             } else if ((offer.rawData as any)?.images && Array.isArray((offer.rawData as any).images)) {
-              offerPayload.images = (offer.rawData as any).images.map((img: any) => ({
+              images = (offer.rawData as any).images.map((img: any) => ({
                 url: typeof img === 'string' ? img : img.url || img.path,
-              }));
+              })).filter((img: any) => img.url);
             }
+
+            if (images.length === 0) {
+              throw new Error('Images are required to create an offer on Allegro. Please add at least one image.');
+            }
+            offerPayload.images = images;
 
             // Add parameters if available
             const parameters =
@@ -3358,7 +3425,7 @@ export class OffersService {
               }));
             }
 
-            // Add product reference
+            // Add product reference - REQUIRED for product-offers endpoint
             if (allegroProductId) {
               offerPayload.productSet = [
                 {
@@ -3367,20 +3434,53 @@ export class OffersService {
                   },
                 },
               ];
+            } else {
+              throw new Error('Product is required to create an offer. Product not found and could not be created.');
             }
 
-            // Add delivery and payment options if available
+            // Add delivery options - use from database or rawData, or provide defaults
             if (offer.deliveryOptions) {
               offerPayload.delivery = offer.deliveryOptions;
             } else if ((offer.rawData as any)?.delivery) {
               offerPayload.delivery = (offer.rawData as any).delivery;
+            } else {
+              // Provide default delivery options if missing
+              offerPayload.delivery = {
+                shippingRates: {
+                  id: '0', // Default shipping rate
+                },
+              };
             }
 
+            // Add payment options - use from database or rawData, or provide defaults
             if (offer.paymentOptions) {
               offerPayload.payments = offer.paymentOptions;
             } else if ((offer.rawData as any)?.payments) {
               offerPayload.payments = (offer.rawData as any).payments;
+            } else {
+              // Provide default payment options if missing
+              offerPayload.payments = {
+                invoice: 'VAT',
+              };
             }
+
+            // Add location if missing (might be required)
+            if (!offerPayload.location && (offer.rawData as any)?.location) {
+              offerPayload.location = (offer.rawData as any).location;
+            }
+
+            // Log payload before creating
+            this.logger.log('[publishOffersToAllegro] Creating offer payload', {
+              offerId,
+              payloadKeys: Object.keys(offerPayload),
+              hasImages: !!offerPayload.images,
+              imagesCount: offerPayload.images?.length || 0,
+              hasParameters: !!offerPayload.parameters,
+              parametersCount: offerPayload.parameters?.length || 0,
+              hasProductSet: !!offerPayload.productSet,
+              hasDelivery: !!offerPayload.delivery,
+              hasPayments: !!offerPayload.payments,
+            });
 
             // Create offer on Allegro
             const createdOffer = await this.allegroApi.createOfferWithOAuthToken(oauthToken, offerPayload);
@@ -3415,24 +3515,30 @@ export class OffersService {
               allegroOfferId: createdOffer.id,
             });
           } catch (error: any) {
+            const errorData = error.response?.data || {};
+            const errorMessage = errorData.errors?.[0]?.message || errorData.message || error.message || 'Unknown error';
+            const errorDetails = JSON.stringify(errorData, null, 2);
+
             this.logger.error('[publishOffersToAllegro] Failed to create offer', {
               offerId,
               error: error.message,
-              errorData: error.response?.data,
+              status: error.response?.status,
+              errorData,
+              errorDetails,
             });
 
             await this.prisma.allegroOffer.update({
               where: { id: offerId },
               data: {
                 syncStatus: 'ERROR',
-                syncError: error.message,
+                syncError: errorMessage,
               } as any,
             });
 
             results.push({
               offerId,
               status: 'failed',
-              error: error.message,
+              error: errorMessage,
             });
             failed++;
           }

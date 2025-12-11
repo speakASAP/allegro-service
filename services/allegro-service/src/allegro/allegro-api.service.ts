@@ -336,6 +336,8 @@ export class AllegroApiService {
         status: error.response?.status,
         statusText: error.response?.statusText,
         errorData,
+        errorDetails: JSON.stringify(errorData, null, 2),
+        requestPayload: JSON.stringify(productData, null, 2).substring(0, 1000),
         responseHeaders: error.response?.headers,
         isTimeout: error.code === 'ECONNABORTED' || error.message?.includes('timeout'),
       });
@@ -379,6 +381,8 @@ export class AllegroApiService {
         status: error.response?.status,
         statusText: error.response?.statusText,
         errorData: errorData,
+        errorDetails: JSON.stringify(errorData, null, 2),
+        requestPayload: JSON.stringify(data, null, 2).substring(0, 1000),
         responseHeaders: error.response?.headers,
         isTimeout: error.code === 'ECONNABORTED' || error.message?.includes('timeout'),
       });
@@ -424,7 +428,9 @@ export class AllegroApiService {
         status: error.response?.status,
         statusText: error.response?.statusText,
         errorData: errorData,
+        errorDetails: JSON.stringify(errorData, null, 2),
         responseHeaders: error.response?.headers,
+        requestPayload: JSON.stringify(data, null, 2).substring(0, 1000), // Log first 1000 chars of payload
         isTimeout: error.code === 'ECONNABORTED' || error.message?.includes('timeout'),
       });
       throw error;
