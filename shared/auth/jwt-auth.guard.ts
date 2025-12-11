@@ -71,11 +71,14 @@ export class JwtAuthGuard implements CanActivate {
 
         // Transform decoded token to AuthUser format
         // Try multiple possible field names for user ID
-        const userId = decoded.id || decoded.sub || decoded.userId || decoded.user?.id || String(decoded.userId || decoded.id || decoded.sub || '');
+        const userId = decoded.id || decoded.sub || decoded.userId || decoded.user?.id || decoded.user?.userId || decoded.user?.sub;
         const userEmail = decoded.email || decoded.user?.email || decoded.userEmail || '';
 
+        // Ensure userId is a valid string
+        const userIdString = userId ? String(userId) : '';
+        
         const user: AuthUser = {
-          id: String(userId), // Ensure it's a string
+          id: userIdString, // Ensure it's a string
           email: userEmail,
           firstName: decoded.firstName || decoded.user?.firstName || decoded.first_name,
           lastName: decoded.lastName || decoded.user?.lastName || decoded.last_name,
