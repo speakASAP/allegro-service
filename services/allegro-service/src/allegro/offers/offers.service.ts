@@ -414,7 +414,30 @@ export class OffersService {
   }
 
   /**
+   * Check if update requires Allegro API call
+   * Some fields can be updated locally in database only (faster)
+   */
+  private requiresAllegroApiUpdate(dto: any): boolean {
+    // Fields that require Allegro API update
+    const allegroApiFields = [
+      'title',
+      'description',
+      'categoryId',
+      'price',
+      'currency',
+      'images',
+      'attributes',
+      'deliveryOptions',
+      'paymentOptions',
+    ];
+
+    // Check if any of these fields are being updated
+    return allegroApiFields.some(field => dto[field] !== undefined);
+  }
+
+  /**
    * Update offer
+   * Optimized: Updates database first for fast response, then syncs to Allegro if needed
    */
   async updateOffer(id: string, dto: any, userId?: string): Promise<any> {
     this.logger.log('Updating Allegro offer', { id, fields: Object.keys(dto), userId });
@@ -427,6 +450,50 @@ export class OffersService {
       throw new HttpException('Offer not found', HttpStatus.NOT_FOUND);
     }
 
+    // Check if this is a local-only update (faster path)
+    const requiresAllegroApi = this.requiresAllegroApiUpdate(dto);
+    const isStockOnlyUpdate = dto.stockQuantity !== undefined && !requiresAllegroApi;
+    const isLocalOnlyUpdate = !requiresAllegroApi && !isStockOnlyUpdate && (
+      dto.status !== undefined ||
+      dto.publicationStatus !== undefined ||
+      dto.quantity !== undefined
+    );
+
+    // Fast path: Update database only for local-only fields
+    if (isLocalOnlyUpdate) {
+      this.logger.log('Fast path: Local-only update (database only)', {
+        id,
+        fields: Object.keys(dto),
+      });
+
+      const dbUpdateData: any = {
+        syncStatus: 'PENDING', // Mark as pending since we're not syncing to Allegro
+        lastSyncedAt: new Date(),
+      };
+
+      if (dto.status !== undefined) dbUpdateData.status = dto.status;
+      if (dto.publicationStatus !== undefined) dbUpdateData.publicationStatus = dto.publicationStatus;
+      if (dto.quantity !== undefined) {
+        dbUpdateData.quantity = dto.quantity;
+        dbUpdateData.stockQuantity = dto.quantity;
+      }
+
+      const updated = await this.prisma.allegroOffer.update({
+        where: { id },
+        data: dbUpdateData,
+      });
+
+      this.logger.log('Local-only update completed', { id });
+      return updated;
+    }
+
+    // Stock-only update uses dedicated fast endpoint
+    if (isStockOnlyUpdate) {
+      this.logger.log('Fast path: Stock-only update', { id, stockQuantity: dto.stockQuantity });
+      return await this.updateOfferStock(id, dto.stockQuantity, userId);
+    }
+
+    // Full update: Requires Allegro API call
     try {
       // Get user's OAuth token for updating offers (required for user-specific operations)
       let oauthToken: string;
@@ -437,20 +504,39 @@ export class OffersService {
         oauthToken = await this.allegroAuth.getAccessToken();
       }
 
-      // Fetch current offer from Allegro API to ensure we have all required fields
-      // This ensures we have the latest parameters and required fields
+      // Skip fetching from Allegro API if we have good rawData (faster)
+      // Only fetch if rawData is missing or incomplete
       let currentAllegroOffer: any = null;
-      try {
-        currentAllegroOffer = await this.allegroApi.getOfferWithOAuthToken(oauthToken, offer.allegroOfferId);
-        this.logger.log('Fetched current offer from Allegro API', {
+      const hasGoodRawData = offer.rawData && 
+        typeof offer.rawData === 'object' && 
+        (offer.rawData as any).parameters && 
+        Array.isArray((offer.rawData as any).parameters);
+
+      if (!hasGoodRawData) {
+        // Only fetch if rawData is missing or incomplete
+        try {
+          const fetchPromise = this.allegroApi.getOfferWithOAuthToken(oauthToken, offer.allegroOfferId);
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Timeout: Fetching current offer took too long')), 5000); // 5 second timeout (reduced)
+          });
+          currentAllegroOffer = await Promise.race([fetchPromise, timeoutPromise]) as any;
+          this.logger.log('Fetched current offer from Allegro API', {
+            allegroOfferId: offer.allegroOfferId,
+            hasParameters: !!currentAllegroOffer?.parameters,
+            parametersCount: currentAllegroOffer?.parameters?.length || 0,
+          });
+        } catch (error: any) {
+          this.logger.warn('Failed to fetch current offer from Allegro API, using stored rawData', {
+            allegroOfferId: offer.allegroOfferId,
+            error: error.message,
+            isTimeout: error.message?.includes('Timeout') || error.code === 'ECONNABORTED',
+          });
+        }
+      } else {
+        this.logger.log('Using stored rawData (skipping API fetch for speed)', {
           allegroOfferId: offer.allegroOfferId,
-          hasParameters: !!currentAllegroOffer?.parameters,
-          parametersCount: currentAllegroOffer?.parameters?.length || 0,
-        });
-      } catch (error: any) {
-        this.logger.warn('Failed to fetch current offer from Allegro API, using stored rawData', {
-          allegroOfferId: offer.allegroOfferId,
-          error: error.message,
+          hasParameters: !!(offer.rawData as any)?.parameters,
+          parametersCount: Array.isArray((offer.rawData as any)?.parameters) ? (offer.rawData as any).parameters.length : 0,
         });
       }
 
@@ -478,20 +564,12 @@ export class OffersService {
         fullPayload: JSON.stringify(allegroPayload, null, 2),
       });
 
-      // Update via Allegro API with OAuth token
-      this.logger.log('Updating offer via Allegro API', {
-        allegroOfferId: offer.allegroOfferId,
-        endpoint: `/sale/product-offers/${offer.allegroOfferId}`,
-        method: 'PATCH',
-      });
-      await this.allegroApi.updateOfferWithOAuthToken(oauthToken, offer.allegroOfferId, allegroPayload);
-
-      // Merge updates into rawData
+      // Merge updates into rawData (before API call)
       const updatedRawData = this.mergeRawDataUpdates(offer.rawData as any, allegroPayload, dto);
 
-      // Prepare database update data
+      // Prepare database update data (update DB first for fast response)
       const dbUpdateData: any = {
-        syncStatus: 'SYNCED',
+        syncStatus: 'PENDING', // Will be updated to SYNCED after API call
         syncSource: 'MANUAL',
         lastSyncedAt: new Date(),
         syncError: null,
@@ -552,14 +630,55 @@ export class OffersService {
         },
       });
       
-      // Update in database
+      // Update in database FIRST (fast response, don't wait for Allegro API)
       const updated = await this.prisma.allegroOffer.update({
         where: { id },
         data: dbUpdateData,
       });
+
+      // Update via Allegro API asynchronously (don't block response)
+      this.logger.log('Updating offer via Allegro API (async, non-blocking)', {
+        allegroOfferId: offer.allegroOfferId,
+        endpoint: `/sale/product-offers/${offer.allegroOfferId}`,
+        method: 'PATCH',
+      });
+
+      this.allegroApi.updateOfferWithOAuthToken(oauthToken, offer.allegroOfferId, allegroPayload)
+        .then(() => {
+          // Update sync status on success
+          this.prisma.allegroOffer.update({
+            where: { id },
+            data: {
+              syncStatus: 'SYNCED',
+              syncError: null,
+              lastSyncedAt: new Date(),
+            } as any,
+          }).catch(err => {
+            this.logger.error('Failed to update sync status after API update', { id, error: err.message });
+          });
+          this.logger.log('Offer synced to Allegro API successfully', { id, allegroOfferId: offer.allegroOfferId });
+        })
+        .catch((error: any) => {
+          // Update sync status on error
+          this.prisma.allegroOffer.update({
+            where: { id },
+            data: {
+              syncStatus: 'ERROR',
+              syncError: error.message,
+            } as any,
+          }).catch(err => {
+            this.logger.error('Failed to update sync error status', { id, error: err.message });
+          });
+          this.logger.error('Failed to sync offer to Allegro API', {
+            id,
+            allegroOfferId: offer.allegroOfferId,
+            error: error.message,
+            status: error.response?.status,
+          });
+        });
       
       // Log after updating database
-      this.logger.log('[updateOffer] Offer updated in database successfully', {
+      this.logger.log('[updateOffer] Offer updated in database successfully (API sync in background)', {
         userId,
         offerId: id,
         allegroOfferId: updated.allegroOfferId,
@@ -677,20 +796,100 @@ export class OffersService {
       throw new Error(`Offer with ID ${id} not found`);
     }
 
-    // Update via Allegro API
-    await this.allegroApi.updateOfferStock(offer.allegroOfferId, quantity);
-
-    // Update in database
+    // Update in database first (fast response)
     const updated = await this.prisma.allegroOffer.update({
       where: { id },
       data: {
         stockQuantity: quantity,
         quantity,
-        syncStatus: 'SYNCED',
+        syncStatus: 'PENDING', // Will be updated to SYNCED after API call
         syncSource: 'MANUAL',
         lastSyncedAt: new Date(),
       } as any,
     });
+
+    // Update via Allegro API (async, don't block response)
+    this.allegroApi.updateOfferStock(offer.allegroOfferId, quantity)
+      .then(() => {
+        // Update sync status on success
+        this.prisma.allegroOffer.update({
+          where: { id },
+          data: {
+            syncStatus: 'SYNCED',
+            syncError: null,
+            lastSyncedAt: new Date(),
+          } as any,
+        }).catch(err => {
+          this.logger.error('Failed to update sync status after stock update', { id, error: err.message });
+        });
+      })
+      .catch((error: any) => {
+        // Update sync status on error
+        this.prisma.allegroOffer.update({
+          where: { id },
+          data: {
+            syncStatus: 'ERROR',
+            syncError: error.message,
+          } as any,
+        }).catch(err => {
+          this.logger.error('Failed to update sync error status', { id, error: err.message });
+        });
+        this.logger.error('Failed to update stock via Allegro API', { id, error: error.message });
+      });
+
+    return updated;
+  }
+
+  /**
+   * Update offer stock (with userId for OAuth)
+   */
+  async updateOfferStock(id: string, quantity: number, userId?: string): Promise<any> {
+    const offer = await this.prisma.allegroOffer.findUnique({
+      where: { id },
+    });
+
+    if (!offer) {
+      throw new Error(`Offer with ID ${id} not found`);
+    }
+
+    // Update in database first (fast response)
+    const updated = await this.prisma.allegroOffer.update({
+      where: { id },
+      data: {
+        stockQuantity: quantity,
+        quantity,
+        syncStatus: 'PENDING',
+        syncSource: 'MANUAL',
+        lastSyncedAt: new Date(),
+      } as any,
+    });
+
+    // Update via Allegro API (async, don't block response)
+    this.allegroApi.updateOfferStock(offer.allegroOfferId, quantity)
+      .then(() => {
+        this.prisma.allegroOffer.update({
+          where: { id },
+          data: {
+            syncStatus: 'SYNCED',
+            syncError: null,
+            lastSyncedAt: new Date(),
+          } as any,
+        }).catch(err => {
+          this.logger.error('Failed to update sync status after stock update', { id, error: err.message });
+        });
+      })
+      .catch((error: any) => {
+        this.prisma.allegroOffer.update({
+          where: { id },
+          data: {
+            syncStatus: 'ERROR',
+            syncError: error.message,
+          } as any,
+        }).catch(err => {
+          this.logger.error('Failed to update sync error status', { id, error: err.message });
+        });
+        this.logger.error('Failed to update stock via Allegro API', { id, error: error.message });
+      });
 
     return updated;
   }

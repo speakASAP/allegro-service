@@ -188,6 +188,7 @@ export class AllegroApiService {
           'Authorization': `Bearer ${accessToken}`,
           'Accept': 'application/vnd.allegro.public.v1+json',
         },
+        timeout: 10000, // 10 seconds timeout for fetching current offer
       };
 
       const response = await firstValueFrom(this.httpService.get(url, config));
@@ -201,6 +202,7 @@ export class AllegroApiService {
         statusText: error.response?.statusText,
         errorData: errorData,
         responseHeaders: error.response?.headers,
+        isTimeout: error.code === 'ECONNABORTED' || error.message?.includes('timeout'),
       });
       throw error;
     }
@@ -236,6 +238,7 @@ export class AllegroApiService {
           'Content-Type': 'application/vnd.allegro.public.v1+json',
           'Accept': 'application/vnd.allegro.public.v1+json',
         },
+        timeout: 20000, // 20 seconds timeout for updating offer
       };
 
       // Use PATCH for partial updates (recommended by Allegro)
@@ -251,6 +254,7 @@ export class AllegroApiService {
         statusText: error.response?.statusText,
         errorData: errorData,
         responseHeaders: error.response?.headers,
+        isTimeout: error.code === 'ECONNABORTED' || error.message?.includes('timeout'),
       });
       throw error;
     }

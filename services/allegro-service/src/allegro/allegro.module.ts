@@ -21,7 +21,17 @@ import { EventsService } from './events/events.service';
 import { OAuthController } from './oauth/oauth.controller';
 
 @Module({
-  imports: [HttpModule, ConfigModule, PrismaModule, LoggerModule, AuthModule, MetricsModule],
+  imports: [
+    HttpModule.register({
+      timeout: 15000, // 15 seconds timeout for Allegro API calls
+      maxRedirects: 5,
+    }),
+    ConfigModule,
+    PrismaModule,
+    LoggerModule,
+    AuthModule,
+    MetricsModule,
+  ],
   controllers: [
     OffersController,
     OrdersController,
