@@ -733,7 +733,7 @@ export class OffersController {
         };
       }
 
-      this.logger.log(`[${requestId}] [publishAllOffers] Starting async publish operation`, {
+      this.logger.log(`[${requestId}] [publishAllOffers] Starting publish operation`, {
         userId,
         offerCount: offerIds.length,
         offerIds: offerIds.slice(0, 10), // Log first 10
@@ -741,56 +741,50 @@ export class OffersController {
         timestamp: new Date().toISOString(),
       });
 
-      // Start async processing - return immediately
-      setImmediate(async () => {
-        const asyncStartTime = Date.now();
-        this.logger.log(`[${requestId}] [publishAllOffers] Async processing started`, {
+      // Wait for publish operation to complete and return results
+      try {
+        const result = await this.offersService.publishOffersToAllegro(userId, offerIds, requestId);
+
+        const totalDuration = Date.now() - startTime;
+        this.logger.log(`[${requestId}] [publishAllOffers] Publish completed`, {
           userId,
-          offerCount: offerIds.length,
           requestId,
-          asyncDelay: `${asyncStartTime - startTime}ms`,
+          total: result.total,
+          successful: result.successful,
+          failed: result.failed,
+          totalDuration: `${totalDuration}ms`,
+          totalDurationSeconds: Math.round(totalDuration / 1000),
           timestamp: new Date().toISOString(),
         });
 
-        try {
-          const result = await this.offersService.publishOffersToAllegro(userId, offerIds, requestId);
-
-          const totalDuration = Date.now() - startTime;
-          this.logger.log(`[${requestId}] [publishAllOffers] Async publish completed`, {
-            userId,
+        // Return actual results
+        return {
+          success: true,
+          data: {
             requestId,
+            status: 'completed',
             total: result.total,
             successful: result.successful,
             failed: result.failed,
-            totalDuration: `${totalDuration}ms`,
-            totalDurationSeconds: Math.round(totalDuration / 1000),
-            timestamp: new Date().toISOString(),
-          });
-        } catch (error: any) {
-          const totalDuration = Date.now() - startTime;
-          this.logger.error(`[${requestId}] [publishAllOffers] Async publish failed`, {
-            userId,
-            requestId,
-            error: error.message,
-            errorCode: error.code,
-            errorStack: error.stack,
-            totalDuration: `${totalDuration}ms`,
-            timestamp: new Date().toISOString(),
-          });
-        }
-      });
-
-      // Return immediately with requestId for tracking
-      return {
-        success: true,
-        data: {
+            results: result.results,
+            message: `Published ${result.successful} of ${result.total} offers successfully. ${result.failed > 0 ? `${result.failed} failed.` : ''}`,
+            completedAt: new Date().toISOString(),
+            duration: `${totalDuration}ms`,
+          },
+        };
+      } catch (error: any) {
+        const totalDuration = Date.now() - startTime;
+        this.logger.error(`[${requestId}] [publishAllOffers] Publish failed`, {
+          userId,
           requestId,
-          status: 'processing',
-          message: `Publishing ${offerIds.length} offers in background. Check logs for progress.`,
-          total: offerIds.length,
-          startedAt: new Date().toISOString(),
-        },
-      };
+          error: error.message,
+          errorCode: error.code,
+          errorStack: error.stack,
+          totalDuration: `${totalDuration}ms`,
+          timestamp: new Date().toISOString(),
+        });
+        throw error;
+      }
     } catch (error: any) {
       const requestDuration = Date.now() - startTime;
       this.metricsService.incrementErrors();
