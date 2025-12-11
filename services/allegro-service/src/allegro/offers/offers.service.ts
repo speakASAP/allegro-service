@@ -618,44 +618,80 @@ export class OffersService {
 
       // Update via Allegro API asynchronously (don't block response)
       this.logger.log('Updating offer via Allegro API (async, non-blocking)', {
+        userId,
+        offerId: id,
         allegroOfferId: offer.allegroOfferId,
         endpoint: `/sale/product-offers/${offer.allegroOfferId}`,
         method: 'PATCH',
+        hasOAuthToken: !!oauthToken,
+        payloadKeys: Object.keys(allegroPayload),
       });
 
-      this.allegroApi.updateOfferWithOAuthToken(oauthToken, offer.allegroOfferId, allegroPayload)
-        .then(() => {
+      // Execute async sync with proper error handling
+      (async () => {
+        try {
+          this.logger.log('[Async Sync] Starting Allegro API update', {
+            offerId: id,
+            allegroOfferId: offer.allegroOfferId,
+          });
+          
+          await this.allegroApi.updateOfferWithOAuthToken(oauthToken, offer.allegroOfferId, allegroPayload);
+          
+          this.logger.log('[Async Sync] Allegro API update successful, updating database sync status', {
+            offerId: id,
+            allegroOfferId: offer.allegroOfferId,
+          });
+          
           // Update sync status on success
-          this.prisma.allegroOffer.update({
+          await this.prisma.allegroOffer.update({
             where: { id },
             data: {
               syncStatus: 'SYNCED',
               syncError: null,
               lastSyncedAt: new Date(),
             } as any,
-          }).catch(err => {
-            this.logger.error('Failed to update sync status after API update', { id, error: err.message });
           });
-          this.logger.log('Offer synced to Allegro API successfully', { id, allegroOfferId: offer.allegroOfferId });
-        })
-        .catch((error: any) => {
+          
+          this.logger.log('[Async Sync] Offer synced to Allegro API successfully', {
+            offerId: id,
+            allegroOfferId: offer.allegroOfferId,
+            syncStatus: 'SYNCED',
+          });
+        } catch (error: any) {
           // Update sync status on error
-          this.prisma.allegroOffer.update({
-            where: { id },
-            data: {
-              syncStatus: 'ERROR',
-              syncError: error.message,
-            } as any,
-          }).catch(err => {
-            this.logger.error('Failed to update sync error status', { id, error: err.message });
-          });
-          this.logger.error('Failed to sync offer to Allegro API', {
-            id,
+          this.logger.error('[Async Sync] Failed to sync offer to Allegro API', {
+            offerId: id,
             allegroOfferId: offer.allegroOfferId,
             error: error.message,
+            errorStack: error.stack,
             status: error.response?.status,
+            statusText: error.response?.statusText,
+            errorData: error.response?.data,
           });
+          
+          try {
+            await this.prisma.allegroOffer.update({
+              where: { id },
+              data: {
+                syncStatus: 'ERROR',
+                syncError: error.message || 'Unknown error',
+              } as any,
+            });
+          } catch (dbError: any) {
+            this.logger.error('[Async Sync] Failed to update sync error status in database', {
+              offerId: id,
+              error: dbError.message,
+            });
+          }
+        }
+      })().catch((unhandledError: any) => {
+        // Catch any unhandled promise rejections
+        this.logger.error('[Async Sync] Unhandled error in async sync', {
+          offerId: id,
+          error: unhandledError.message,
+          errorStack: unhandledError.stack,
         });
+      });
       
       // Log after updating database
       this.logger.log('[updateOffer] Offer updated in database successfully (API sync in background)', {
