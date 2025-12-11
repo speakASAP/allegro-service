@@ -43,6 +43,7 @@ const ProductsPage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [pagination, setPagination] = useState<Pagination>(defaultPagination);
   const [loading, setLoading] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
@@ -101,21 +102,37 @@ const ProductsPage: React.FC = () => {
     setModalOpen(true);
   };
 
-  const openEdit = (product: Product) => {
-    setSelected(product);
-    setForm({
-      allegroProductId: product.allegroProductId || '',
-      name: product.name || '',
-      brand: product.brand || '',
-      manufacturerCode: product.manufacturerCode || '',
-      ean: product.ean || '',
-      publicationStatus: product.publicationStatus || '',
-      isAiCoCreated: !!product.isAiCoCreated,
-      marketedBeforeGPSR: product.marketedBeforeGPSR ?? false,
-      rawDataText: JSON.stringify(product.rawData || {}, null, 2),
-      parametersText: product.parameters && product.parameters.length > 0 ? JSON.stringify(product.parameters, null, 2) : '',
-    });
+  const openEdit = async (product: Product) => {
+    setError(null);
+    setDetailLoading(true);
     setModalOpen(true);
+    try {
+      const res = await api.get(`/allegro/products/${product.id}`);
+      if (res.data?.success && res.data.data) {
+        const full = res.data.data as Product;
+        setSelected(full);
+        setForm({
+          allegroProductId: full.allegroProductId || '',
+          name: full.name || '',
+          brand: full.brand || '',
+          manufacturerCode: full.manufacturerCode || '',
+          ean: full.ean || '',
+          publicationStatus: full.publicationStatus || '',
+          isAiCoCreated: !!full.isAiCoCreated,
+          marketedBeforeGPSR: full.marketedBeforeGPSR ?? false,
+          rawDataText: JSON.stringify(full.rawData || {}, null, 2),
+          parametersText: full.parameters && full.parameters.length > 0 ? JSON.stringify(full.parameters, null, 2) : '',
+        });
+      } else {
+        setError('Failed to load product details');
+      }
+    } catch (err) {
+      console.error('Failed to load product detail', err);
+      const axiosErr = err as AxiosError & { serviceErrorMessage?: string };
+      setError(axiosErr.serviceErrorMessage || axiosErr.message || 'Failed to load product details');
+    } finally {
+      setDetailLoading(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -180,10 +197,10 @@ const ProductsPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-semibold">Products</h2>
-          <p className="text-gray-600">Manage Allegro products extracted from offers</p>
+            <p className="text-gray-600">Manage Allegro products extracted from offers</p>
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => loadProducts(pagination.page)} disabled={loading}>
@@ -215,9 +232,11 @@ const ProductsPage: React.FC = () => {
                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Allegro Product ID</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Name</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Brand</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Manufacturer Code</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">EAN</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Status</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Updated</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Params</th>
                 <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Actions</th>
               </tr>
             </thead>
@@ -227,10 +246,14 @@ const ProductsPage: React.FC = () => {
                   <td className="px-4 py-2 text-sm">{product.allegroProductId}</td>
                   <td className="px-4 py-2 text-sm">{product.name || '—'}</td>
                   <td className="px-4 py-2 text-sm">{product.brand || '—'}</td>
+                  <td className="px-4 py-2 text-sm">{product.manufacturerCode || '—'}</td>
                   <td className="px-4 py-2 text-sm">{product.ean || '—'}</td>
                   <td className="px-4 py-2 text-sm">{product.publicationStatus || '—'}</td>
                   <td className="px-4 py-2 text-sm">
                     {product.updatedAt ? new Date(product.updatedAt).toLocaleString() : '—'}
+                  </td>
+                  <td className="px-4 py-2 text-sm">
+                    {product.parameters && product.parameters.length > 0 ? product.parameters.length : '0'}
                   </td>
                   <td className="px-4 py-2 text-right space-x-2">
                     <Button variant="secondary" size="small" onClick={() => openEdit(product)}>
@@ -280,6 +303,20 @@ const ProductsPage: React.FC = () => {
 
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={selected ? 'Edit Product' : 'Add Product'}>
         <div className="space-y-3">
+          {detailLoading && selected && (
+            <div className="text-sm text-gray-600">Loading product details...</div>
+          )}
+          {selected && !detailLoading && (
+            <div className="p-2 bg-gray-50 rounded border text-sm grid grid-cols-2 gap-2">
+              <div><span className="font-medium">Allegro Product ID:</span> {selected.allegroProductId || '—'}</div>
+              <div><span className="font-medium">Publication:</span> {selected.publicationStatus || '—'}</div>
+              <div><span className="font-medium">Brand:</span> {selected.brand || '—'}</div>
+              <div><span className="font-medium">Manufacturer Code:</span> {selected.manufacturerCode || '—'}</div>
+              <div><span className="font-medium">EAN:</span> {selected.ean || '—'}</div>
+              <div><span className="font-medium">AI Co-Created:</span> {selected.isAiCoCreated ? 'Yes' : 'No'}</div>
+              <div><span className="font-medium">Marketed before GPSR:</span> {selected.marketedBeforeGPSR ? 'Yes' : 'No'}</div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <Input
               label="Allegro Product ID"
@@ -348,6 +385,27 @@ const ProductsPage: React.FC = () => {
               onChange={(e) => setForm({ ...form, parametersText: e.target.value })}
             />
           </div>
+
+          {selected && selected.parameters && selected.parameters.length > 0 && (
+            <div className="border rounded p-2 max-h-48 overflow-auto text-sm space-y-1 bg-gray-50">
+              <div className="font-semibold">Existing parameters</div>
+              {selected.parameters.map((param) => {
+                const renderValues = () => {
+                  if (!param.values) return '—';
+                  if (Array.isArray(param.values)) {
+                    return (param.values as unknown[]).map((v) => (typeof v === 'string' ? v : JSON.stringify(v))).join(', ');
+                  }
+                  return typeof param.values === 'string' ? param.values : JSON.stringify(param.values);
+                };
+                return (
+                  <div key={`${param.parameterId}-${param.name || ''}`}>
+                    <span className="font-medium">{param.name || param.parameterId}:</span>{' '}
+                    <span>{renderValues()}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)} disabled={saving}>

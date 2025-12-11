@@ -38,11 +38,12 @@ export class ProductsService {
     this.logger.setContext('ProductsService');
   }
 
-  async getProducts(query: ProductQuery) {
+  async getProducts(query: ProductQuery & { includeRaw?: string }) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 20;
     const skip = (page - 1) * limit;
     const search = query.search?.trim();
+    const includeRaw = query.includeRaw === 'true';
 
     const where: any = {};
     if (search) {
@@ -57,15 +58,42 @@ export class ProductsService {
 
     this.logger.log('[getProducts] Fetching products', { page, limit, search });
 
+    const prisma = this.prisma as any; // fallback to allow newer Prisma models
+
     const [items, total] = await Promise.all([
-      this.prisma.allegroProduct.findMany({
+      prisma.allegroProduct.findMany({
         where,
         skip,
         take: limit,
-        include: { parameters: true },
+        select: {
+          id: true,
+          allegroProductId: true,
+          name: true,
+          brand: true,
+          manufacturerCode: true,
+          ean: true,
+          publicationStatus: true,
+          isAiCoCreated: true,
+          marketedBeforeGPSR: true,
+          rawData: includeRaw,
+          createdAt: true,
+          updatedAt: true,
+          parameters: {
+            select: {
+              id: true,
+              parameterId: true,
+              name: true,
+              values: true,
+              valuesIds: true,
+              rangeValue: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          },
+        },
         orderBy: { updatedAt: 'desc' },
       }),
-      this.prisma.allegroProduct.count({ where }),
+      prisma.allegroProduct.count({ where }),
     ]);
 
     return {
@@ -80,7 +108,9 @@ export class ProductsService {
   }
 
   async getProduct(id: string) {
-    const product = await this.prisma.allegroProduct.findUnique({
+    const prisma = this.prisma as any;
+
+    const product = await prisma.allegroProduct.findUnique({
       where: { id },
       include: { parameters: true },
     });
@@ -97,7 +127,9 @@ export class ProductsService {
       throw new HttpException('rawData is required', HttpStatus.BAD_REQUEST);
     }
 
-    const created = await this.prisma.allegroProduct.create({
+    const prisma = this.prisma as any;
+
+    const created = await prisma.allegroProduct.create({
       data: {
         allegroProductId: payload.allegroProductId || payload.rawData?.product?.id || payload.rawData?.id || undefined,
         name: payload.name ?? payload.rawData?.product?.name ?? null,
@@ -122,12 +154,13 @@ export class ProductsService {
   }
 
   async updateProduct(id: string, payload: ProductPayload) {
-    const existing = await this.prisma.allegroProduct.findUnique({ where: { id } });
+    const prisma = this.prisma as any;
+    const existing = await prisma.allegroProduct.findUnique({ where: { id } });
     if (!existing) {
       throw new HttpException('Product not found', HttpStatus.NOT_FOUND);
     }
 
-    await this.prisma.allegroProduct.update({
+    await prisma.allegroProduct.update({
       where: { id },
       data: {
         allegroProductId: payload.allegroProductId ?? existing.allegroProductId,
@@ -150,12 +183,14 @@ export class ProductsService {
   }
 
   async deleteProduct(id: string) {
-    await this.prisma.allegroProduct.delete({ where: { id } });
+    const prisma = this.prisma as any;
+    await prisma.allegroProduct.delete({ where: { id } });
     return { success: true };
   }
 
   private async replaceParameters(productId: string, parameters: any[]) {
-    await this.prisma.allegroProductParameter.deleteMany({ where: { allegroProductId: productId } });
+    const prisma = this.prisma as any;
+    await prisma.allegroProductParameter.deleteMany({ where: { allegroProductId: productId } });
     if (parameters.length === 0) {
       return;
     }
@@ -167,7 +202,7 @@ export class ProductsService {
       valuesIds: param.valuesIds || null,
       rangeValue: param.rangeValue || null,
     }));
-    await this.prisma.allegroProductParameter.createMany({
+    await prisma.allegroProductParameter.createMany({
       data: data as any,
       skipDuplicates: true,
     });
