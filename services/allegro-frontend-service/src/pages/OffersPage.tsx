@@ -117,6 +117,8 @@ interface Offer {
   deliveryOptions?: Record<string, unknown>;
   paymentOptions?: Record<string, unknown>;
   attributes?: Array<{ id: string; values: string[] }>;
+  // Allegro public URL (if available from API)
+  publicUrl?: string;
 }
 
 
@@ -1128,13 +1130,14 @@ const OffersPage: React.FC = () => {
                     <a
                       href={(() => {
                         // Try to get URL from various sources
-                        const rawData = selectedOffer.rawData as any;
+                        const rawData = selectedOffer.rawData as AllegroRawData | undefined;
+                        const rawDataRecord = rawData as Record<string, unknown> | undefined;
                         const url = selectedOffer.publicUrl || 
-                          rawData?.url || 
-                          rawData?.publicUrl ||
-                          rawData?.webUrl ||
-                          rawData?.external?.url ||
-                          rawData?.listing?.url;
+                          (rawDataRecord && typeof rawDataRecord.url === 'string' ? rawDataRecord.url : undefined) ||
+                          (rawDataRecord && typeof rawDataRecord.publicUrl === 'string' ? rawDataRecord.publicUrl : undefined) ||
+                          (rawDataRecord && typeof rawDataRecord.webUrl === 'string' ? rawDataRecord.webUrl : undefined) ||
+                          (rawDataRecord?.external && typeof rawDataRecord.external === 'object' && rawDataRecord.external !== null && 'url' in rawDataRecord.external && typeof (rawDataRecord.external as Record<string, unknown>).url === 'string' ? (rawDataRecord.external as Record<string, unknown>).url as string : undefined) ||
+                          (rawDataRecord?.listing && typeof rawDataRecord.listing === 'object' && rawDataRecord.listing !== null && 'url' in rawDataRecord.listing && typeof (rawDataRecord.listing as Record<string, unknown>).url === 'string' ? (rawDataRecord.listing as Record<string, unknown>).url as string : undefined);
                         
                         // If we have a URL, use it (might be full URL or relative)
                         if (url) {
