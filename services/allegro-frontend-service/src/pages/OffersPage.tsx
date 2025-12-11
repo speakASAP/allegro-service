@@ -88,6 +88,28 @@ interface AllegroRawData {
   [key: string]: unknown;
 }
 
+interface AllegroProductParameter {
+  parameterId: string;
+  name?: string;
+  values?: unknown;
+  valuesIds?: unknown;
+  rangeValue?: unknown;
+}
+
+interface AllegroProduct {
+  id: string;
+  allegroProductId: string;
+  name?: string;
+  brand?: string;
+  manufacturerCode?: string;
+  ean?: string;
+  publicationStatus?: string;
+  isAiCoCreated?: boolean;
+  marketedBeforeGPSR?: boolean | null;
+  rawData?: unknown;
+  parameters?: AllegroProductParameter[];
+}
+
 interface Offer {
   id: string;
   allegroOfferId: string;
@@ -113,6 +135,7 @@ interface Offer {
     code: string;
     name: string;
   };
+  allegroProduct?: AllegroProduct;
   // Edit form fields
   deliveryOptions?: Record<string, unknown>;
   paymentOptions?: Record<string, unknown>;
@@ -1235,6 +1258,80 @@ const OffersPage: React.FC = () => {
                     <div className="font-medium">{selectedOffer.syncSource}</div>
                   </div>
                 )}
+            {selectedOffer.allegroProduct && (
+              <div className="col-span-2 border-t pt-3 mt-2">
+                <h3 className="font-semibold mb-2">Allegro Product</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-sm text-gray-600">Allegro Product ID</div>
+                    <div className="font-medium">{selectedOffer.allegroProduct.allegroProductId}</div>
+                  </div>
+                  {selectedOffer.allegroProduct.name && (
+                    <div>
+                      <div className="text-sm text-gray-600">Name</div>
+                      <div className="font-medium">{selectedOffer.allegroProduct.name}</div>
+                    </div>
+                  )}
+                  {selectedOffer.allegroProduct.brand && (
+                    <div>
+                      <div className="text-sm text-gray-600">Brand</div>
+                      <div className="font-medium">{selectedOffer.allegroProduct.brand}</div>
+                    </div>
+                  )}
+                  {selectedOffer.allegroProduct.manufacturerCode && (
+                    <div>
+                      <div className="text-sm text-gray-600">Manufacturer Code</div>
+                      <div className="font-medium">{selectedOffer.allegroProduct.manufacturerCode}</div>
+                    </div>
+                  )}
+                  {selectedOffer.allegroProduct.ean && (
+                    <div>
+                      <div className="text-sm text-gray-600">EAN</div>
+                      <div className="font-medium">{selectedOffer.allegroProduct.ean}</div>
+                    </div>
+                  )}
+                  {selectedOffer.allegroProduct.publicationStatus && (
+                    <div>
+                      <div className="text-sm text-gray-600">Publication Status</div>
+                      <div className="font-medium">{selectedOffer.allegroProduct.publicationStatus}</div>
+                    </div>
+                  )}
+                  <div>
+                    <div className="text-sm text-gray-600">AI Co-Created</div>
+                    <div className="font-medium">{selectedOffer.allegroProduct.isAiCoCreated ? 'Yes' : 'No'}</div>
+                  </div>
+                  {selectedOffer.allegroProduct.marketedBeforeGPSR !== null && selectedOffer.allegroProduct.marketedBeforeGPSR !== undefined && (
+                    <div>
+                      <div className="text-sm text-gray-600">Marketed before GPSR</div>
+                      <div className="font-medium">{selectedOffer.allegroProduct.marketedBeforeGPSR ? 'Yes' : 'No'}</div>
+                    </div>
+                  )}
+                </div>
+
+                {selectedOffer.allegroProduct.parameters && selectedOffer.allegroProduct.parameters.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-sm text-gray-600 mb-1">Parameters</div>
+                    <div className="border rounded p-2 max-h-48 overflow-auto text-sm space-y-1">
+                      {selectedOffer.allegroProduct.parameters.map((param) => {
+                        const renderValues = () => {
+                          if (!param.values) return '—';
+                          if (Array.isArray(param.values)) {
+                            return (param.values as unknown[]).map((v) => (typeof v === 'string' ? v : JSON.stringify(v))).join(', ');
+                          }
+                          return typeof param.values === 'string' ? param.values : JSON.stringify(param.values);
+                        };
+                        return (
+                          <div key={`${param.parameterId}-${param.name || ''}`}>
+                            <span className="font-medium">{param.name || param.parameterId}:</span>{' '}
+                            <span>{renderValues()}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
                 {selectedOffer.validationStatus && (
                   <div>
                     <div className="text-sm text-gray-600">Validation Status</div>

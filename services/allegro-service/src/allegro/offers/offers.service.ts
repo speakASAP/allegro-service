@@ -89,6 +89,11 @@ export class OffersService {
         take: limit,
         include: {
           product: true,
+          allegroProduct: {
+            include: {
+              parameters: true,
+            },
+          },
         },
         orderBy: { createdAt: 'desc' },
       }),
@@ -124,6 +129,11 @@ export class OffersService {
       where: { id },
       include: {
         product: true,
+        allegroProduct: {
+          include: {
+            parameters: true,
+          },
+        },
       },
     });
 
@@ -1227,6 +1237,9 @@ export class OffersService {
               });
             }
 
+            const allegroProductId = await this.upsertAllegroProductFromOffer(fullOfferData);
+            const allegroProductId = await this.upsertAllegroProductFromOffer(fullOfferData);
+            const allegroProductId = await this.upsertAllegroProductFromOffer(fullOfferData);
             const offerData = this.extractOfferData(fullOfferData);
             
             // Log before saving to database
@@ -1252,6 +1265,7 @@ export class OffersService {
                 where: { allegroOfferId: allegroOffer.id },
                 data: {
                   ...offerData,
+                  ...(allegroProductId ? { allegroProductId } : {}),
                   syncStatus: 'SYNCED',
                   syncSource: 'ALLEGRO_API',
                   lastSyncedAt: new Date(),
@@ -1295,6 +1309,7 @@ export class OffersService {
               const created = await this.prisma.allegroOffer.create({
                 data: {
                   ...offerData,
+                  ...(allegroProductId ? { allegroProductId } : {}),
                   syncStatus: 'SYNCED',
                   syncSource: 'ALLEGRO_API',
                   lastSyncedAt: new Date(),
@@ -1565,6 +1580,7 @@ export class OffersService {
               deliveryOptions: offerData.deliveryOptions || null,
               paymentOptions: offerData.paymentOptions || null,
               rawData: offerData.rawData || null,
+              ...(allegroProductId ? { allegroProductId } : {}),
               syncStatus: 'SYNCED',
               syncSource: 'ALLEGRO_API',
               lastSyncedAt: new Date(),
@@ -1913,12 +1929,14 @@ export class OffersService {
               where: { allegroOfferId: allegroOffer.id },
               update: {
                 ...offerData,
+                ...(allegroProductId ? { allegroProductId } : {}),
                 syncStatus: 'SYNCED',
                 syncSource: 'SALES_CENTER',
                 lastSyncedAt: new Date(),
               } as any,
               create: {
                 ...offerData,
+                ...(allegroProductId ? { allegroProductId } : {}),
                 syncStatus: 'SYNCED',
                 syncSource: 'SALES_CENTER',
                 lastSyncedAt: new Date(),
@@ -2109,17 +2127,20 @@ export class OffersService {
       
       for (const allegroOffer of offers) {
         try {
+          const allegroProductId = await this.upsertAllegroProductFromOffer(allegroOffer);
           const offerData = this.extractOfferData(allegroOffer);
           const offer = await this.prisma.allegroOffer.upsert({
             where: { allegroOfferId: allegroOffer.id },
             update: {
               ...offerData,
+              ...(allegroProductId ? { allegroProductId } : {}),
               syncStatus: 'SYNCED',
               syncSource: 'SALES_CENTER',
               lastSyncedAt: new Date(),
             } as any,
             create: {
               ...offerData,
+              ...(allegroProductId ? { allegroProductId } : {}),
               syncStatus: 'SYNCED',
               syncSource: 'SALES_CENTER',
               lastSyncedAt: new Date(),
@@ -2186,6 +2207,89 @@ export class OffersService {
 
   private getDefaultCurrency(): string {
     return this.configService.get('PRICE_CURRENCY_TARGET') || 'CZK';
+  }
+
+  /**
+   * Upsert Allegro product (raw productSet) and normalized parameters
+   */
+  private async upsertAllegroProductFromOffer(allegroOffer: any): Promise<string | null> {
+    try {
+      const productSet = Array.isArray(allegroOffer?.productSet) && allegroOffer.productSet.length > 0
+        ? allegroOffer.productSet[0]
+        : null;
+      const product = productSet?.product;
+      if (!product || !product.id) {
+        return null;
+      }
+
+      const parameters = Array.isArray(product.parameters) ? product.parameters : [];
+      const findParamValue = (match: (param: any) => boolean): string | null => {
+        const param = parameters.find(match);
+        if (!param) return null;
+        if (Array.isArray(param.values) && param.values.length > 0) {
+          const first = param.values[0] as any;
+          return typeof first === 'string' ? first : (first?.name || null);
+        }
+        if (typeof param.value === 'string') return param.value;
+        return null;
+      };
+
+      const brand = findParamValue((p) => String(p.id) === '248811' || p.name === 'Značka') || product.brand || null;
+      const manufacturerCode = findParamValue((p) => String(p.id) === '224017' || p.name === 'Kód výrobce') || product.manufacturerCode || null;
+      const ean = findParamValue((p) => String(p.id) === '225693' || p.name === 'EAN (GTIN)') || product.ean || null;
+      const publicationStatus = product.publication?.status || null;
+      const marketedBeforeGPSR = productSet?.marketedBeforeGPSRObligation ?? null;
+      const isAiCoCreated = !!product.isAiCoCreated;
+
+      const baseData = {
+        allegroProductId: String(product.id),
+        name: product.name || null,
+        brand,
+        manufacturerCode,
+        ean,
+        publicationStatus,
+        isAiCoCreated,
+        marketedBeforeGPSR,
+        rawData: productSet,
+      };
+
+      const allegroProduct = await this.prisma.allegroProduct.upsert({
+        where: { allegroProductId: String(product.id) },
+        update: baseData as any,
+        create: baseData as any,
+      });
+
+      if (parameters.length > 0) {
+        await this.prisma.allegroProductParameter.deleteMany({
+          where: { allegroProductId: allegroProduct.id },
+        });
+
+        const paramsData = parameters.map((param: any, index: number) => {
+          const parameterId = param.id ? String(param.id) : (param.name ? `name:${param.name}` : `idx:${index}`);
+          return {
+            allegroProductId: allegroProduct.id,
+            parameterId,
+            name: param.name || null,
+            values: param.values || null,
+            valuesIds: param.valuesIds || null,
+            rangeValue: param.rangeValue || null,
+          };
+        });
+
+        await this.prisma.allegroProductParameter.createMany({
+          data: paramsData as any,
+          skipDuplicates: true,
+        });
+      }
+
+      return allegroProduct.id;
+    } catch (error: any) {
+      this.logger.error('[upsertAllegroProductFromOffer] Failed to upsert Allegro product', {
+        error: error.message,
+        offerId: allegroOffer?.id,
+      });
+      return null;
+    }
   }
 
   /**
