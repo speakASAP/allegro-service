@@ -253,36 +253,42 @@ export class OffersService {
   /**
    * Transform DTO to Allegro API format
    * For PATCH requests, we must include all required fields from existing offer
+   * REQUIRED fields for PATCH: category, images, parameters, sellingMode, stock
    */
   private transformDtoToAllegroFormat(dto: any, existingOffer: any): any {
     const payload: any = {};
+    const rawData = existingOffer.rawData || {};
 
     // Basic fields
     if (dto.title !== undefined) {
       payload.name = dto.title;
-    } else if (existingOffer.rawData?.name) {
-      payload.name = existingOffer.rawData.name;
+    } else if (rawData.name) {
+      payload.name = rawData.name;
+    } else if (existingOffer.title) {
+      payload.name = existingOffer.title;
     }
 
     // Description - DO NOT include in PATCH requests
     // Allegro API's /sale/product-offers endpoint does not accept description field in PATCH requests
     // Description can only be updated via PUT with full offer data, not via PATCH
     // Completely omit description from PATCH payload to avoid 422 errors
-    // if (dto.description !== undefined) {
-    //   // Description updates are not supported via PATCH
-    //   // This would require a full PUT request with complete offer data
-    // }
 
-    // Category - always include (required)
+    // Category - ALWAYS REQUIRED - must be included
     if (dto.categoryId !== undefined) {
       payload.category = { id: dto.categoryId };
-    } else if (existingOffer.rawData?.category?.id) {
-      payload.category = { id: existingOffer.rawData.category.id };
+    } else if (rawData.category?.id) {
+      payload.category = { id: rawData.category.id };
     } else if (existingOffer.categoryId) {
       payload.category = { id: existingOffer.categoryId };
+    } else {
+      // If no category found, this is an error - but we'll log it and try to continue
+      this.logger.warn('[transformDtoToAllegroFormat] Missing category - this may cause 422 error', {
+        offerId: existingOffer.id,
+        allegroOfferId: existingOffer.allegroOfferId,
+      });
     }
 
-    // Selling mode (price) - only include price, not other sellingMode properties
+    // Selling mode (price) - ALWAYS REQUIRED - must be included
     if (dto.price !== undefined || dto.currency !== undefined) {
       payload.sellingMode = {
         price: {
@@ -290,83 +296,120 @@ export class OffersService {
           currency: dto.currency || existingOffer.currency || this.getDefaultCurrency(),
         },
       };
-    } else if (existingOffer.rawData?.sellingMode?.price) {
-      // Only include price, not other sellingMode properties
+    } else if (rawData.sellingMode?.price) {
       payload.sellingMode = {
-        price: existingOffer.rawData.sellingMode.price,
+        price: rawData.sellingMode.price,
       };
+    } else if (existingOffer.price !== undefined) {
+      payload.sellingMode = {
+        price: {
+          amount: String(existingOffer.price),
+          currency: existingOffer.currency || this.getDefaultCurrency(),
+        },
+      };
+    } else {
+      this.logger.warn('[transformDtoToAllegroFormat] Missing sellingMode - this may cause 422 error', {
+        offerId: existingOffer.id,
+        allegroOfferId: existingOffer.allegroOfferId,
+      });
     }
 
-    // Stock - only include available, not other stock properties
+    // Stock - ALWAYS REQUIRED - must be included
     if (dto.stockQuantity !== undefined || dto.quantity !== undefined) {
       const stockQty = dto.stockQuantity !== undefined ? dto.stockQuantity : dto.quantity;
       payload.stock = {
         available: stockQty,
       };
-    } else if (existingOffer.rawData?.stock?.available !== undefined) {
+    } else if (rawData.stock?.available !== undefined) {
       payload.stock = {
-        available: existingOffer.rawData.stock.available,
+        available: rawData.stock.available,
       };
+    } else if (existingOffer.stockQuantity !== undefined) {
+      payload.stock = {
+        available: existingOffer.stockQuantity,
+      };
+    } else if (existingOffer.quantity !== undefined) {
+      payload.stock = {
+        available: existingOffer.quantity,
+      };
+    } else {
+      // Default to 0 if not found
+      payload.stock = {
+        available: 0,
+      };
+      this.logger.warn('[transformDtoToAllegroFormat] Missing stock, defaulting to 0', {
+        offerId: existingOffer.id,
+        allegroOfferId: existingOffer.allegroOfferId,
+      });
     }
 
-    // Images - always include (required by Allegro API)
-    // If updating, use new images; otherwise preserve existing images
-    if (dto.images !== undefined && dto.images.length > 0) {
-      payload.images = dto.images.map((url: string) => ({ url }));
-    } else if (existingOffer.rawData?.images && Array.isArray(existingOffer.rawData.images)) {
-      // Preserve existing images if not updating
-      payload.images = existingOffer.rawData.images;
-    } else if (existingOffer.images && Array.isArray(existingOffer.images)) {
-      // Fallback to images field if rawData.images not available
-      payload.images = existingOffer.images.map((url: string) => ({ url }));
+    // Images - ALWAYS REQUIRED - must have at least one
+    if (dto.images !== undefined && Array.isArray(dto.images) && dto.images.length > 0) {
+      payload.images = dto.images.map((url: string) => ({ url })).filter((img: any) => img.url);
+    } else if (rawData.images && Array.isArray(rawData.images) && rawData.images.length > 0) {
+      payload.images = rawData.images;
+    } else if (existingOffer.images && Array.isArray(existingOffer.images) && existingOffer.images.length > 0) {
+      payload.images = existingOffer.images.map((img: any) => ({
+        url: typeof img === 'string' ? img : img.url || img.path,
+      })).filter((img: any) => img.url);
+    } else {
+      // Images are required - this will cause 422 if missing
+      this.logger.error('[transformDtoToAllegroFormat] Missing images - this will cause 422 error', {
+        offerId: existingOffer.id,
+        allegroOfferId: existingOffer.allegroOfferId,
+      });
     }
 
-    // Parameters/attributes - always include all existing parameters (required)
-    // Merge updated parameters from DTO with existing ones
-    // Check both rawData.parameters and direct parameters (for API responses)
-    const existingParams = existingOffer.rawData?.parameters || 
+    // Parameters/attributes - ALWAYS REQUIRED - must be included (can be empty array)
+    const existingParams = rawData.parameters || 
                           existingOffer.parameters || 
-                          existingOffer.rawData?.product?.parameters || 
+                          rawData.product?.parameters || 
                           [];
     if (dto.attributes !== undefined && Array.isArray(dto.attributes)) {
       // Update specific parameters from DTO
       const updatedParams = dto.attributes.map((attr: any) => ({
-        id: attr.id,
-        values: attr.values,
+        id: String(attr.id || attr.parameterId),
+        values: Array.isArray(attr.values) ? attr.values : [],
       }));
       // Keep non-updated parameters from existing offer
       const otherParams = existingParams.filter((p: any) => 
-        !dto.attributes.some((a: any) => a.id === p.id)
+        !dto.attributes.some((a: any) => String(a.id || a.parameterId) === String(p.id || p.parameterId))
       );
       payload.parameters = [...otherParams, ...updatedParams];
     } else if (existingParams.length > 0) {
-      // Include all existing parameters if not updating
-      payload.parameters = existingParams;
+      // Include all existing parameters
+      payload.parameters = existingParams.map((p: any) => ({
+        id: String(p.id || p.parameterId),
+        values: Array.isArray(p.values) ? p.values : [],
+      }));
+    } else {
+      // Empty array if no parameters
+      payload.parameters = [];
     }
 
-    // Publication status - only include status, not other publication properties
+    // Publication status - include if exists
     if (dto.publicationStatus !== undefined) {
       payload.publication = {
         status: dto.publicationStatus,
       };
-    } else if (existingOffer.rawData?.publication?.status) {
+    } else if (rawData.publication?.status) {
       payload.publication = {
-        status: existingOffer.rawData.publication.status,
+        status: rawData.publication.status,
       };
     }
 
     // Delivery options - include if exists
     if (dto.deliveryOptions !== undefined) {
       payload.delivery = dto.deliveryOptions;
-    } else if (existingOffer.rawData?.delivery) {
-      payload.delivery = existingOffer.rawData.delivery;
+    } else if (rawData.delivery) {
+      payload.delivery = rawData.delivery;
     }
 
     // Payment options - include if exists
     if (dto.paymentOptions !== undefined) {
       payload.payments = dto.paymentOptions;
-    } else if (existingOffer.rawData?.payments) {
-      payload.payments = existingOffer.rawData.payments;
+    } else if (rawData.payments) {
+      payload.payments = rawData.payments;
     }
 
     return payload;
