@@ -432,7 +432,6 @@ export class OffersController {
         timestamp: new Date().toISOString(),
       });
       
-      this.metricsService.incrementCreateRequests();
       return { success: true, data: offer };
     } catch (error: any) {
       const duration = Date.now() - startTime;
@@ -616,12 +615,19 @@ export class OffersController {
     @Query() query: OfferQueryDto,
   ): Promise<{ success: boolean; data: any }> {
     const userId = String(req.user?.id || 'unknown');
+    const requestId = `publish-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const startTime = Date.now();
+    
     try {
-      this.logger.log('[publishAllOffers] Publish all request received', {
+      this.logger.log(`[${requestId}] [publishAllOffers] Publish all request received`, {
         userId,
+        requestId,
         offerIdsProvided: !!body.offerIds,
         offerIdsCount: body.offerIds?.length || 0,
         hasFilters: !!(query.status || query.search || query.categoryId),
+        queryParams: query,
+        bodyKeys: Object.keys(body),
+        timestamp: new Date().toISOString(),
       });
 
       let offerIds: string[] = [];
@@ -629,6 +635,10 @@ export class OffersController {
       if (body.offerIds && body.offerIds.length > 0) {
         // Use provided offer IDs
         offerIds = body.offerIds;
+        this.logger.log(`[${requestId}] [publishAllOffers] Using provided offer IDs`, {
+          offerIdsCount: offerIds.length,
+          firstFewIds: offerIds.slice(0, 5),
+        });
       } else {
         // Use same filters as GET /allegro/offers to get filtered offers
         const where: any = {};
@@ -645,6 +655,11 @@ export class OffersController {
           };
         }
 
+        this.logger.log(`[${requestId}] [publishAllOffers] Fetching offers with filters`, {
+          where,
+          query,
+        });
+
         const offers = await this.offersService.getOffers({
           ...query,
           limit: 1000, // Get all matching offers
@@ -652,9 +667,16 @@ export class OffersController {
         });
 
         offerIds = offers.items.map((offer: any) => offer.id);
+        this.logger.log(`[${requestId}] [publishAllOffers] Fetched offers from database`, {
+          totalOffers: offers.items.length,
+          offerIdsCount: offerIds.length,
+        });
       }
 
       if (offerIds.length === 0) {
+        this.logger.log(`[${requestId}] [publishAllOffers] No offers to publish`, {
+          userId,
+        });
         return {
           success: true,
           data: {
@@ -663,36 +685,85 @@ export class OffersController {
             failed: 0,
             results: [],
             message: 'No offers to publish',
+            requestId,
           },
         };
       }
 
-      this.logger.log('[publishAllOffers] Publishing offers', {
+      this.logger.log(`[${requestId}] [publishAllOffers] Starting async publish operation`, {
         userId,
         offerCount: offerIds.length,
+        offerIds: offerIds.slice(0, 10), // Log first 10
+        requestId,
+        timestamp: new Date().toISOString(),
       });
 
-      const result = await this.offersService.publishOffersToAllegro(userId, offerIds);
+      // Start async processing - return immediately
+      setImmediate(async () => {
+        const asyncStartTime = Date.now();
+        this.logger.log(`[${requestId}] [publishAllOffers] Async processing started`, {
+          userId,
+          offerCount: offerIds.length,
+          requestId,
+          asyncDelay: `${asyncStartTime - startTime}ms`,
+          timestamp: new Date().toISOString(),
+        });
 
-      this.logger.log('[publishAllOffers] Publish completed', {
-        userId,
-        total: result.total,
-        successful: result.successful,
-        failed: result.failed,
+        try {
+          const result = await this.offersService.publishOffersToAllegro(userId, offerIds, requestId);
+
+          const totalDuration = Date.now() - startTime;
+          this.logger.log(`[${requestId}] [publishAllOffers] Async publish completed`, {
+            userId,
+            requestId,
+            total: result.total,
+            successful: result.successful,
+            failed: result.failed,
+            totalDuration: `${totalDuration}ms`,
+            totalDurationSeconds: Math.round(totalDuration / 1000),
+            timestamp: new Date().toISOString(),
+          });
+        } catch (error: any) {
+          const totalDuration = Date.now() - startTime;
+          this.logger.error(`[${requestId}] [publishAllOffers] Async publish failed`, {
+            userId,
+            requestId,
+            error: error.message,
+            errorCode: error.code,
+            errorStack: error.stack,
+            totalDuration: `${totalDuration}ms`,
+            timestamp: new Date().toISOString(),
+          });
+        }
       });
 
-      return { success: true, data: result };
+      // Return immediately with requestId for tracking
+      return {
+        success: true,
+        data: {
+          requestId,
+          status: 'processing',
+          message: `Publishing ${offerIds.length} offers in background. Check logs for progress.`,
+          total: offerIds.length,
+          startedAt: new Date().toISOString(),
+        },
+      };
     } catch (error: any) {
+      const requestDuration = Date.now() - startTime;
       this.metricsService.incrementErrors();
       const errorStatus = error.response?.status || error.status || HttpStatus.INTERNAL_SERVER_ERROR;
       const errorData = error.response?.data || {};
       const errorMessage = errorData.error_description || errorData.error || errorData.message || error.message || 'Failed to publish offers';
 
-      this.logger.error('[publishAllOffers] Failed to publish offers', {
+      this.logger.error(`[${requestId}] [publishAllOffers] Failed to start publish operation`, {
         error: error.message,
         status: errorStatus,
         userId: req.user?.id,
+        requestId,
+        requestDuration: `${requestDuration}ms`,
         errorData: JSON.stringify(errorData, null, 2),
+        errorStack: error.stack,
+        timestamp: new Date().toISOString(),
       });
 
       // Check if error is OAuth-related
@@ -717,6 +788,7 @@ export class OffersController {
             requiresOAuth: isOAuthError,
             oauthSettingsUrl: '/dashboard/settings',
             details: errorData,
+            requestId,
           },
         },
         errorStatus,
