@@ -116,10 +116,10 @@ export class OffersService {
   /**
    * Get offer by ID
    * Called when user clicks "View Details" button on offers page
+   * Optimized: Loads from database only (fast, no Allegro API calls)
    */
   async getOffer(id: string): Promise<any> {
-    this.logger.log('[getOffer] Fetching offer by ID from database for View Details', { offerId: id });
-
+    // Fast path: Load from database only (no Allegro API calls)
     const offer = await this.prisma.allegroOffer.findUnique({
       where: { id },
       include: {
@@ -132,36 +132,16 @@ export class OffersService {
       throw new Error(`Offer with ID ${id} not found`);
     }
 
-    // Log images and description data that will be sent to frontend
-    this.logger.log('[getOffer] Offer fetched from database - Images and Description data', {
-      offerId: id,
-      allegroOfferId: offer.allegroOfferId,
-      title: offer.title?.substring(0, 50),
-      images: {
-        hasDirectImages: !!offer.images,
-        directImagesCount: Array.isArray(offer.images) ? offer.images.length : 0,
-        directImagesUrls: Array.isArray(offer.images) ? offer.images.map((url: string) => url.substring(0, 80)) : [],
-        hasRawDataImages: !!(offer.rawData as any)?.images,
-        rawDataImagesCount: Array.isArray((offer.rawData as any)?.images) ? (offer.rawData as any).images.length : 0,
-        rawDataImagesUrls: Array.isArray((offer.rawData as any)?.images) ? (offer.rawData as any).images.map((img: any) => {
-          const url = typeof img === 'string' ? img : (img.url || img.path || String(img));
-          return url.substring(0, 80);
-        }) : [],
-      },
-      description: {
-        hasDirectDescription: !!offer.description,
-        directDescriptionType: offer.description ? typeof offer.description : 'null',
-        directDescriptionLength: offer.description ? (typeof offer.description === 'string' ? offer.description.length : 'non-string') : 0,
-        directDescriptionPreview: offer.description && typeof offer.description === 'string' ? offer.description.substring(0, 300) : 'N/A',
-        hasRawDataDescription: !!(offer.rawData as any)?.description,
-        rawDataDescriptionType: (offer.rawData as any)?.description ? typeof (offer.rawData as any).description : 'null',
-        rawDataDescriptionLength: (offer.rawData as any)?.description ? (typeof (offer.rawData as any).description === 'string' ? (offer.rawData as any).description.length : 'non-string') : 0,
-        rawDataDescriptionPreview: (offer.rawData as any)?.description && typeof (offer.rawData as any).description === 'string' ? (offer.rawData as any).description.substring(0, 300) : 'N/A',
-      },
-      hasRawData: !!offer.rawData,
-      hasProduct: !!offer.product,
-      rawDataKeys: offer.rawData ? Object.keys(offer.rawData) : [],
-    });
+    // Return immediately (no logging overhead in production)
+    // Logging only in development to avoid performance impact
+    if (process.env.NODE_ENV === 'development') {
+      this.logger.log('[getOffer] Offer fetched from database (fast path)', {
+        offerId: id,
+        allegroOfferId: offer.allegroOfferId,
+        hasRawData: !!offer.rawData,
+        hasProduct: !!offer.product,
+      });
+    }
 
     return offer;
   }
