@@ -218,25 +218,37 @@ const OffersPage: React.FC = () => {
   }, [allOffers, searchQuery, statusFilter, categoryFilter, page, limit]);
 
   const handleViewDetails = async (offer: Offer) => {
+    // Use existing offer data immediately (fast response)
     setSelectedOffer(offer);
     setShowDetailModal(true);
     setError(null);
-    setLoadingDetail(true);
     
-    // Always fetch full offer details to ensure we have rawData
-    try {
-      const response = await api.get(`/allegro/offers/${offer.id}`);
-      if (response.data.success && response.data.data) {
-        setSelectedOffer(response.data.data);
-      } else {
-        setError('Failed to load offer details: Invalid response');
+    // Only fetch if we don't have rawData (optimization: skip fetch if data is already complete)
+    const rawData = offer.rawData as AllegroRawData | undefined;
+    const hasCompleteData = rawData && 
+      (offer.description || rawData.description) &&
+      (offer.images || rawData.images);
+    
+    if (!hasCompleteData) {
+      // Only fetch if data is incomplete
+      setLoadingDetail(true);
+      try {
+        const response = await api.get<{ success: boolean; data: Offer }>(`/allegro/offers/${offer.id}`);
+        if (response.data.success && response.data.data) {
+          setSelectedOffer(response.data.data);
+        } else {
+          setError('Failed to load offer details: Invalid response');
+        }
+      } catch (err) {
+        console.error('Failed to load offer details', err);
+        const axiosError = err as AxiosError & { response?: { data?: { error?: { message?: string } } } };
+        const errorMessage = axiosError.response?.data?.error?.message || (err as Error).message || 'Failed to load offer details';
+        setError(errorMessage);
+      } finally {
+        setLoadingDetail(false);
       }
-    } catch (err) {
-      console.error('Failed to load offer details', err);
-      const axiosError = err as AxiosError & { response?: { data?: { error?: { message?: string } } } };
-      const errorMessage = axiosError.response?.data?.error?.message || (err as Error).message || 'Failed to load offer details';
-      setError(errorMessage);
-    } finally {
+    } else {
+      // Data is already complete, no need to fetch
       setLoadingDetail(false);
     }
   };
