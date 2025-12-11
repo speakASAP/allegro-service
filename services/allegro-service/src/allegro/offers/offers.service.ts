@@ -159,27 +159,91 @@ export class OffersService {
   /**
    * Create offer
    */
-  async createOffer(dto: any): Promise<any> {
-    this.logger.log('Creating Allegro offer', { productId: dto.productId });
+  async createOffer(dto: any, userId?: string): Promise<any> {
+    this.logger.log('Creating Allegro offer', { 
+      productId: dto.productId, 
+      allegroProductId: dto.allegroProductId,
+      syncToAllegro: dto.syncToAllegro !== false,
+    });
 
-    // Create offer via Allegro API
-    const allegroOffer = await this.allegroApi.createOffer(dto);
+    // Link to AllegroProduct if allegroProductId is provided
+    let allegroProductId: string | null = null;
+    if (dto.allegroProductId) {
+      const prismaAny = this.prisma as any;
+      const product = await prismaAny.allegroProduct.findUnique({
+        where: { id: dto.allegroProductId },
+      });
+      if (product) {
+        allegroProductId = product.id;
+      }
+    }
+
+    // If syncToAllegro is false, create local-only offer
+    if (dto.syncToAllegro === false) {
+      const offer = await this.prisma.allegroOffer.create({
+        data: {
+          allegroOfferId: dto.allegroOfferId || `local-${crypto.randomUUID()}`,
+          productId: dto.productId || null,
+          allegroProductId: allegroProductId || null,
+          title: dto.title,
+          description: dto.description || null,
+          categoryId: dto.categoryId || null,
+          price: dto.price || 0,
+          quantity: dto.quantity || 0,
+          stockQuantity: dto.quantity || 0,
+          currency: dto.currency || this.getDefaultCurrency(),
+          status: dto.status || 'ACTIVE',
+          publicationStatus: dto.publicationStatus || 'INACTIVE',
+          images: dto.images || null,
+          syncStatus: 'PENDING',
+          syncSource: 'MANUAL',
+          lastSyncedAt: new Date(),
+          rawData: dto.rawData || null,
+        } as any,
+      });
+
+      return offer;
+    }
+
+    // Create offer via Allegro API (if syncToAllegro is true or not specified)
+    let allegroOffer: any;
+    try {
+      allegroOffer = await this.allegroApi.createOffer(dto);
+    } catch (error: any) {
+      this.logger.error('Failed to create offer via Allegro API', {
+        error: error.message,
+        dto: { ...dto, description: dto.description?.substring(0, 100) },
+      });
+      throw error;
+    }
+
+    // Extract product from created offer if available
+    if (allegroOffer?.productSet?.[0]?.product?.id && !allegroProductId) {
+      const createdProductId = await this.upsertAllegroProductFromOffer(allegroOffer);
+      if (createdProductId) {
+        allegroProductId = createdProductId;
+      }
+    }
 
     // Save to database
     const offer = await this.prisma.allegroOffer.create({
       data: {
         allegroOfferId: allegroOffer.id,
-        productId: dto.productId,
+        productId: dto.productId || null,
+        allegroProductId: allegroProductId || null,
         title: dto.title,
-        description: dto.description,
+        description: dto.description || null,
         categoryId: dto.categoryId,
         price: dto.price,
         quantity: dto.quantity,
         stockQuantity: dto.quantity,
+        currency: allegroOffer.sellingMode?.price?.currency || dto.currency || this.getDefaultCurrency(),
         status: 'ACTIVE',
+        publicationStatus: allegroOffer.publication?.status || 'INACTIVE',
         syncStatus: 'SYNCED',
         syncSource: 'MANUAL',
         lastSyncedAt: new Date(),
+        rawData: allegroOffer || null,
       } as any,
     });
 

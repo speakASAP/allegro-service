@@ -160,6 +160,22 @@ const OffersPage: React.FC = () => {
   const [syncingToAllegro, setSyncingToAllegro] = useState(false);
   const [syncingFromAllegro, setSyncingFromAllegro] = useState(false);
   
+  // Create offer states
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [creatingOffer, setCreatingOffer] = useState(false);
+  const [products, setProducts] = useState<Array<{ id: string; allegroProductId: string; name?: string; brand?: string }>>([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [newOffer, setNewOffer] = useState({
+    title: '',
+    description: '',
+    categoryId: '',
+    price: '',
+    quantity: '',
+    currency: 'CZK',
+    allegroProductId: '',
+    syncToAllegro: false,
+  });
+  
   // Load saved filters from localStorage
   const loadSavedFilters = (): { statusFilter: string; searchQuery: string; categoryFilter: string; page: number } => {
     try {
@@ -851,6 +867,71 @@ const OffersPage: React.FC = () => {
     );
   };
 
+  // Load products for selection
+  const loadProducts = useCallback(async () => {
+    setLoadingProducts(true);
+    try {
+      const response = await api.get('/allegro/products', { params: { limit: 100, page: 1 } });
+      if (response.data.success) {
+        const items = response.data.data.items || [];
+        setProducts(items.map((p: any) => ({ id: p.id, allegroProductId: p.allegroProductId, name: p.name, brand: p.brand })));
+      }
+    } catch (err) {
+      console.error('Failed to load products', err);
+    } finally {
+      setLoadingProducts(false);
+    }
+  }, []);
+
+  // Open create offer modal
+  const openCreateOffer = () => {
+    setNewOffer({
+      title: '',
+      description: '',
+      categoryId: '',
+      price: '',
+      quantity: '',
+      currency: 'CZK',
+      allegroProductId: '',
+      syncToAllegro: false,
+    });
+    setShowCreateModal(true);
+    loadProducts();
+  };
+
+  // Create offer
+  const handleCreateOffer = async () => {
+    if (!newOffer.title.trim()) {
+      setError('Title is required');
+      return;
+    }
+
+    setCreatingOffer(true);
+    setError(null);
+    try {
+      const payload: any = {
+        title: newOffer.title,
+        description: newOffer.description || undefined,
+        categoryId: newOffer.categoryId || undefined,
+        price: newOffer.price ? parseFloat(newOffer.price) : undefined,
+        quantity: newOffer.quantity ? parseInt(newOffer.quantity) : undefined,
+        currency: newOffer.currency,
+        allegroProductId: newOffer.allegroProductId || undefined,
+        syncToAllegro: newOffer.syncToAllegro,
+      };
+
+      await api.post('/allegro/offers', payload);
+      setShowCreateModal(false);
+      await loadAllOffers();
+    } catch (err) {
+      console.error('Failed to create offer', err);
+      const axiosErr = err as AxiosError & { serviceErrorMessage?: string };
+      setError(axiosErr.serviceErrorMessage || axiosErr.message || 'Failed to create offer');
+    } finally {
+      setCreatingOffer(false);
+    }
+  };
+
   if (loading && offers.length === 0) {
     return <div>Loading offers...</div>;
   }
@@ -859,8 +940,11 @@ const OffersPage: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Offers</h2>
-        <div className="text-sm text-gray-600">
-          Total: {total} offers
+        <div className="flex items-center gap-4">
+          <div className="text-sm text-gray-600">
+            Total: {total} offers
+          </div>
+          <Button onClick={openCreateOffer}>Add Offer</Button>
         </div>
       </div>
 
@@ -1537,6 +1621,110 @@ const OffersPage: React.FC = () => {
             )}
           </div>
         ) : null}
+      </Modal>
+
+      {/* Create Offer Modal */}
+      <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} title="Create Offer">
+        <div className="space-y-4">
+          {error && <div className="text-red-600 text-sm">{error}</div>}
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+              <Input
+                value={newOffer.title}
+                onChange={(e) => setNewOffer({ ...newOffer, title: e.target.value })}
+                placeholder="Offer title"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Category ID</label>
+              <Input
+                value={newOffer.categoryId}
+                onChange={(e) => setNewOffer({ ...newOffer, categoryId: e.target.value })}
+                placeholder="Category ID"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Price</label>
+              <Input
+                type="number"
+                value={newOffer.price}
+                onChange={(e) => setNewOffer({ ...newOffer, price: e.target.value })}
+                placeholder="0.00"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+              <Input
+                type="number"
+                value={newOffer.quantity}
+                onChange={(e) => setNewOffer({ ...newOffer, quantity: e.target.value })}
+                placeholder="1"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                value={newOffer.currency}
+                onChange={(e) => setNewOffer({ ...newOffer, currency: e.target.value })}
+              >
+                <option value="CZK">CZK</option>
+                <option value="PLN">PLN</option>
+                <option value="EUR">EUR</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Product</label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                value={newOffer.allegroProductId}
+                onChange={(e) => setNewOffer({ ...newOffer, allegroProductId: e.target.value })}
+                disabled={loadingProducts}
+              >
+                <option value="">None</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name || p.brand || p.allegroProductId}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <textarea
+              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              rows={4}
+              value={newOffer.description}
+              onChange={(e) => setNewOffer({ ...newOffer, description: e.target.value })}
+              placeholder="Offer description"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="syncToAllegro"
+              checked={newOffer.syncToAllegro}
+              onChange={(e) => setNewOffer({ ...newOffer, syncToAllegro: e.target.checked })}
+            />
+            <label htmlFor="syncToAllegro" className="text-sm text-gray-700">
+              Sync to Allegro API (if unchecked, creates local-only offer)
+            </label>
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setShowCreateModal(false)} disabled={creatingOffer}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateOffer} disabled={creatingOffer}>
+              {creatingOffer ? 'Creating...' : 'Create Offer'}
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );
