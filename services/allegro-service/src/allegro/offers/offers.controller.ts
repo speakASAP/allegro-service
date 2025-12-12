@@ -463,7 +463,7 @@ export class OffersController {
     });
 
     try {
-      const offer = await this.offersService.createOffer(dto, userId);
+    const offer = await this.offersService.createOffer(dto, userId);
       const duration = Date.now() - startTime;
       
       this.logger.log(`[${requestId}] [createOffer] Offer created successfully`, {
@@ -475,7 +475,7 @@ export class OffersController {
         timestamp: new Date().toISOString(),
       });
       
-      return { success: true, data: offer };
+    return { success: true, data: offer };
     } catch (error: any) {
       const duration = Date.now() - startTime;
       this.metricsService.incrementErrors();
@@ -557,13 +557,13 @@ export class OffersController {
         userId,
         offerId: id,
       });
-      const result = await this.offersService.syncOfferFromAllegro(id, userId);
+    const result = await this.offersService.syncOfferFromAllegro(id, userId);
       this.logger.log('Offer synced from Allegro successfully', {
         userId,
         offerId: id,
         allegroOfferId: result?.allegroOfferId,
       });
-      return { success: true, data: result };
+    return { success: true, data: result };
     } catch (error: any) {
       this.metricsService.incrementErrors();
       const errorStatus = error.response?.status || error.status || HttpStatus.INTERNAL_SERVER_ERROR;
