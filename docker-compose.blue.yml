@@ -1,8 +1,8 @@
 services:
-  backend:
+  api-gateway:
     build:
       context: .
-      dockerfile: ./services/api-gateway/Dockerfile
+      dockerfile: services/api-gateway/Dockerfile
     container_name: allegro-api-gateway-blue
     ports:
       - "${API_GATEWAY_PORT:-3411}:3411"

@@ -1,5 +1,5 @@
 services:
-  backend:
+  api-gateway:
     build:
       context: .
       dockerfile: services/api-gateway/Dockerfile
