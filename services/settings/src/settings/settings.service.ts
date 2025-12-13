@@ -189,17 +189,6 @@ export class SettingsService {
       this.logger.log('SettingsService.getSettings: No Client Secret in database', { userId });
     }
 
-    this.logger.log('SettingsService.getSettings: Returning result', {
-      userId,
-      resultKeys: Object.keys(result),
-      hasClientId: !!result.allegroClientId,
-      hasClientSecret: !!result.allegroClientSecret,
-      clientSecretLength: result.allegroClientSecret?.length,
-      hasDecryptionError: !!result._allegroClientSecretDecryptionError,
-    });
-
-    return result;
-
     // Decrypt API keys in supplier configs
     if (result.supplierConfigs && Array.isArray(result.supplierConfigs)) {
       result.supplierConfigs = result.supplierConfigs.map((config: any) => {
@@ -214,6 +203,39 @@ export class SettingsService {
         return config;
       });
     }
+
+    // Add OAuth status to the result (from database, no API call needed)
+    if (result.allegroAccessToken) {
+      result.oauthStatus = {
+        authorized: true,
+        expiresAt: result.allegroTokenExpiresAt 
+          ? (result.allegroTokenExpiresAt instanceof Date 
+              ? result.allegroTokenExpiresAt.toISOString() 
+              : result.allegroTokenExpiresAt)
+          : undefined,
+        scopes: result.allegroTokenScopes || undefined,
+      };
+    } else {
+      result.oauthStatus = {
+        authorized: false,
+      };
+    }
+
+    // Don't expose sensitive OAuth tokens in response
+    delete result.allegroAccessToken;
+    delete result.allegroRefreshToken;
+    delete result.allegroOAuthState;
+    delete result.allegroOAuthCodeVerifier;
+
+    this.logger.log('SettingsService.getSettings: Returning result', {
+      userId,
+      resultKeys: Object.keys(result),
+      hasClientId: !!result.allegroClientId,
+      hasClientSecret: !!result.allegroClientSecret,
+      clientSecretLength: result.allegroClientSecret?.length,
+      hasDecryptionError: !!result._allegroClientSecretDecryptionError,
+      oauthAuthorized: result.oauthStatus?.authorized,
+    });
 
     return result;
   }
