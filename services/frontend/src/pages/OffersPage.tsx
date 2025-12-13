@@ -147,7 +147,7 @@ interface Offer {
 
 const OffersPage: React.FC = () => {
   const [offers, setOffers] = useState<Offer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Start as false to render immediately
   const [error, setError] = useState<string | null>(null);
   const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -227,7 +227,7 @@ const OffersPage: React.FC = () => {
 
   // Server-side filtering with pagination (fast, only loads what's needed)
   const loadOffers = useCallback(async () => {
-    setLoading(true);
+    setLoading(true); // Set loading only during the API call
     try {
       const params: any = {
         limit,
@@ -1027,9 +1027,8 @@ const OffersPage: React.FC = () => {
     }
   };
 
-  if (loading && offers.length === 0) {
-    return <div>Loading offers...</div>;
-  }
+  // Page renders immediately, no blocking loading screen
+  // Loading state is used for showing loading indicators in the UI, not blocking render
 
   return (
     <div className="space-y-6">
