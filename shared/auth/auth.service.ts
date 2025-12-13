@@ -78,7 +78,7 @@ export class AuthService {
         1000,
       );
 
-      this.resilienceMonitor.recordCall('auth-service', true);
+      this.resilienceMonitor.recordCall('auth-microservice', true);
 
       this.logger.log(`User registered successfully`, {
         email: dto.email,
@@ -87,7 +87,7 @@ export class AuthService {
 
       return response as AuthResponse;
     } catch (error: any) {
-      this.resilienceMonitor.recordCall('auth-service', false);
+      this.resilienceMonitor.recordCall('auth-microservice', false);
 
       this.logger.error('Failed to register user', {
         error: error.message,
@@ -112,7 +112,7 @@ export class AuthService {
         1000,
       );
 
-      this.resilienceMonitor.recordCall('auth-service', true);
+      this.resilienceMonitor.recordCall('auth-microservice', true);
 
       this.logger.log(`User logged in successfully`, {
         email: dto.email,
@@ -121,7 +121,7 @@ export class AuthService {
 
       return response as AuthResponse;
     } catch (error: any) {
-      this.resilienceMonitor.recordCall('auth-service', false);
+      this.resilienceMonitor.recordCall('auth-microservice', false);
 
       this.logger.error('Failed to login user', {
         error: error.message,
@@ -174,10 +174,10 @@ export class AuthService {
         retryDelay,
       );
 
-      this.resilienceMonitor.recordCall('auth-service', true);
+      this.resilienceMonitor.recordCall('auth-microservice', true);
       return response as ValidateTokenResponse;
     } catch (error: any) {
-      this.resilienceMonitor.recordCall('auth-service', false);
+      this.resilienceMonitor.recordCall('auth-microservice', false);
 
       // Log the actual error to help debug token validation issues
       this.logger.error('Failed to validate token', {
@@ -211,10 +211,10 @@ export class AuthService {
         retryDelay,
       );
 
-      this.resilienceMonitor.recordCall('auth-service', true);
+      this.resilienceMonitor.recordCall('auth-microservice', true);
       return response as AuthResponse;
     } catch (error: any) {
-      this.resilienceMonitor.recordCall('auth-service', false);
+      this.resilienceMonitor.recordCall('auth-microservice', false);
 
       this.logger.error('Failed to refresh token', {
         error: error.message,
