@@ -33,7 +33,7 @@ interface Settings {
 
 const SettingsPage: React.FC = () => {
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Start as false to render immediately
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -46,15 +46,16 @@ const SettingsPage: React.FC = () => {
   const [newSupplierKey, setNewSupplierKey] = useState('');
   const [showAddSupplier, setShowAddSupplier] = useState(false);
 
-  // OAuth state
+  // OAuth state - initialize immediately so page can render
   const [oauthStatus, setOauthStatus] = useState<{
     authorized: boolean;
     expiresAt?: string;
     scopes?: string;
-  } | null>(null);
+  }>({ authorized: false }); // Initialize with default value
   const [oauthLoading, setOauthLoading] = useState(false);
 
   useEffect(() => {
+    // Load settings in background (non-blocking)
     loadSettings();
 
     // Check if returning from OAuth callback
@@ -66,6 +67,7 @@ const SettingsPage: React.FC = () => {
   }, []);
 
   const loadSettings = async () => {
+    setLoading(true); // Set loading only during the API call
     try {
       const response = await api.get('/settings');
       if (response.data.success) {
@@ -439,9 +441,7 @@ const SettingsPage: React.FC = () => {
       {/* OAuth Authorization */}
       <Card title="OAuth Authorization">
         <div className="space-y-4">
-          {oauthStatus === null ? (
-            <p className="text-gray-600">Loading OAuth status...</p>
-          ) : oauthStatus.authorized ? (
+          {oauthStatus.authorized ? (
             <div className="space-y-3">
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 bg-green-500 rounded-full"></div>
