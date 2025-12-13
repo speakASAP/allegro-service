@@ -25,10 +25,16 @@ export class GatewayService {
     private readonly configService: ConfigService,
     loggerService: LoggerService,
   ) {
-    // Create HTTP and HTTPS agents with keep-alive to reuse connections
-    // These are shared across all requests to eliminate connection delays
+    // Use the agents from HttpModule configuration (created in GatewayModule)
+    // These are already configured with keep-alive and connection pooling
     const agentStartTime = Date.now();
-    this.httpAgent = new HttpAgent({
+    
+    // Get agents from HttpModule if they exist, otherwise create new ones
+    const existingHttpAgent = this.httpService.axiosRef.defaults.httpAgent as HttpAgent;
+    const existingHttpsAgent = this.httpService.axiosRef.defaults.httpsAgent as HttpsAgent;
+    
+    // Create agents with aggressive keep-alive settings to prevent connection delays
+    this.httpAgent = existingHttpAgent || new HttpAgent({
       keepAlive: true,
       keepAliveMsecs: 1000,
       maxSockets: 50,
@@ -36,7 +42,7 @@ export class GatewayService {
       timeout: 60000,
     });
     
-    this.httpsAgent = new HttpsAgent({
+    this.httpsAgent = existingHttpsAgent || new HttpsAgent({
       keepAlive: true,
       keepAliveMsecs: 1000,
       maxSockets: 50,
@@ -44,7 +50,7 @@ export class GatewayService {
       timeout: 60000,
     });
     
-    // Set agents on the HttpService's Axios instance defaults
+    // Ensure agents are set on the HttpService's Axios instance defaults
     // This ensures all requests use keep-alive agents
     this.httpService.axiosRef.defaults.httpAgent = this.httpAgent;
     this.httpService.axiosRef.defaults.httpsAgent = this.httpsAgent;
