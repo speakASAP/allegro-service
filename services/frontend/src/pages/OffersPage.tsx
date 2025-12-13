@@ -1033,7 +1033,7 @@ const OffersPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Offers</h2>
+        <h2 className="text-2xl font-bold">Offers{loading && <span className="ml-2 text-sm text-gray-500">(Loading...)</span>}</h2>
         <div className="flex items-center gap-4">
           <div className="text-sm text-gray-600">
             Total: {total} offers
