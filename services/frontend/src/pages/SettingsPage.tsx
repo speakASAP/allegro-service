@@ -60,15 +60,8 @@ const SettingsPage: React.FC = () => {
     // Check if returning from OAuth callback
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('oauth_refresh') === 'true') {
-      // Refresh OAuth status after settings load
-      loadSettings().then(() => {
-        loadOAuthStatus(); // Optional background refresh
-      });
       // Clean up URL
       window.history.replaceState({}, '', window.location.pathname);
-    } else {
-      // Load OAuth status in background (non-blocking)
-      loadOAuthStatus();
     }
   }, []);
 
@@ -83,6 +76,9 @@ const SettingsPage: React.FC = () => {
         // Set OAuth status from settings response (from database, instant)
         if (data.oauthStatus) {
           setOauthStatus(data.oauthStatus);
+        } else {
+          // If oauthStatus is not in response, set as not authorized
+          setOauthStatus({ authorized: false });
         }
         
         // Debug logging
