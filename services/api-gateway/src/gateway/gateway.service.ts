@@ -120,6 +120,9 @@ export class GatewayService {
     // Set to 10 minutes (600000ms) to be safe
     const timeout = isPublishAll ? 600000 : (isBulkOperation ? 120000 : defaultTimeout);
     
+    // Determine if URL is HTTPS or HTTP to use correct agent
+    const isHttps = url.startsWith('https://');
+    
     const config: AxiosRequestConfig = {
       headers: {
         'Content-Type': 'application/json',
@@ -128,6 +131,10 @@ export class GatewayService {
       timeout,
       maxRedirects: followRedirects ? 5 : 0,
       validateStatus: (status) => status >= 200 && status < 400, // Accept redirects
+      // Explicitly use the agents configured in HttpModule
+      // HttpService should inherit these, but explicitly setting ensures they're used
+      ...(isHttps ? {} : { httpAgent: this.httpService.axiosRef.defaults.httpAgent }),
+      ...(isHttps ? { httpsAgent: this.httpService.axiosRef.defaults.httpsAgent } : {}),
     };
 
     // Log request details
