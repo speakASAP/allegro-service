@@ -154,11 +154,19 @@ export class GatewayService {
       validateStatus: (status) => status >= 200 && status < 400, // Accept redirects
       // Explicitly use keep-alive agents to reuse connections
       // This eliminates the 17-second delay on first connection
-      ...(isHttps ? { httpsAgent: this.httpsAgent } : { httpAgent: this.httpAgent }),
+      httpAgent: this.httpAgent,
+      httpsAgent: this.httpsAgent,
     };
 
     // Log request details
     const requestId = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Log agent usage for debugging
+    this.logger.debug(`[${requestId}] Using keep-alive agents for ${url}`, {
+      hasHttpAgent: !!config.httpAgent,
+      hasHttpsAgent: !!config.httpsAgent,
+      isHttps,
+    });
     
     // Log timeout configuration for debugging bulk operations
     if (isBulkOperation) {
