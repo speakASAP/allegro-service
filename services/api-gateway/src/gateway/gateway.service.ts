@@ -49,6 +49,123 @@ export class GatewayService {
     this.httpService.axiosRef.defaults.httpAgent = this.httpAgent;
     this.httpService.axiosRef.defaults.httpsAgent = this.httpsAgent;
     
+    // Add request interceptor to log when Axios actually sends the request
+    this.httpService.axiosRef.interceptors.request.use(
+      (config) => {
+        const configAny = config as any;
+        const requestId = configAny.metadata?.requestId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const timestamp = new Date().toISOString();
+        const url = config.url || '';
+        const method = config.method?.toUpperCase() || 'UNKNOWN';
+        
+        // Store request start time in config metadata
+        if (!configAny.metadata) {
+          configAny.metadata = {};
+        }
+        configAny.metadata.requestId = requestId;
+        configAny.metadata.requestStartTime = Date.now();
+        configAny.metadata.requestStartTimestamp = timestamp;
+        
+        console.log(`[${timestamp}] [TIMING] Axios Request Interceptor: Request being sent`, {
+          requestId,
+          method,
+          url: config.baseURL ? `${config.baseURL}${url}` : url,
+          fullUrl: config.url,
+          baseURL: config.baseURL,
+          hasHttpAgent: !!config.httpAgent,
+          hasHttpsAgent: !!config.httpsAgent,
+          httpAgentSockets: this.httpAgent.sockets ? Object.keys(this.httpAgent.sockets).length : 0,
+          httpAgentFreeSockets: this.httpAgent.freeSockets ? Object.keys(this.httpAgent.freeSockets).length : 0,
+          httpAgentRequests: this.httpAgent.requests ? Object.keys(this.httpAgent.requests).length : 0,
+          httpsAgentSockets: this.httpsAgent.sockets ? Object.keys(this.httpsAgent.sockets).length : 0,
+          httpsAgentFreeSockets: this.httpsAgent.freeSockets ? Object.keys(this.httpsAgent.freeSockets).length : 0,
+          httpsAgentRequests: this.httpsAgent.requests ? Object.keys(this.httpsAgent.requests).length : 0,
+        });
+        this.sharedLogger.log(`[${timestamp}] [TIMING] Axios Request Interceptor: Request being sent`, {
+          requestId,
+          method,
+          url: config.baseURL ? `${config.baseURL}${url}` : url,
+        });
+        
+        return config;
+      },
+      (error) => {
+        const timestamp = new Date().toISOString();
+        console.error(`[${timestamp}] [TIMING] Axios Request Interceptor: Error`, {
+          error: error.message,
+          errorCode: error.code,
+        });
+        this.sharedLogger.error(`[${timestamp}] [TIMING] Axios Request Interceptor: Error`, {
+          error: error.message,
+          errorCode: error.code,
+        });
+        return Promise.reject(error);
+      },
+    );
+    
+    // Add response interceptor to log when Axios receives the response
+    this.httpService.axiosRef.interceptors.response.use(
+      (response) => {
+        const configAny = response.config as any;
+        const requestId = configAny.metadata?.requestId || 'unknown';
+        const requestStartTime = configAny.metadata?.requestStartTime;
+        const timestamp = new Date().toISOString();
+        const duration = requestStartTime ? Date.now() - requestStartTime : null;
+        
+        console.log(`[${timestamp}] [TIMING] Axios Response Interceptor: Response received`, {
+          requestId,
+          status: response.status,
+          statusText: response.statusText,
+          url: response.config.url,
+          method: response.config.method?.toUpperCase(),
+          duration: duration ? `${duration}ms` : 'unknown',
+          durationMs: duration,
+          timeSinceRequestSent: duration,
+          httpAgentSockets: this.httpAgent.sockets ? Object.keys(this.httpAgent.sockets).length : 0,
+          httpAgentFreeSockets: this.httpAgent.freeSockets ? Object.keys(this.httpAgent.freeSockets).length : 0,
+          httpAgentRequests: this.httpAgent.requests ? Object.keys(this.httpAgent.requests).length : 0,
+          httpsAgentSockets: this.httpsAgent.sockets ? Object.keys(this.httpsAgent.sockets).length : 0,
+          httpsAgentFreeSockets: this.httpsAgent.freeSockets ? Object.keys(this.httpsAgent.freeSockets).length : 0,
+          httpsAgentRequests: this.httpsAgent.requests ? Object.keys(this.httpsAgent.requests).length : 0,
+        });
+        this.sharedLogger.log(`[${timestamp}] [TIMING] Axios Response Interceptor: Response received`, {
+          requestId,
+          status: response.status,
+          duration: duration ? `${duration}ms` : 'unknown',
+          durationMs: duration,
+        });
+        
+        return response;
+      },
+      (error) => {
+        const configAny = error.config as any;
+        const requestId = configAny?.metadata?.requestId || 'unknown';
+        const requestStartTime = configAny?.metadata?.requestStartTime;
+        const timestamp = new Date().toISOString();
+        const duration = requestStartTime ? Date.now() - requestStartTime : null;
+        
+        console.error(`[${timestamp}] [TIMING] Axios Response Interceptor: Error`, {
+          requestId,
+          error: error.message,
+          errorCode: error.code,
+          status: error.response?.status,
+          url: error.config?.url,
+          method: error.config?.method?.toUpperCase(),
+          duration: duration ? `${duration}ms` : 'unknown',
+          durationMs: duration,
+          timeSinceRequestSent: duration,
+        });
+        this.sharedLogger.error(`[${timestamp}] [TIMING] Axios Response Interceptor: Error`, {
+          requestId,
+          error: error.message,
+          errorCode: error.code,
+          duration: duration ? `${duration}ms` : 'unknown',
+          durationMs: duration,
+        });
+        return Promise.reject(error);
+      },
+    );
+    
     this.sharedLogger = loggerService;
     this.sharedLogger.setContext('GatewayService');
     
@@ -164,22 +281,30 @@ export class GatewayService {
     // Determine if URL is HTTPS or HTTP to use correct agent
     const isHttps = url.startsWith('https://');
     
-    const config: AxiosRequestConfig = {
-      headers: {
-        'Content-Type': 'application/json',
-        ...headers,
-      },
-      timeout,
-      maxRedirects: followRedirects ? 5 : 0,
-      validateStatus: (status) => status >= 200 && status < 400, // Accept redirects
-      // Explicitly use keep-alive agents to reuse connections
-      // This eliminates the 17-second delay on first connection
-      httpAgent: this.httpAgent,
-      httpsAgent: this.httpsAgent,
-    };
-
-    // Log request details
+    // Generate request ID for tracking (must be before config to use in metadata)
     const requestId = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+      const config: AxiosRequestConfig = {
+        headers: {
+          'Content-Type': 'application/json',
+          ...headers,
+        },
+        timeout,
+        maxRedirects: followRedirects ? 5 : 0,
+        validateStatus: (status) => status >= 200 && status < 400, // Accept redirects
+        // Explicitly use keep-alive agents to reuse connections
+        // This eliminates the 17-second delay on first connection
+        httpAgent: this.httpAgent,
+        httpsAgent: this.httpsAgent,
+        // Pass metadata to interceptors
+        metadata: {
+          requestId,
+          serviceName,
+          method,
+          url,
+          path,
+        },
+      } as any; // TypeScript doesn't know about metadata, but it works at runtime
     
     // Log agent usage and connection details for debugging
     const agentCheckTime = Date.now();
@@ -292,30 +417,108 @@ export class GatewayService {
     try {
       let response;
       const axiosMethodStartTime = Date.now();
+      
+      // Extract hostname for DNS timing
+      const urlObj = new URL(url);
+      const hostname = urlObj.hostname;
+      const port = urlObj.port || (url.startsWith('https') ? '443' : '80');
+      
       console.log(`[${new Date().toISOString()}] [TIMING] GatewayService: About to call Axios ${method} ${url}`, {
         requestId,
         timeSinceRequestStart: axiosMethodStartTime - startTime,
+        hostname,
+        port,
       });
+      
+      console.log(`[${new Date().toISOString()}] [TIMING] GatewayService: About to create Axios promise ${method} ${url}`, {
+        requestId,
+        timeSinceRequestStart: axiosMethodStartTime - startTime,
+        hostname,
+        port,
+        hasHttpAgent: !!config.httpAgent,
+        hasHttpsAgent: !!config.httpsAgent,
+        agentMaxSockets: config.httpAgent ? (config.httpAgent as any).maxSockets : (config.httpsAgent ? (config.httpsAgent as any).maxSockets : 'N/A'),
+      });
+      
+      // Create the promise and immediately log
+      const promiseCreationTime = Date.now();
+      let axiosPromise;
       
       switch (method.toUpperCase()) {
         case 'GET':
-          response = await firstValueFrom(this.httpService.get(url, config));
+          axiosPromise = firstValueFrom(this.httpService.get(url, config));
           break;
         case 'POST':
-          response = await firstValueFrom(this.httpService.post(url, body, config));
+          axiosPromise = firstValueFrom(this.httpService.post(url, body, config));
           break;
         case 'PUT':
-          response = await firstValueFrom(this.httpService.put(url, body, config));
+          axiosPromise = firstValueFrom(this.httpService.put(url, body, config));
           break;
         case 'DELETE':
-          response = await firstValueFrom(this.httpService.delete(url, config));
+          axiosPromise = firstValueFrom(this.httpService.delete(url, config));
           break;
         case 'PATCH':
-          response = await firstValueFrom(this.httpService.patch(url, body, config));
+          axiosPromise = firstValueFrom(this.httpService.patch(url, body, config));
           break;
         default:
           throw new Error(`Unsupported method: ${method}`);
       }
+      
+      const promiseCreatedTime = Date.now();
+      const promiseCreationDuration = promiseCreatedTime - promiseCreationTime;
+      console.log(`[${new Date().toISOString()}] [TIMING] GatewayService: Axios promise created (${promiseCreationDuration}ms)`, {
+        requestId,
+        hostname,
+        timeSinceRequestStart: promiseCreatedTime - startTime,
+      });
+      
+      // Log when we start awaiting the promise (this is when actual network I/O begins)
+      const awaitStartTime = Date.now();
+      const prepDuration = awaitStartTime - axiosMethodStartTime;
+      console.log(`[${new Date().toISOString()}] [TIMING] GatewayService: Starting to await Axios promise (prep: ${prepDuration}ms)`, {
+        requestId,
+        hostname,
+        port,
+        timeSinceRequestStart: awaitStartTime - startTime,
+        httpAgentSockets: this.httpAgent.sockets ? Object.keys(this.httpAgent.sockets).length : 0,
+        httpAgentFreeSockets: this.httpAgent.freeSockets ? Object.keys(this.httpAgent.freeSockets).length : 0,
+        httpAgentRequests: this.httpAgent.requests ? Object.keys(this.httpAgent.requests).length : 0,
+        httpsAgentSockets: this.httpsAgent.sockets ? Object.keys(this.httpsAgent.sockets).length : 0,
+        httpsAgentFreeSockets: this.httpsAgent.freeSockets ? Object.keys(this.httpsAgent.freeSockets).length : 0,
+        httpsAgentRequests: this.httpsAgent.requests ? Object.keys(this.httpsAgent.requests).length : 0,
+      });
+      this.sharedLogger.log(`[${new Date().toISOString()}] [TIMING] GatewayService: Starting to await Axios promise`, {
+        requestId,
+        hostname,
+        port,
+        timeSinceRequestStart: awaitStartTime - startTime,
+        prepDuration,
+      });
+      
+      // Await the response - this is where the actual network delay happens
+      response = await axiosPromise;
+      
+      const awaitCompleteTime = Date.now();
+      const awaitDuration = awaitCompleteTime - awaitStartTime;
+      console.log(`[${new Date().toISOString()}] [TIMING] GatewayService: Axios promise resolved (await: ${awaitDuration}ms)`, {
+        requestId,
+        hostname,
+        port,
+        totalTimeSinceStart: awaitCompleteTime - startTime,
+        httpAgentSockets: this.httpAgent.sockets ? Object.keys(this.httpAgent.sockets).length : 0,
+        httpAgentFreeSockets: this.httpAgent.freeSockets ? Object.keys(this.httpAgent.freeSockets).length : 0,
+        httpAgentRequests: this.httpAgent.requests ? Object.keys(this.httpAgent.requests).length : 0,
+        httpsAgentSockets: this.httpsAgent.sockets ? Object.keys(this.httpsAgent.sockets).length : 0,
+        httpsAgentFreeSockets: this.httpsAgent.freeSockets ? Object.keys(this.httpsAgent.freeSockets).length : 0,
+        httpsAgentRequests: this.httpsAgent.requests ? Object.keys(this.httpsAgent.requests).length : 0,
+      });
+      this.sharedLogger.log(`[${new Date().toISOString()}] [TIMING] GatewayService: Axios promise resolved`, {
+        requestId,
+        hostname,
+        port,
+        awaitDuration,
+        totalTimeSinceStart: awaitCompleteTime - startTime,
+      });
 
       const axiosCallDuration = Date.now() - axiosCallStartTime;
       const duration = Date.now() - startTime;
