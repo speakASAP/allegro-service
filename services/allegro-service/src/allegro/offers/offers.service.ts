@@ -82,6 +82,7 @@ export class OffersService {
       pagination: { page, limit, skip },
     });
 
+    // Optimized: Load offers without relations first (fast), relations can be loaded on-demand
     const [items, total] = await Promise.all([
       this.prisma.allegroOffer.findMany({
         where,
@@ -107,21 +108,22 @@ export class OffersService {
           lastValidatedAt: true,
           createdAt: true,
           updatedAt: true,
-          product: {
-            select: {
-              id: true,
-              code: true,
-              name: true,
-            },
-          },
-          allegroProduct: {
-            select: {
-              id: true,
-              allegroProductId: true,
-              name: true,
-              brand: true,
-            },
-          },
+          // Relations removed for faster list loading - can be loaded on-demand when viewing details
+          // product: {
+          //   select: {
+          //     id: true,
+          //     code: true,
+          //     name: true,
+          //   },
+          // },
+          // allegroProduct: {
+          //   select: {
+          //     id: true,
+          //     allegroProductId: true,
+          //     name: true,
+          //     brand: true,
+          //   },
+          // },
         },
         orderBy: { createdAt: 'desc' },
       }),

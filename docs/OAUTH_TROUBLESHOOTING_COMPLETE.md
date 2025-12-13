@@ -46,7 +46,7 @@ The Allegro API requires OAuth 2.0 Authorization Code Flow with PKCE for accessi
 
 ### System Components
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    Frontend Service                          │
 │              (React/TypeScript - Port 3410)                 │
@@ -92,7 +92,7 @@ The Allegro API requires OAuth 2.0 Authorization Code Flow with PKCE for accessi
 
 ### OAuth Flow Diagram
 
-```
+```text
 ┌─────────┐         ┌──────────────┐         ┌─────────────┐         ┌──────────┐
 │  User   │         │   Frontend   │         │   Backend   │         │ Allegro  │
 │         │         │   Service    │         │   Service   │         │   API    │
@@ -869,7 +869,7 @@ WHERE "userId" = '6';
 
 **Log Verification**:
 
-```
+```text
 [OAuth Callback] Token lengths before database save {
   userId: '6',
   accessTokenLength: 1242,
