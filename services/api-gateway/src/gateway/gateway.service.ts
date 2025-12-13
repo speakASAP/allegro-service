@@ -27,6 +27,7 @@ export class GatewayService {
   ) {
     // Create HTTP and HTTPS agents with keep-alive to reuse connections
     // These are shared across all requests to eliminate connection delays
+    const agentStartTime = Date.now();
     this.httpAgent = new HttpAgent({
       keepAlive: true,
       keepAliveMsecs: 1000,
@@ -42,8 +43,33 @@ export class GatewayService {
       maxFreeSockets: 10,
       timeout: 60000,
     });
+    
+    // Set agents on the HttpService's Axios instance defaults
+    // This ensures all requests use keep-alive agents
+    this.httpService.axiosRef.defaults.httpAgent = this.httpAgent;
+    this.httpService.axiosRef.defaults.httpsAgent = this.httpsAgent;
+    
     this.sharedLogger = loggerService;
     this.sharedLogger.setContext('GatewayService');
+    
+    // Log agent creation and configuration
+    const agentCreationTime = Date.now() - agentStartTime;
+    console.log(`[${new Date().toISOString()}] [TIMING] GatewayService: Agents created (${agentCreationTime}ms)`, {
+      httpAgentKeepAlive: this.httpAgent.options.keepAlive,
+      httpAgentMaxSockets: this.httpAgent.maxSockets,
+      httpsAgentKeepAlive: this.httpsAgent.options.keepAlive,
+      httpsAgentMaxSockets: this.httpsAgent.maxSockets,
+      axiosDefaultsHttpAgent: !!this.httpService.axiosRef.defaults.httpAgent,
+      axiosDefaultsHttpsAgent: !!this.httpService.axiosRef.defaults.httpsAgent,
+    });
+    this.sharedLogger.info(`[${new Date().toISOString()}] [TIMING] GatewayService: Agents created (${agentCreationTime}ms)`, {
+      httpAgentKeepAlive: this.httpAgent.options.keepAlive,
+      httpAgentMaxSockets: this.httpAgent.maxSockets,
+      httpsAgentKeepAlive: this.httpsAgent.options.keepAlive,
+      httpsAgentMaxSockets: this.httpsAgent.maxSockets,
+      axiosDefaultsHttpAgent: !!this.httpService.axiosRef.defaults.httpAgent,
+      axiosDefaultsHttpsAgent: !!this.httpService.axiosRef.defaults.httpsAgent,
+    });
     
     const nodeEnv = this.configService.get<string>('NODE_ENV') || 'development';
     const isDevelopment = nodeEnv === 'development';
@@ -161,12 +187,23 @@ export class GatewayService {
     // Log request details
     const requestId = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
-    // Log agent usage for debugging
-    this.logger.debug(`[${requestId}] Using keep-alive agents for ${url}`, {
+    // Log agent usage and connection details for debugging
+    const agentCheckTime = Date.now();
+    const agentInfo = {
       hasHttpAgent: !!config.httpAgent,
       hasHttpsAgent: !!config.httpsAgent,
       isHttps,
-    });
+      httpAgentSockets: this.httpAgent.sockets,
+      httpAgentFreeSockets: this.httpAgent.freeSockets,
+      httpAgentRequests: this.httpAgent.requests,
+      httpsAgentSockets: this.httpsAgent.sockets,
+      httpsAgentFreeSockets: this.httpsAgent.freeSockets,
+      httpsAgentRequests: this.httpsAgent.requests,
+      axiosDefaultsHttpAgent: !!this.httpService.axiosRef.defaults.httpAgent,
+      axiosDefaultsHttpsAgent: !!this.httpService.axiosRef.defaults.httpsAgent,
+    };
+    console.log(`[${new Date().toISOString()}] [TIMING] GatewayService: Agent check (${Date.now() - agentCheckTime}ms) for ${url}`, agentInfo);
+    this.logger.debug(`[${requestId}] Using keep-alive agents for ${url}`, agentInfo);
     
     // Log timeout configuration for debugging bulk operations
     if (isBulkOperation) {
@@ -228,15 +265,36 @@ export class GatewayService {
 
     const startTime = Date.now();
     const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] [TIMING] GatewayService.forwardRequest START`, {
+      requestId,
+      serviceName,
+      method,
+      url,
+      path,
+      configTimeout: config.timeout,
+      configHasHttpAgent: !!config.httpAgent,
+      configHasHttpsAgent: !!config.httpsAgent,
+    });
     this.sharedLogger.log(`[${timestamp}] [TIMING] GatewayService.forwardRequest START`, {
       requestId,
       serviceName,
       method,
       url,
       path,
+      configTimeout: config.timeout,
+      configHasHttpAgent: !!config.httpAgent,
+      configHasHttpsAgent: !!config.httpsAgent,
     });
+    
+    const axiosCallStartTime = Date.now();
     try {
       let response;
+      const axiosMethodStartTime = Date.now();
+      console.log(`[${new Date().toISOString()}] [TIMING] GatewayService: About to call Axios ${method} ${url}`, {
+        requestId,
+        timeSinceRequestStart: axiosMethodStartTime - startTime,
+      });
+      
       switch (method.toUpperCase()) {
         case 'GET':
           response = await firstValueFrom(this.httpService.get(url, config));
@@ -257,12 +315,23 @@ export class GatewayService {
           throw new Error(`Unsupported method: ${method}`);
       }
 
+      const axiosCallDuration = Date.now() - axiosCallStartTime;
       const duration = Date.now() - startTime;
       const responseData = response.data;
       const responseSize = JSON.stringify(responseData).length;
       const responseKeys = responseData && typeof responseData === 'object' ? Object.keys(responseData) : [];
       
-      this.sharedLogger.log(`[${new Date().toISOString()}] [TIMING] GatewayService.forwardRequest COMPLETE (${duration}ms)`, {
+      // Log agent status after request
+      const postRequestAgentInfo = {
+        httpAgentSockets: Object.keys(this.httpAgent.sockets || {}).length,
+        httpAgentFreeSockets: Object.keys(this.httpAgent.freeSockets || {}).length,
+        httpAgentRequests: Object.keys(this.httpAgent.requests || {}).length,
+        httpsAgentSockets: Object.keys(this.httpsAgent.sockets || {}).length,
+        httpsAgentFreeSockets: Object.keys(this.httpsAgent.freeSockets || {}).length,
+        httpsAgentRequests: Object.keys(this.httpsAgent.requests || {}).length,
+      };
+      
+      console.log(`[${new Date().toISOString()}] [TIMING] GatewayService.forwardRequest COMPLETE (${duration}ms total, axios: ${axiosCallDuration}ms)`, {
         requestId,
         serviceName,
         method,
@@ -270,6 +339,20 @@ export class GatewayService {
         path,
         statusCode: response.status,
         durationMs: duration,
+        axiosCallDurationMs: axiosCallDuration,
+        ...postRequestAgentInfo,
+      });
+      
+      this.sharedLogger.log(`[${new Date().toISOString()}] [TIMING] GatewayService.forwardRequest COMPLETE (${duration}ms total, axios: ${axiosCallDuration}ms)`, {
+        requestId,
+        serviceName,
+        method,
+        url,
+        path,
+        statusCode: response.status,
+        durationMs: duration,
+        axiosCallDurationMs: axiosCallDuration,
+        ...postRequestAgentInfo,
       });
       
       // Enhanced logging for publish-all responses
@@ -335,9 +418,34 @@ export class GatewayService {
 
       return response.data;
     } catch (error: any) {
+      const axiosCallDuration = Date.now() - axiosCallStartTime;
       const duration = Date.now() - startTime;
       const errorResponse = error.response;
       const errorData = errorResponse?.data;
+      
+      // Log agent status on error
+      const errorAgentInfo = {
+        httpAgentSockets: Object.keys(this.httpAgent.sockets || {}).length,
+        httpAgentFreeSockets: Object.keys(this.httpAgent.freeSockets || {}).length,
+        httpAgentRequests: Object.keys(this.httpAgent.requests || {}).length,
+        httpsAgentSockets: Object.keys(this.httpsAgent.sockets || {}).length,
+        httpsAgentFreeSockets: Object.keys(this.httpsAgent.freeSockets || {}).length,
+        httpsAgentRequests: Object.keys(this.httpsAgent.requests || {}).length,
+      };
+      
+      console.error(`[${new Date().toISOString()}] [TIMING] GatewayService.forwardRequest ERROR (${duration}ms total, axios: ${axiosCallDuration}ms)`, {
+        requestId,
+        serviceName,
+        method,
+        url,
+        path,
+        errorMessage: error.message,
+        errorCode: error.code,
+        errorName: error.name,
+        durationMs: duration,
+        axiosCallDurationMs: axiosCallDuration,
+        ...errorAgentInfo,
+      });
       
       // Enhanced logging for publish-all errors
       if (isPublishAll) {
