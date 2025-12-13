@@ -1,6 +1,6 @@
-## Execution Plan for Allegro Import Issues
+# Execution Plan for Allegro Import Issues
 
-### Objectives
+## Objectives
 
 - Diagnose and resolve dashboard import page issues (500 on `/import/jobs`, OAuth/authorization errors, slow loading, export errors, wrong currency display).
 - Collect evidence from production logs and configuration (`.env`) to confirm runtime settings.

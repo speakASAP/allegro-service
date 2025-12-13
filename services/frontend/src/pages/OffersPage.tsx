@@ -229,7 +229,7 @@ const OffersPage: React.FC = () => {
   const loadOffers = useCallback(async () => {
     setLoading(true); // Set loading only during the API call
     try {
-      const params: any = {
+      const params: Record<string, string | number> = {
         limit,
         page,
       };
@@ -968,7 +968,7 @@ const OffersPage: React.FC = () => {
       let hasMore = true;
       
       while (hasMore) {
-        const params: any = {
+        const params: Record<string, string | number> = {
           limit: 100, // Fetch in batches
           page: currentPage,
         };
@@ -1015,10 +1015,13 @@ const OffersPage: React.FC = () => {
       }
     } catch (err) {
       console.error('Failed to publish offers', err);
-      const axiosErr = err as AxiosError & { response?: { data?: { error?: { message?: string } } } };
+      const axiosErr = err as AxiosError & { 
+        response?: { data?: { error?: { message?: string } } };
+        serviceErrorMessage?: string;
+      };
       const errorMessage =
         axiosErr.response?.data?.error?.message ||
-        (axiosErr as any).serviceErrorMessage ||
+        axiosErr.serviceErrorMessage ||
         axiosErr.message ||
         'Failed to publish offers';
       setError(errorMessage);

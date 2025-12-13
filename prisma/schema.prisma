@@ -192,6 +192,8 @@ model AllegroOffer {
   @@index([status])
   @@index([syncStatus])
   @@index([createdAt])
+  @@index([title]) // Index for fast text search
+  @@index([categoryId]) // Index for fast category filtering
   @@map("allegro_offers")
 }
 
