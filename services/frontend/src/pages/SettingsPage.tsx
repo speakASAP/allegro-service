@@ -24,6 +24,11 @@ interface Settings {
   allegroClientSecret?: string;
   supplierConfigs?: SupplierConfig[];
   preferences?: Record<string, unknown>;
+  oauthStatus?: {
+    authorized: boolean;
+    expiresAt?: string;
+    scopes?: string;
+  };
 }
 
 const SettingsPage: React.FC = () => {
@@ -51,14 +56,19 @@ const SettingsPage: React.FC = () => {
 
   useEffect(() => {
     loadSettings();
-    loadOAuthStatus();
 
     // Check if returning from OAuth callback
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('oauth_refresh') === 'true') {
-      loadOAuthStatus();
+      // Refresh OAuth status after settings load
+      loadSettings().then(() => {
+        loadOAuthStatus(); // Optional background refresh
+      });
       // Clean up URL
       window.history.replaceState({}, '', window.location.pathname);
+    } else {
+      // Load OAuth status in background (non-blocking)
+      loadOAuthStatus();
     }
   }, []);
 
@@ -70,12 +80,18 @@ const SettingsPage: React.FC = () => {
         setSettings(data);
         setAllegroClientId(data.allegroClientId || '');
         
+        // Set OAuth status from settings response (from database, instant)
+        if (data.oauthStatus) {
+          setOauthStatus(data.oauthStatus);
+        }
+        
         // Debug logging
         console.log('[SettingsPage] loadSettings response:', {
           hasClientSecret: !!data.allegroClientSecret,
           clientSecretLength: data.allegroClientSecret?.length,
           hasDecryptionError: !!data._allegroClientSecretDecryptionError,
           decryptionError: data._allegroClientSecretDecryptionError,
+          oauthStatus: data.oauthStatus,
         });
         
         // Check if Client Secret exists in database (regardless of decryption success)
@@ -185,9 +201,8 @@ const SettingsPage: React.FC = () => {
 
       if (response.data.success) {
         setSuccess('Allegro settings saved successfully');
+        // Reload settings (which now includes OAuth status from database)
         loadSettings();
-        // Reload OAuth status in case credentials changed
-        loadOAuthStatus();
       }
     } catch (err: unknown) {
       const errorMessage =
@@ -368,7 +383,8 @@ const SettingsPage: React.FC = () => {
       const response = await oauthApi.revoke();
       if (response.data.success) {
         setSuccess('OAuth authorization revoked successfully');
-        loadOAuthStatus();
+        // Reload settings (which includes OAuth status from database)
+        loadSettings();
       } else {
         setError('Failed to revoke OAuth authorization');
       }

@@ -87,14 +87,40 @@ export class OffersService {
         where,
         skip,
         take: limit,
-        include: {
-          product: true,
-          allegroProduct: {
-            include: {
-              parameters: true,
+        select: {
+          id: true,
+          allegroOfferId: true,
+          title: true,
+          description: true,
+          categoryId: true,
+          price: true,
+          currency: true,
+          stockQuantity: true,
+          status: true,
+          publicationStatus: true,
+          lastSyncedAt: true,
+          syncSource: true,
+          validationStatus: true,
+          validationErrors: true,
+          lastValidatedAt: true,
+          createdAt: true,
+          updatedAt: true,
+          product: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
             },
           },
-        } as any,
+          allegroProduct: {
+            select: {
+              id: true,
+              allegroProductId: true,
+              name: true,
+              brand: true,
+            },
+          },
+        },
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.allegroOffer.count({ where }),
@@ -548,6 +574,16 @@ export class OffersService {
     const updateDto = { ...dto };
     delete updateDto.syncToAllegro;
 
+    // Log when syncToAllegro is true but updateDto is empty (sync-only operation)
+    if (syncToAllegro && Object.keys(updateDto).length === 0) {
+      this.logger.log('[updateOffer] Sync-to-Allegro requested with empty updateDto - will sync current offer data', {
+        id,
+        userId,
+        syncToAllegro: true,
+        updateDtoKeys: Object.keys(updateDto),
+      });
+    }
+
     const offer = await this.prisma.allegroOffer.findUnique({
       where: { id },
     });
@@ -557,7 +593,8 @@ export class OffersService {
     }
 
     // Check if this is a local-only update (faster path)
-    const requiresAllegroApi = this.requiresAllegroApiUpdate(updateDto);
+    // If syncToAllegro is true, we must go through full update path even if updateDto is empty
+    const requiresAllegroApi = syncToAllegro || this.requiresAllegroApiUpdate(updateDto);
     const isStockOnlyUpdate = updateDto.stockQuantity !== undefined && !requiresAllegroApi;
     const isLocalOnlyUpdate = !requiresAllegroApi && !isStockOnlyUpdate && (
       updateDto.status !== undefined ||
@@ -566,7 +603,8 @@ export class OffersService {
     );
 
     // Fast path: Update database only for local-only fields
-    if (isLocalOnlyUpdate) {
+    // Skip fast path if syncToAllegro is true (we need to sync to Allegro)
+    if (isLocalOnlyUpdate && !syncToAllegro) {
       this.logger.log('Fast path: Local-only update (database only)', {
         id,
         fields: Object.keys(updateDto),
@@ -594,7 +632,8 @@ export class OffersService {
     }
 
     // Stock-only update uses dedicated fast endpoint
-    if (isStockOnlyUpdate) {
+    // Skip fast path if syncToAllegro is true (we need to sync to Allegro)
+    if (isStockOnlyUpdate && !syncToAllegro) {
       this.logger.log('Fast path: Stock-only update', { id, stockQuantity: updateDto.stockQuantity });
       return await this.updateOfferStock(id, updateDto.stockQuantity, userId);
     }

@@ -191,6 +191,7 @@ model AllegroOffer {
   @@index([allegroProductId])
   @@index([status])
   @@index([syncStatus])
+  @@index([createdAt])
   @@map("allegro_offers")
 }
 
