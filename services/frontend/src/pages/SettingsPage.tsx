@@ -97,7 +97,7 @@ const SettingsPage: React.FC = () => {
         const secretExistsInDb = data._allegroClientSecretDecryptionError || (data.allegroClientSecret && data.allegroClientSecret.length > 0);
         
         if (data._allegroClientSecretDecryptionError && data.allegroClientSecret === null) {
-          // Secret exists in DB but decryption failed - show stars and error
+          // Secret exists in DB but decryption failed - clear field and show error
           const errorInfo = data._allegroClientSecretDecryptionError;
           const errorMessage = errorInfo && typeof errorInfo === 'object'
             ? `Client Secret Decryption Error:\n\n` +
@@ -108,12 +108,12 @@ const SettingsPage: React.FC = () => {
               `This typically occurs when the encryption key has changed or the data was encrypted with a different configuration.`
             : 'Client Secret exists in database but could not be decrypted. Please re-enter your Client Secret and save it again.';
           setError(errorMessage);
-          setAllegroClientSecret('********'); // Show stars because secret exists in DB
-          console.log('[SettingsPage] Setting Client Secret to stars (decryption failed)');
-        } else if (secretExistsInDb) {
-          // Client Secret exists in database and was successfully decrypted - show masked value
-          setAllegroClientSecret('********');
-          console.log('[SettingsPage] Setting Client Secret to stars (exists and decrypted)');
+          setAllegroClientSecret(''); // Clear field if decryption failed - user needs to re-enter
+          console.log('[SettingsPage] Setting Client Secret to empty (decryption failed - user must re-enter)');
+        } else if (secretExistsInDb && data.allegroClientSecret) {
+          // Client Secret exists in database and was successfully decrypted - show actual value for visual verification
+          setAllegroClientSecret(data.allegroClientSecret);
+          console.log('[SettingsPage] Setting Client Secret to actual decrypted value (length: ' + data.allegroClientSecret.length + ')');
         } else {
           // No Client Secret in database - show empty
           setAllegroClientSecret('');
