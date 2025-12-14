@@ -75,7 +75,7 @@ export class OffersService {
       };
     }
 
-    this.logger.log(`[${timestamp}] [TIMING] OffersService.getOffers START`, {
+    console.log(`[${timestamp}] [TIMING] OffersService.getOffers START`, {
       filters: {
         status: query.status,
         categoryId: query.categoryId,
@@ -135,13 +135,13 @@ export class OffersService {
     const dbQueryDuration = Date.now() - dbQueryStartTime;
     const totalDuration = Date.now() - startTime;
 
-    this.logger.log(`[${new Date().toISOString()}] [TIMING] OffersService.getOffers: Database query completed (${dbQueryDuration}ms)`, {
+    console.log(`[${new Date().toISOString()}] [TIMING] OffersService.getOffers: Database query completed (${dbQueryDuration}ms)`, {
       total,
       returned: items.length,
       page,
       limit,
     });
-    this.logger.log(`[${new Date().toISOString()}] [TIMING] OffersService.getOffers COMPLETE (${totalDuration}ms total)`, {
+    console.log(`[${new Date().toISOString()}] [TIMING] OffersService.getOffers COMPLETE (${totalDuration}ms total)`, {
       total,
       returned: items.length,
       page,
