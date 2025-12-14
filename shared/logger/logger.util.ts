@@ -197,7 +197,8 @@ export class Logger {
   }
 
   /**
-   * Write log to local file
+   * Write log to local file (non-blocking)
+   * Fire and forget - doesn't block application execution
    */
   private writeToLocalFile(level: LogLevel, message: string, metadata: LogMetadata = {}): void {
     if (!this.enableLocalLogging) return;
@@ -224,23 +225,37 @@ export class Logger {
     const logFile = path.join(this.logDir, `${level}.log`);
     const allLogFile = path.join(this.logDir, 'all.log');
 
-    try {
-      // Write to level-specific log file
-      fs.appendFileSync(logFile, logLine, 'utf8');
-      // Write to combined log file
-      fs.appendFileSync(allLogFile, logLine, 'utf8');
-    } catch (error) {
-      // Fallback to console if file write fails
-      console.error('Failed to write log to file:', error);
-      console.log(logLine);
-    }
+    // Fire and forget - non-blocking file write
+    setImmediate(() => {
+      // Write to level-specific log file (async, non-blocking)
+      fs.appendFile(logFile, logLine, 'utf8', (err) => {
+        if (err) {
+          // Silently handle errors - don't block application
+          // Only log to console in development mode
+          if (process.env.NODE_ENV === 'development') {
+            console.error('Failed to write log to file:', err);
+          }
+        }
+      });
+      // Write to combined log file (async, non-blocking)
+      fs.appendFile(allLogFile, logLine, 'utf8', (err) => {
+        if (err) {
+          // Silently handle errors - don't block application
+          // Only log to console in development mode
+          if (process.env.NODE_ENV === 'development') {
+            console.error('Failed to write log to file:', err);
+          }
+        }
+      });
+    });
   }
 
   /**
    * Log message
    * Dual logging: always writes locally AND sends to external service (non-blocking)
+   * All operations are fire-and-forget to prevent blocking
    */
-  private async log(level: LogLevel, message: string, metadata: LogMetadata = {}): Promise<void> {
+  private log(level: LogLevel, message: string, metadata: LogMetadata = {}): void {
     const levelPriority = this.levels[level] ?? this.levels.info;
 
     // Check if log level is enabled
@@ -248,7 +263,7 @@ export class Logger {
       return;
     }
 
-    // DUAL LOGGING: Always write locally (synchronous)
+    // DUAL LOGGING: Always write locally (non-blocking, fire and forget)
     this.writeToLocalFile(level, message, metadata);
 
     // Also send to external logging service (non-blocking, fire and forget)
@@ -263,31 +278,31 @@ export class Logger {
   }
 
   /**
-   * Error level logging
+   * Error level logging (non-blocking)
    */
-  async error(message: string, metadata: LogMetadata = {}): Promise<void> {
-    await this.log('error', message, metadata);
+  error(message: string, metadata: LogMetadata = {}): void {
+    this.log('error', message, metadata);
   }
 
   /**
-   * Warn level logging
+   * Warn level logging (non-blocking)
    */
-  async warn(message: string, metadata: LogMetadata = {}): Promise<void> {
-    await this.log('warn', message, metadata);
+  warn(message: string, metadata: LogMetadata = {}): void {
+    this.log('warn', message, metadata);
   }
 
   /**
-   * Info level logging
+   * Info level logging (non-blocking)
    */
-  async info(message: string, metadata: LogMetadata = {}): Promise<void> {
-    await this.log('info', message, metadata);
+  info(message: string, metadata: LogMetadata = {}): void {
+    this.log('info', message, metadata);
   }
 
   /**
-   * Debug level logging
+   * Debug level logging (non-blocking)
    */
-  async debug(message: string, metadata: LogMetadata = {}): Promise<void> {
-    await this.log('debug', message, metadata);
+  debug(message: string, metadata: LogMetadata = {}): void {
+    this.log('debug', message, metadata);
   }
 
   private throwConfigError(key: string): never {

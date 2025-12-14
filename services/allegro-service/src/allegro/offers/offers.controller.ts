@@ -44,10 +44,8 @@ export class OffersController {
     const timestamp = new Date().toISOString();
     // Use console.log for immediate visibility in Docker logs
     console.log(`[${timestamp}] [TIMING] OffersController.getOffers START - Request received at controller`);
-    // Commented out to check if logger.log blocks execution
-    // this.logger.log(`[${timestamp}] [TIMING] OffersController.getOffers START - Request received at controller`);
-    // Use non-blocking logger call instead
-    this.logger.log(`[${timestamp}] [TIMING] OffersController.getOffers START - Request received at controller`).catch(() => {});
+    // Logger is now non-blocking (fire and forget)
+    this.logger.log(`[${timestamp}] [TIMING] OffersController.getOffers START - Request received at controller`);
     
     const userId = String(req.user?.id || req.user?.sub || 'unknown');
     console.log(`[${timestamp}] [TIMING] OffersController.getOffers - userId extracted: ${userId}`);

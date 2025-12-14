@@ -15,55 +15,97 @@ export class LoggerService implements NestLoggerService, ILogger {
     this.context = context;
   }
 
-  async error(message: string, traceOrMetadata?: string | Record<string, any>, context?: string): Promise<void> {
-    const metadata: Record<string, any> = {};
-    if (typeof traceOrMetadata === 'object' && traceOrMetadata !== null) {
-      Object.assign(metadata, traceOrMetadata);
-    } else if (traceOrMetadata) {
-      metadata.trace = traceOrMetadata;
+  error(message: string, traceOrMetadata?: string | Record<string, any>, context?: string): void {
+    try {
+      const metadata: Record<string, any> = {};
+      if (typeof traceOrMetadata === 'object' && traceOrMetadata !== null) {
+        Object.assign(metadata, traceOrMetadata);
+      } else if (traceOrMetadata) {
+        metadata.trace = traceOrMetadata;
+      }
+      if (context || this.context) metadata.context = context || this.context;
+      loggerUtil.error(message, metadata);
+    } catch (error) {
+      // Silently handle errors - don't block application
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Logger error:', error);
+      }
     }
-    if (context || this.context) metadata.context = context || this.context;
-    await loggerUtil.error(message, metadata);
   }
 
-  async warn(message: string, contextOrMetadata?: string | Record<string, any>): Promise<void> {
-    const metadata: Record<string, any> = {};
-    if (typeof contextOrMetadata === 'object' && contextOrMetadata !== null) {
-      Object.assign(metadata, contextOrMetadata);
-    } else if (contextOrMetadata) {
-      metadata.context = contextOrMetadata;
+  warn(message: string, contextOrMetadata?: string | Record<string, any>): void {
+    try {
+      const metadata: Record<string, any> = {};
+      if (typeof contextOrMetadata === 'object' && contextOrMetadata !== null) {
+        Object.assign(metadata, contextOrMetadata);
+      } else if (contextOrMetadata) {
+        metadata.context = contextOrMetadata;
+      }
+      if (this.context) metadata.context = this.context;
+      loggerUtil.warn(message, metadata);
+    } catch (error) {
+      // Silently handle errors - don't block application
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Logger error:', error);
+      }
     }
-    if (this.context) metadata.context = this.context;
-    await loggerUtil.warn(message, metadata);
   }
 
-  async log(message: string, contextOrMetadata?: string | Record<string, any>): Promise<void> {
-    const metadata: Record<string, any> = {};
-    if (typeof contextOrMetadata === 'object' && contextOrMetadata !== null) {
-      Object.assign(metadata, contextOrMetadata);
-    } else if (contextOrMetadata) {
-      metadata.context = contextOrMetadata;
+  log(message: string, contextOrMetadata?: string | Record<string, any>): void {
+    try {
+      const metadata: Record<string, any> = {};
+      if (typeof contextOrMetadata === 'object' && contextOrMetadata !== null) {
+        Object.assign(metadata, contextOrMetadata);
+      } else if (contextOrMetadata) {
+        metadata.context = contextOrMetadata;
+      }
+      if (this.context) metadata.context = this.context;
+      loggerUtil.info(message, metadata);
+    } catch (error) {
+      // Silently handle errors - don't block application
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Logger error:', error);
+      }
     }
-    if (this.context) metadata.context = this.context;
-    await loggerUtil.info(message, metadata);
   }
 
-  async info(message: string, metadata?: Record<string, any>): Promise<void> {
-    const logMetadata: Record<string, any> = metadata || {};
-    if (this.context) logMetadata.context = this.context;
-    await loggerUtil.info(message, logMetadata);
+  info(message: string, metadata?: Record<string, any>): void {
+    try {
+      const logMetadata: Record<string, any> = metadata || {};
+      if (this.context) logMetadata.context = this.context;
+      loggerUtil.info(message, logMetadata);
+    } catch (error) {
+      // Silently handle errors - don't block application
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Logger error:', error);
+      }
+    }
   }
 
-  async debug(message: string, metadata?: Record<string, any>): Promise<void> {
-    const logMetadata: Record<string, any> = metadata || {};
-    if (this.context) logMetadata.context = this.context;
-    await loggerUtil.debug(message, logMetadata);
+  debug(message: string, metadata?: Record<string, any>): void {
+    try {
+      const logMetadata: Record<string, any> = metadata || {};
+      if (this.context) logMetadata.context = this.context;
+      loggerUtil.debug(message, logMetadata);
+    } catch (error) {
+      // Silently handle errors - don't block application
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Logger error:', error);
+      }
+    }
   }
 
-  async verbose(message: string, context?: string): Promise<void> {
-    const metadata: Record<string, any> = {};
-    if (context || this.context) metadata.context = context || this.context;
-    await this.debug(message, metadata);
+  verbose(message: string, context?: string): void {
+    try {
+      const metadata: Record<string, any> = {};
+      if (context || this.context) metadata.context = context || this.context;
+      this.debug(message, metadata);
+    } catch (error) {
+      // Silently handle errors - don't block application
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Logger error:', error);
+      }
+    }
   }
 }
 
