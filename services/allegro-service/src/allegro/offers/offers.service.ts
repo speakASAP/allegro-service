@@ -3560,12 +3560,14 @@ export class OffersService {
         // Load offer from database with relations
         console.log('[publishOffersToAllegro] About to load offer from database', { offerId });
         const dbLoadStartTime = Date.now();
-        console.log('[publishOffersToAllegro] About to call logger.log for STEP 2.X.1');
+        console.log('[publishOffersToAllegro] About to call logger.log for STEP 2.X.1 (non-blocking)');
+        // Don't await logger.log - it blocks execution. Fire and forget.
         this.logger.log(`[${offerRequestId}] [publishOffersToAllegro] STEP 2.${processedCount}.1: Loading offer from database`, {
           offerId,
           userId,
           timestamp: new Date().toISOString(),
-        });
+        }).catch(() => {}); // Fire and forget - don't block
+        console.log('[publishOffersToAllegro] logger.log for STEP 2.X.1 called (non-blocking)');
         
         const offer = await this.prisma.allegroOffer.findUnique({
           where: { id: offerId },
