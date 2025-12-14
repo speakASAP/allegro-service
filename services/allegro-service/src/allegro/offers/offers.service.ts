@@ -3491,6 +3491,7 @@ export class OffersService {
       console.log('[publishOffersToAllegro] getUserOAuthToken completed', { tokenLength: oauthToken?.length || 0 });
       const tokenDuration = Date.now() - tokenStartTime;
       
+      console.log('[publishOffersToAllegro] About to call logger.log for STEP 1 COMPLETE');
       this.logger.log(`[${finalRequestId}] [publishOffersToAllegro] STEP 1 COMPLETE: OAuth token obtained`, {
         userId,
         tokenDuration: `${tokenDuration}ms`,
@@ -3504,6 +3505,7 @@ export class OffersService {
         step: '1/5',
         status: 'SUCCESS',
       });
+      console.log('[publishOffersToAllegro] logger.log for STEP 1 COMPLETE completed');
     } catch (error: any) {
       const tokenDuration = Date.now() - tokenStartTime;
       this.logger.error(`[${finalRequestId}] [publishOffersToAllegro] STEP 1 FAILED: Failed to get OAuth token`, {
@@ -3523,7 +3525,9 @@ export class OffersService {
     }
 
     // Process each offer
+    console.log('[publishOffersToAllegro] About to start offer processing loop', { offerIdsCount: offerIds.length });
     let processedCount = 0;
+    console.log('[publishOffersToAllegro] About to call logger.log for STEP 2');
     this.logger.log(`[${finalRequestId}] [publishOffersToAllegro] STEP 2: Starting offer processing loop`, {
       userId,
       totalOffers: offerIds.length,
@@ -3531,8 +3535,11 @@ export class OffersService {
       step: '2/5',
       description: 'Iterating through offers to publish',
     });
+    console.log('[publishOffersToAllegro] logger.log for STEP 2 completed');
     
+    console.log('[publishOffersToAllegro] About to enter for loop', { offerIdsCount: offerIds.length });
     for (const offerId of offerIds) {
+      console.log('[publishOffersToAllegro] Inside for loop, processing offer', { offerId, processedCount: processedCount + 1 });
       const offerStartTime = Date.now();
       processedCount++;
       const offerRequestId = `${finalRequestId}-offer-${processedCount}`;
