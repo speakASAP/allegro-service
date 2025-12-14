@@ -422,7 +422,7 @@ const SettingsPage: React.FC = () => {
 
           <Input
             label="Client Secret"
-            type="password"
+            type="text"
             value={allegroClientSecret}
             onChange={(e) => setAllegroClientSecret(e.target.value)}
             placeholder="Enter your Allegro Client Secret"
