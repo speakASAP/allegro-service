@@ -25,7 +25,7 @@ import { ProductsService } from './products/products.service';
 @Module({
   imports: [
     HttpModule.register({
-      timeout: 15000, // 15 seconds timeout for Allegro API calls
+      timeout: 120000, // 120 seconds default timeout for Allegro API calls (can be slow)
       maxRedirects: 5,
     }),
     ConfigModule,
