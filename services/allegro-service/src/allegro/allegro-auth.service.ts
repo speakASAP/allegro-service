@@ -83,8 +83,17 @@ export class AllegroAuthService {
    * Get user's OAuth access token (with auto-refresh)
    */
   async getUserAccessToken(userId: string): Promise<string> {
+    console.log('[getUserAccessToken] ========== METHOD CALLED ==========', { userId });
+    const dbStartTime = Date.now();
+    console.log('[getUserAccessToken] About to query database');
     const settings = await this.prisma.userSettings.findUnique({
       where: { userId },
+    });
+    const dbDuration = Date.now() - dbStartTime;
+    console.log('[getUserAccessToken] Database query completed', { 
+      dbDuration: `${dbDuration}ms`,
+      hasSettings: !!settings,
+      hasToken: !!settings?.allegroAccessToken,
     });
 
     if (!settings?.allegroAccessToken) {
@@ -98,15 +107,24 @@ export class AllegroAuthService {
 
     if (expiresAt && new Date(expiresAt.getTime() - bufferTime) <= now) {
       // Token expires soon or is expired, refresh it
+      console.log('[getUserAccessToken] Token expired or expiring soon, refreshing');
       this.logger.log('OAuth token expired or expiring soon, refreshing', { userId });
       return await this.refreshUserToken(userId);
     }
 
     // Decrypt and return access token
     try {
+      console.log('[getUserAccessToken] About to decrypt token');
+      const decryptStartTime = Date.now();
       const accessToken = this.decrypt(settings.allegroAccessToken);
+      const decryptDuration = Date.now() - decryptStartTime;
+      console.log('[getUserAccessToken] Token decrypted', { 
+        decryptDuration: `${decryptDuration}ms`,
+        tokenLength: accessToken?.length || 0,
+      });
       return accessToken;
     } catch (error) {
+      console.log('[getUserAccessToken] Decryption failed', { error: error.message });
       this.logger.error('Failed to decrypt OAuth access token', { userId, error: error.message });
       throw new Error('Failed to decrypt OAuth token. Please re-authorize.');
     }

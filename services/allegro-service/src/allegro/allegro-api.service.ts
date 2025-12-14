@@ -38,8 +38,15 @@ export class AllegroApiService {
    * Make authenticated request to Allegro API
    */
   private async request(method: string, endpoint: string, data?: any): Promise<any> {
+    console.log('[AllegroApiService.request] ========== METHOD CALLED ==========', { method, endpoint });
+    const tokenStartTime = Date.now();
+    console.log('[AllegroApiService.request] About to get access token');
     const token = await this.getAccessToken();
+    const tokenDuration = Date.now() - tokenStartTime;
+    console.log('[AllegroApiService.request] Access token obtained', { tokenDuration: `${tokenDuration}ms` });
+    
     const url = `${this.apiUrl}${endpoint}`;
+    console.log('[AllegroApiService.request] URL prepared', { url, method });
 
     try {
       // Allegro API requires application/vnd.allegro.public.v1+json for PUT/POST requests
@@ -56,6 +63,8 @@ export class AllegroApiService {
         timeout: 20000, // 20 seconds for general requests - more than enough
       };
 
+      console.log('[AllegroApiService.request] About to send HTTP request', { method, endpoint, timeout: config.timeout });
+      const httpStartTime = Date.now();
       let response;
       switch (method.toUpperCase()) {
         case 'GET':
@@ -73,10 +82,26 @@ export class AllegroApiService {
         default:
           throw new Error(`Unsupported method: ${method}`);
       }
+      const httpDuration = Date.now() - httpStartTime;
+      console.log('[AllegroApiService.request] HTTP request completed', { 
+        method, 
+        endpoint, 
+        httpDuration: `${httpDuration}ms`,
+        status: response?.status,
+      });
 
       return response.data;
     } catch (error: any) {
       const errorData = error.response?.data || {};
+      const isTimeout = error.code === 'ECONNABORTED' || error.message?.includes('timeout');
+      console.log('[AllegroApiService.request] HTTP request failed', {
+        method,
+        endpoint,
+        error: error.message,
+        errorCode: error.code,
+        isTimeout,
+        status: error.response?.status,
+      });
       // Extract error details for better logging
       const errorDetails = errorData.errors ? JSON.stringify(errorData.errors, null, 2) : JSON.stringify(errorData, null, 2);
       this.logger.error('Allegro API request failed', {
