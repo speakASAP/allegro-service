@@ -564,17 +564,17 @@ export class SettingsService {
               if (allegroTimeout) {
                 return parseInt(allegroTimeout);
               }
-              // Default to 30 seconds for Allegro API validation (external API can be slow)
-              const defaultAllegroTimeout = 30000;
+              // Default to 60 seconds for Allegro API validation (external API can be very slow)
+              const defaultAllegroTimeout = 60000;
               const authTimeout = this.configService.get<string>('AUTH_SERVICE_TIMEOUT');
               const httpTimeout = this.configService.get<string>('HTTP_TIMEOUT');
               const timeout = authTimeout || httpTimeout;
               if (!timeout) {
                 // If no timeout configured, use default for Allegro validation
-                this.logger.log('No timeout configured, using default 30s for Allegro validation', { userId });
+                this.logger.log('No timeout configured, using default 60s for Allegro validation', { userId });
                 return defaultAllegroTimeout;
               }
-              // Use configured timeout, but ensure minimum 30 seconds for external API
+              // Use configured timeout, but ensure minimum 60 seconds for external API
               const configuredTimeout = parseInt(timeout);
               return Math.max(configuredTimeout, defaultAllegroTimeout);
             })(),
