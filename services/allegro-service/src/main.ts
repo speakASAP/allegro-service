@@ -75,9 +75,9 @@ async function bootstrap() {
     }),
   );
 
-  const port = configService.get<string>('ALLEGRO_SERVICE_PORT') || configService.get<string>('PORT');
+  const port = configService.get<string>('ALLEGRO_SERVICE_PORT');
   if (!port) {
-    throw new Error('ALLEGRO_SERVICE_PORT or PORT must be configured in .env file');
+    throw new Error('ALLEGRO_SERVICE_PORT must be configured in .env file');
   }
   await app.listen(parseInt(port));
   console.log(`Allegro Service is running on: http://localhost:${port}`);

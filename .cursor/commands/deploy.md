@@ -15,7 +15,7 @@ ssh statex "cd /home/statex/allegro && git pull origin master"
 ssh statex "cd /home/statex/nginx-microservice && ./scripts/blue-green/deploy-smart allegro"
 
 # 3. Register domain (if not exists)
-ssh statex "cd /home/statex/nginx-microservice && ./scripts/add-domain.sh allegro.statex.cz allegro 3468 admin@statex.cz"
+ssh statex "cd /home/statex/nginx-microservice && ./scripts/add-domain.sh allegro.statex.cz allegro 3411 admin@statex.cz"
 
 # 4. Configure nginx for frontend service
 
@@ -37,8 +37,8 @@ ssh statex "curl -s https://allegro.statex.cz/health && docker run --rm --networ
 
 ## Notes
 
-- Port: 3367
-- Internal URL: `http://allegro:3468`
+- API Gateway Port: 3411 (configured via `API_GATEWAY_PORT` in .env)
+- Frontend Port: 3410 (configured via `ALLEGRO_FRONTEND_SERVICE_PORT` in .env)
 - External URL: `https://allegro.statex.cz`
 - Service registry: `/home/statex/nginx-microservice/service-registry/allegro.json`
-- Environment: `.env` file in project root (PORT=3468)
+- Environment: `.env` file in project root

@@ -70,9 +70,9 @@ async function bootstrap() {
   }
 
   // Port configured in allegro/.env: API_GATEWAY_PORT
-  const port = configService.get<string>('API_GATEWAY_PORT') || configService.get<string>('PORT');
+  const port = configService.get<string>('API_GATEWAY_PORT');
   if (!port) {
-    throw new Error('API_GATEWAY_PORT or PORT must be configured in .env file');
+    throw new Error('API_GATEWAY_PORT must be configured in .env file');
   }
   await app.listen(parseInt(port));
   console.log(`API Gateway is running on: http://localhost:${port}`);

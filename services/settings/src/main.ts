@@ -140,9 +140,9 @@ async function bootstrap() {
   );
   app.useGlobalFilters(new GlobalHttpExceptionFilter());
 
-  const port = configService.get<string>('ALLEGRO_SETTINGS_SERVICE_PORT') || configService.get<string>('PORT');
+  const port = configService.get<string>('ALLEGRO_SETTINGS_SERVICE_PORT');
   if (!port) {
-    throw new Error('ALLEGRO_SETTINGS_SERVICE_PORT or PORT must be configured in .env file');
+    throw new Error('ALLEGRO_SETTINGS_SERVICE_PORT must be configured in .env file');
   }
   await app.listen(parseInt(port));
   console.log(`Settings Service is running on: http://localhost:${port}`);
