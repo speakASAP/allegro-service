@@ -395,6 +395,8 @@ export class GatewayService implements OnModuleInit {
     // Special timeout for bulk operations that may take longer
     const isBulkOperation = path.includes('/publish-all') || path.includes('/import') || path.includes('/bulk');
     const isPublishAll = path.includes('/publish-all');
+    // Validation operations that call external APIs need longer timeouts
+    const isValidationOperation = path.includes('/validate/allegro') || path.includes('/validate/');
     const defaultTimeout = (() => {
       const gatewayTimeout = this.configService.get<string>('GATEWAY_TIMEOUT');
       const httpTimeout = this.configService.get<string>('HTTP_TIMEOUT');
@@ -405,10 +407,12 @@ export class GatewayService implements OnModuleInit {
       return parseInt(timeout);
     })();
     
-    // Use longer timeout for bulk operations
+    // Use longer timeout for bulk operations and validation operations
     // publish-all can take 5+ minutes for many offers (30 seconds per offer * 29 offers = ~14 minutes worst case)
     // Set to 10 minutes (600000ms) to be safe
-    const timeout = isPublishAll ? 600000 : (isBulkOperation ? 120000 : defaultTimeout);
+    // Validation operations call external APIs (Allegro) which can take 30-60 seconds
+    // Set to 90 seconds (90000ms) to be safe for validation
+    const timeout = isPublishAll ? 600000 : (isBulkOperation ? 120000 : (isValidationOperation ? 90000 : defaultTimeout));
     
     // Determine if URL is HTTPS or HTTP to use correct agent
     const isHttps = url.startsWith('https://');
