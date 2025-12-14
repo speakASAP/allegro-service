@@ -412,7 +412,8 @@ export class GatewayService implements OnModuleInit {
     // Set to 10 minutes (600000ms) to be safe
     // Validation operations call external APIs (Allegro) which can take 30-60 seconds
     // Set to 90 seconds (90000ms) to be safe for validation
-    const timeout = isPublishAll ? 600000 : (isBulkOperation ? 120000 : (isValidationOperation ? 90000 : defaultTimeout));
+    // Regular GET requests (like /settings) should be fast, but increase timeout to 60s to handle slow connections
+    const timeout = isPublishAll ? 600000 : (isBulkOperation ? 120000 : (isValidationOperation ? 90000 : Math.max(defaultTimeout, 60000)));
     
     // Determine if URL is HTTPS or HTTP to use correct agent
     const isHttps = url.startsWith('https://');
