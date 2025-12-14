@@ -3569,6 +3569,7 @@ export class OffersService {
         }).catch(() => {}); // Fire and forget - don't block
         console.log('[publishOffersToAllegro] logger.log for STEP 2.X.1 called (non-blocking)');
         
+        console.log('[publishOffersToAllegro] About to execute Prisma query', { offerId, dbLoadStartTime });
         const offer = await this.prisma.allegroOffer.findUnique({
           where: { id: offerId },
           include: {
@@ -3581,6 +3582,11 @@ export class OffersService {
           } as any,
         });
         const dbLoadDuration = Date.now() - dbLoadStartTime;
+        console.log('[publishOffersToAllegro] Prisma query completed', { 
+          offerId, 
+          dbLoadDuration: `${dbLoadDuration}ms`,
+          offerFound: !!offer,
+        });
         
         this.logger.log(`[${offerRequestId}] [publishOffersToAllegro] STEP 2.${processedCount}.1 COMPLETE: Database query completed`, {
           offerId,
