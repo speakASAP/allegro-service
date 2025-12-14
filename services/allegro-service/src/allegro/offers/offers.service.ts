@@ -3760,6 +3760,20 @@ export class OffersService {
               });
             }
 
+            // CRITICAL: Remove description from PATCH payload - Allegro API /sale/product-offers/{id} PATCH endpoint
+            // does NOT accept description field (causes 422 "Message is not readable" error)
+            // Description can only be updated via PUT request to /sale/offers/{id} endpoint (deprecated)
+            if (updatePayload.description !== undefined) {
+              console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Removing description from PATCH payload (not supported)`, {
+                offerId,
+                allegroOfferId: offer.allegroOfferId,
+                hadDescription: true,
+                descriptionLength: updatePayload.description?.length || 0,
+                timestamp: new Date().toISOString(),
+              });
+              delete updatePayload.description;
+            }
+
             // Log payload before sending
             const payloadSize = JSON.stringify(updatePayload).length;
             console.log(`[${finalRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Preparing update payload`, {
@@ -3778,6 +3792,7 @@ export class OffersService {
               currency: updatePayload.sellingMode?.price?.currency,
               hasStock: !!updatePayload.stock,
               stockAvailable: updatePayload.stock?.available,
+              hasDescription: false, // Always false for PATCH requests
               payloadPreview: JSON.stringify(updatePayload, null, 2).substring(0, 500),
               timestamp: new Date().toISOString(),
             });
