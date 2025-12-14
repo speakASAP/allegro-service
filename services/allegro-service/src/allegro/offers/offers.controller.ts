@@ -871,15 +871,26 @@ export class OffersController {
       });
 
       // Check if error is OAuth-related
+      // Don't treat all 403/401 as OAuth errors - check the actual error message first
       const isOAuthError = errorMessage.toLowerCase().includes('oauth') ||
                           errorMessage.toLowerCase().includes('authorization required') ||
-                          errorStatus === 403 ||
-                          errorStatus === 401 ||
-                          error.code === 'OAUTH_REQUIRED';
+                          errorMessage.toLowerCase().includes('unauthorized') ||
+                          errorMessage.toLowerCase().includes('token expired') ||
+                          errorMessage.toLowerCase().includes('invalid token') ||
+                          errorMessage.toLowerCase().includes('access denied') ||
+                          (errorStatus === 401) || // 401 is always auth-related
+                          (errorStatus === 403 && (
+                            errorMessage.toLowerCase().includes('forbidden') ||
+                            errorData.code === 'OAUTH_REQUIRED' ||
+                            error.code === 'OAUTH_REQUIRED'
+                          ));
 
       let userFriendlyMessage = errorMessage;
       if (isOAuthError) {
         userFriendlyMessage = 'OAuth authorization required or token expired. Please go to Settings and re-authorize the application to access your Allegro offers.';
+      } else if (errorStatus === 403) {
+        // 403 but not OAuth-related - show the actual error from Allegro
+        userFriendlyMessage = errorMessage || errorData.message || 'Access forbidden. Please check your permissions and offer data.';
       }
 
       throw new HttpException(
