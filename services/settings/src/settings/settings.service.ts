@@ -590,16 +590,29 @@ export class SettingsService {
       return { valid: false, message: 'Invalid response from Allegro API' };
     } catch (error: any) {
       const status = error.response?.status;
-      const errorMessage = error.response?.data?.error_description || error.response?.data?.error || error.message;
+      const errorData = error.response?.data || {};
+      const errorMessage = errorData.error_description || errorData.error || error.message;
+      const errorCode = errorData.error_code || error.code;
       
       this.logger.error('Failed to validate Allegro API keys', {
         userId,
         error: errorMessage,
         status,
+        statusText: error.response?.statusText,
+        errorCode,
+        errorData: JSON.stringify(errorData),
         tokenUrl,
+        clientIdPrefix: dto.clientId ? dto.clientId.substring(0, 8) + '...' : 'missing',
+        hasClientSecret: !!dto.clientSecret,
+        clientSecretLength: dto.clientSecret?.length || 0,
       });
 
       if (status === 401 || status === 403) {
+        // Provide more specific error message if available from Allegro
+        const specificMessage = errorData.error_description || errorData.error;
+        if (specificMessage && specificMessage !== 'invalid_client') {
+          return { valid: false, message: `Invalid API credentials: ${specificMessage}` };
+        }
         return { valid: false, message: 'Invalid API credentials. Please check your Client ID and Client Secret.' };
       }
 
@@ -607,7 +620,12 @@ export class SettingsService {
         return { valid: false, message: `OAuth endpoint not found. Please check ALLEGRO_AUTH_URL configuration.` };
       }
 
-      return { valid: false, message: `Validation failed: ${errorMessage || error.message}` };
+      // Include more details in error message for debugging
+      const detailedMessage = errorMessage 
+        ? `Validation failed: ${errorMessage}${status ? ` (HTTP ${status})` : ''}`
+        : `Validation failed: ${error.message || 'Unknown error'}`;
+      
+      return { valid: false, message: detailedMessage };
     }
   }
 
