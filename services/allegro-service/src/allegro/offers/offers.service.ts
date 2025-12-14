@@ -3555,9 +3555,12 @@ export class OffersService {
           timestamp: new Date().toISOString(),
           step: `2.${processedCount}/5`,
         });
+        console.log('[publishOffersToAllegro] logger.log for PROCESSING OFFER completed');
 
         // Load offer from database with relations
+        console.log('[publishOffersToAllegro] About to load offer from database', { offerId });
         const dbLoadStartTime = Date.now();
+        console.log('[publishOffersToAllegro] About to call logger.log for STEP 2.X.1');
         this.logger.log(`[${offerRequestId}] [publishOffersToAllegro] STEP 2.${processedCount}.1: Loading offer from database`, {
           offerId,
           userId,
