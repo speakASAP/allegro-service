@@ -3414,9 +3414,18 @@ export class OffersService {
    * Returns summary with success/failure results
    */
   async publishOffersToAllegro(userId: string, offerIds: string[], requestId?: string): Promise<any> {
+    console.log('[publishOffersToAllegro] ========== METHOD CALLED ==========', {
+      userId,
+      offerIdsCount: offerIds?.length || 0,
+      requestId,
+      timestamp: new Date().toISOString(),
+    });
+    
     const startTime = Date.now();
     const finalRequestId = requestId || `publish-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    console.log('[publishOffersToAllegro] finalRequestId created:', finalRequestId);
     
+    console.log('[publishOffersToAllegro] About to call logger.log for STARTING BULK PUBLISH');
     this.logger.log(`[${finalRequestId}] [publishOffersToAllegro] ========== STARTING BULK PUBLISH ==========`, {
       userId,
       offerCount: offerIds.length,
@@ -3428,8 +3437,10 @@ export class OffersService {
       memoryUsage: process.memoryUsage(),
       nodeVersion: process.version,
     });
+    console.log('[publishOffersToAllegro] logger.log for STARTING BULK PUBLISH completed');
     
     // Log initial state
+    console.log('[publishOffersToAllegro] About to call logger.log for Initial state check');
     this.logger.log(`[${finalRequestId}] [publishOffersToAllegro] Initial state check`, {
       userId,
       offerIdsCount: offerIds.length,
@@ -3438,15 +3449,18 @@ export class OffersService {
       lastOfferId: offerIds[offerIds.length - 1] || null,
       timestamp: new Date().toISOString(),
     });
+    console.log('[publishOffersToAllegro] logger.log for Initial state check completed');
 
     const results: Array<{ offerId: string; status: 'success' | 'failed'; error?: string; allegroOfferId?: string }> = [];
     let successful = 0;
     let failed = 0;
 
     // Get OAuth token once for all operations
+    console.log('[publishOffersToAllegro] About to get OAuth token');
     let oauthToken: string;
     const tokenStartTime = Date.now();
     try {
+      console.log('[publishOffersToAllegro] About to call logger.log for STEP 1');
       this.logger.log(`[${finalRequestId}] [publishOffersToAllegro] STEP 1: Fetching OAuth token`, { 
         userId,
         timestamp: new Date().toISOString(),
