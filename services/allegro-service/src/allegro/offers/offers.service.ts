@@ -3588,13 +3588,17 @@ export class OffersService {
           offerFound: !!offer,
         });
         
+        console.log('[publishOffersToAllegro] About to call logger.log for STEP 2.X.1 COMPLETE (non-blocking)');
+        // Don't await logger.log - it blocks execution. Fire and forget.
         this.logger.log(`[${offerRequestId}] [publishOffersToAllegro] STEP 2.${processedCount}.1 COMPLETE: Database query completed`, {
           offerId,
           dbLoadDuration: `${dbLoadDuration}ms`,
           offerFound: !!offer,
           timestamp: new Date().toISOString(),
-        });
+        }).catch(() => {}); // Fire and forget - don't block
+        console.log('[publishOffersToAllegro] logger.log for STEP 2.X.1 COMPLETE called (non-blocking)');
 
+        console.log('[publishOffersToAllegro] About to check if offer exists', { offerId, hasOffer: !!offer });
         if (!offer) {
           this.logger.error(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Offer not found in database`, {
             offerId,
@@ -3608,6 +3612,8 @@ export class OffersService {
           throw new Error(`Offer not found: ${offerId}`);
         }
 
+        console.log('[publishOffersToAllegro] Offer found, about to call logger.log for Loaded from database (non-blocking)');
+        // Don't await logger.log - it blocks execution. Fire and forget.
         this.logger.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Loaded from database`, {
           offerId,
           title: offer.title,
@@ -3626,9 +3632,13 @@ export class OffersService {
           imagesCount: Array.isArray(offer.images) ? offer.images.length : 0,
           hasRawData: !!offer.rawData,
           timestamp: new Date().toISOString(),
-        });
+        }).catch(() => {}); // Fire and forget - don't block
+        console.log('[publishOffersToAllegro] logger.log for Loaded from database called (non-blocking)');
 
         // Check if offer already exists on Allegro
+        console.log('[publishOffersToAllegro] About to check if offer exists on Allegro', { offerId, allegroOfferId: offer.allegroOfferId });
+        console.log('[publishOffersToAllegro] About to call logger.log for STEP 2.X.2 (non-blocking)');
+        // Don't await logger.log - it blocks execution. Fire and forget.
         this.logger.log(`[${offerRequestId}] [publishOffersToAllegro] STEP 2.${processedCount}.2: Checking if offer exists on Allegro`, {
           offerId,
           hasAllegroOfferId: !!offer.allegroOfferId,
