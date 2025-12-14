@@ -747,7 +747,7 @@ export class OffersController {
         queryContent: JSON.stringify(query, null, 2),
         timestamp: new Date().toISOString(),
         step: 'CONTROLLER_ENTRY',
-      }).catch(() => {}); // Fire and forget - don't block
+      }); // Logger is now non-blocking (fire and forget)
       console.log('[publishAllOffers] logger.log for PUBLISH ALL REQUEST RECEIVED called (non-blocking)');
 
       console.log('[publishAllOffers] About to process offerIds');
@@ -759,7 +759,7 @@ export class OffersController {
         this.logger.log(`[${requestId}] [publishAllOffers] Using provided offer IDs`, {
           offerIdsCount: offerIds.length,
           firstFewIds: offerIds.slice(0, 5),
-        }).catch(() => {}); // Fire and forget - don't block
+        }); // Logger is now non-blocking (fire and forget)
       } else {
         // Use same filters as GET /allegro/offers to get filtered offers
         const where: any = {};
@@ -779,7 +779,7 @@ export class OffersController {
         this.logger.log(`[${requestId}] [publishAllOffers] Fetching offers with filters`, {
           where,
           query,
-        }).catch(() => {}); // Fire and forget - don't block
+        }); // Logger is now non-blocking (fire and forget)
 
         const offers = await this.offersService.getOffers({
           ...query,
@@ -791,13 +791,13 @@ export class OffersController {
         this.logger.log(`[${requestId}] [publishAllOffers] Fetched offers from database`, {
           totalOffers: offers.items.length,
           offerIdsCount: offerIds.length,
-        }).catch(() => {}); // Fire and forget - don't block
+        }); // Logger is now non-blocking (fire and forget)
       }
 
       if (offerIds.length === 0) {
         this.logger.log(`[${requestId}] [publishAllOffers] No offers to publish`, {
           userId,
-        }).catch(() => {}); // Fire and forget - don't block
+        }); // Logger is now non-blocking (fire and forget)
         return {
           success: true,
           data: {
@@ -821,7 +821,7 @@ export class OffersController {
         timestamp: new Date().toISOString(),
         step: 'BEFORE_SERVICE_CALL',
         memoryUsage: process.memoryUsage(),
-      }).catch(() => {}); // Fire and forget - don't block
+      }); // Logger is now non-blocking (fire and forget)
       console.log('[publishAllOffers] logger.log for STARTING PUBLISH OPERATION called (non-blocking)');
 
       // Wait for publish operation to complete and return results
@@ -833,7 +833,7 @@ export class OffersController {
           requestId,
           timestamp: new Date().toISOString(),
           step: 'SERVICE_CALL_START',
-        }).catch(() => {}); // Fire and forget - don't block
+        }); // Logger is now non-blocking (fire and forget)
         console.log('[publishAllOffers] logger.log for SERVICE_CALL_START called (non-blocking)');
         
         console.log('[publishAllOffers] About to call offersService.publishOffersToAllegro');
@@ -847,7 +847,7 @@ export class OffersController {
           resultKeys: result ? Object.keys(result) : [],
           timestamp: new Date().toISOString(),
           step: 'SERVICE_CALL_COMPLETE',
-        }).catch(() => {}); // Fire and forget - don't block
+        }); // Logger is now non-blocking (fire and forget)
 
         const totalDuration = Date.now() - startTime;
         this.logger.log(`[${requestId}] [publishAllOffers] Publish completed`, {
@@ -859,7 +859,7 @@ export class OffersController {
           totalDuration: `${totalDuration}ms`,
           totalDurationSeconds: Math.round(totalDuration / 1000),
           timestamp: new Date().toISOString(),
-        }).catch(() => {}); // Fire and forget - don't block
+        }); // Logger is now non-blocking (fire and forget)
 
         // Return actual results
         return {
