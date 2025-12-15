@@ -634,6 +634,139 @@ export class AllegroApiService {
   }
 
   /**
+   * Publish / unpublish offers using Allegro command pattern
+   * Wrapper for:
+   * PUT /sale/offer-publication-commands/{commandId}
+   *
+   * @param accessToken OAuth access token
+   * @param offerIds Allegro offer IDs to publish/unpublish
+   * @param action "ACTIVATE" to publish, "END" to end offers
+   */
+  async publishOffersWithOAuthToken(
+    accessToken: string,
+    offerIds: string[],
+    action: 'ACTIVATE' | 'END' = 'ACTIVATE',
+  ): Promise<{ commandId: string; response: any }> {
+    const commandId = `publish-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const endpoint = `/sale/offer-publication-commands/${commandId}`;
+    const url = `${this.apiUrl}${endpoint}`;
+    const requestId = `api-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const requestStartTime = Date.now();
+
+    const body = {
+      publication: { action },
+      offerCriteria: [
+        {
+          type: 'CONTAINS_OFFERS',
+          offers: offerIds.map((id) => ({ id })),
+        },
+      ],
+    };
+
+    try {
+      const payloadSize = JSON.stringify(body).length;
+      this.logger.log(`[${requestId}] [publishOffersWithOAuthToken] ========== ALLEGRO API REQUEST ==========` as string, {
+        endpoint,
+        method: 'PUT',
+        url,
+        commandId,
+        action,
+        offerIdsCount: offerIds.length,
+        firstOfferIds: offerIds.slice(0, 10),
+        payloadSize: `${payloadSize} bytes`,
+        payloadKeys: Object.keys(body),
+        tokenLength: accessToken?.length || 0,
+        tokenPreview: accessToken ? `${accessToken.substring(0, 20)}...${accessToken.substring(accessToken.length - 10)}` : 'null',
+        payloadPreview: JSON.stringify(body, null, 2).substring(0, 2000),
+        timestamp: new Date().toISOString(),
+      });
+
+      const config = {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/vnd.allegro.public.v1+json',
+          Accept: 'application/vnd.allegro.public.v1+json',
+        },
+        timeout: 15000,
+      };
+
+      this.logger.log(`[${requestId}] [publishOffersWithOAuthToken] Sending HTTP PUT request` as string, {
+        url,
+        headers: Object.keys(config.headers),
+        timeout: config.timeout,
+        payloadSize: `${payloadSize} bytes`,
+        timestamp: new Date().toISOString(),
+      });
+
+      const httpRequestStartTime = Date.now();
+      const response = await firstValueFrom(this.httpService.put(url, body, config));
+      const httpRequestDuration = Date.now() - httpRequestStartTime;
+
+      this.logger.log(`[${requestId}] [publishOffersWithOAuthToken] HTTP request completed` as string, {
+        httpRequestDuration: `${httpRequestDuration}ms`,
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      });
+
+      const requestDuration = Date.now() - requestStartTime;
+      this.logger.log(
+        `[${requestId}] [publishOffersWithOAuthToken] ========== ALLEGRO API RESPONSE SUCCESS ==========` as string,
+        {
+          endpoint,
+          method: 'PUT',
+          commandId,
+          action,
+          status: response.status,
+          statusText: response.statusText,
+          requestDuration: `${requestDuration}ms`,
+          responseKeys: response.data ? Object.keys(response.data) : [],
+          responseSize: JSON.stringify(response.data).length,
+          responsePreview: JSON.stringify(response.data, null, 2).substring(0, 2000),
+          timestamp: new Date().toISOString(),
+        },
+      );
+
+      return { commandId, response: response.data };
+    } catch (error: any) {
+      const requestDuration = Date.now() - requestStartTime;
+      const errorData = error.response?.data || {};
+      const errorDetails = JSON.stringify(errorData, null, 2);
+
+      this.logger.error(
+        `[${requestId}] [publishOffersWithOAuthToken] ========== ALLEGRO API RESPONSE ERROR ==========` as string,
+        {
+          endpoint,
+          method: 'PUT',
+          url,
+          commandId,
+          action,
+          error: error.message,
+          errorCode: error.code,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          requestDuration: `${requestDuration}ms`,
+          isTimeout: error.code === 'ECONNABORTED' || error.message?.includes('timeout'),
+          errorData,
+          errorDetails,
+          errorResponseKeys: errorData ? Object.keys(errorData) : [],
+          hasErrorsArray: !!(errorData.errors && Array.isArray(errorData.errors)),
+          errorsCount: errorData.errors?.length || 0,
+          firstError: errorData.errors?.[0] ? JSON.stringify(errorData.errors[0], null, 2) : undefined,
+          userMessage: errorData.userMessage,
+          message: errorData.message,
+          code: errorData.code,
+          path: errorData.path,
+          errorDescription: errorData.error_description,
+          responseHeaders: error.response?.headers ? JSON.stringify(error.response.headers) : undefined,
+          requestPayload: JSON.stringify(body, null, 2).substring(0, 2000),
+          timestamp: new Date().toISOString(),
+        },
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Delete offer
    */
   async deleteOffer(offerId: string) {
