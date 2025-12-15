@@ -3462,6 +3462,7 @@ export class OffersService {
     });
 
     const results: Array<{ offerId: string; status: 'success' | 'failed'; error?: string; allegroOfferId?: string }> = [];
+    const successfulAllegroOfferIds: string[] = [];
     let successful = 0;
     let failed = 0;
 
@@ -3858,6 +3859,9 @@ export class OffersService {
               allegroOfferId: offer.allegroOfferId,
             });
             successful++;
+            if (offer.allegroOfferId) {
+              successfulAllegroOfferIds.push(offer.allegroOfferId);
+            }
 
             console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: ✅ SUCCESS - Offer updated successfully`, {
               offerId,
@@ -4402,11 +4406,50 @@ export class OffersService {
     }
 
     const totalDuration = Date.now() - startTime;
+
+    // After updating offers via PATCH, send a publication command to Allegro
+    // so offers are explicitly ACTIVATED using official command pattern.
+    let publishCommand: { commandId: string; response: any } | null = null;
+    if (successfulAllegroOfferIds.length > 0) {
+      const publishStartTime = Date.now();
+      console.log(`[${finalRequestId}] [publishOffersToAllegro] STEP 3: Sending publish command to Allegro`, {
+        userId,
+        successfulAllegroOfferIdsCount: successfulAllegroOfferIds.length,
+        successfulAllegroOfferIds: successfulAllegroOfferIds.slice(0, 10),
+        timestamp: new Date().toISOString(),
+      });
+      try {
+        publishCommand = await this.allegroApi.publishOffersWithOAuthToken(oauthToken, successfulAllegroOfferIds, 'ACTIVATE');
+        const publishDuration = Date.now() - publishStartTime;
+        console.log(`[${finalRequestId}] [publishOffersToAllegro] STEP 3 COMPLETE: Publish command sent`, {
+          userId,
+          commandId: publishCommand.commandId,
+          publishDuration: `${publishDuration}ms`,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (publishError: any) {
+        const publishDuration = Date.now() - publishStartTime;
+        console.error(
+          `[${finalRequestId}] [publishOffersToAllegro] STEP 3 FAILED: Failed to send publish command to Allegro`,
+          {
+            userId,
+            error: publishError.message,
+            errorCode: publishError.code,
+            errorStatus: publishError.response?.status,
+            errorData: publishError.response?.data,
+            publishDuration: `${publishDuration}ms`,
+            timestamp: new Date().toISOString(),
+          },
+        );
+      }
+    }
+
     const summary = {
       total: offerIds.length,
       successful,
       failed,
       results,
+      publishCommand,
     };
 
     console.log(`[${finalRequestId}] [publishOffersToAllegro] ========== BULK PUBLISH COMPLETED ==========`, {
