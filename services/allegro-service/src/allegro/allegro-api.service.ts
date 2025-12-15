@@ -767,6 +767,212 @@ export class AllegroApiService {
   }
 
   /**
+   * Get publish command summary
+   * GET /sale/offer-publication-commands/{commandId}
+   */
+  async getOfferPublicationCommandStatusWithOAuthToken(
+    accessToken: string,
+    commandId: string,
+  ): Promise<any> {
+    const endpoint = `/sale/offer-publication-commands/${commandId}`;
+    const url = `${this.apiUrl}${endpoint}`;
+    const requestId = `api-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const requestStartTime = Date.now();
+
+    try {
+      this.logger.log(
+        `[${requestId}] [getOfferPublicationCommandStatusWithOAuthToken] Fetching publish command status` as string,
+        {
+          endpoint,
+          commandId,
+          url,
+          timestamp: new Date().toISOString(),
+        },
+      );
+
+      const config = {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.allegro.public.v1+json',
+        },
+        timeout: 10000,
+      };
+
+      const httpRequestStartTime = Date.now();
+      const response = await firstValueFrom(this.httpService.get(url, config));
+      const httpRequestDuration = Date.now() - httpRequestStartTime;
+
+      this.logger.log(
+        `[${requestId}] [getOfferPublicationCommandStatusWithOAuthToken] HTTP request completed` as string,
+        {
+          httpRequestDuration: `${httpRequestDuration}ms`,
+          status: response.status,
+          timestamp: new Date().toISOString(),
+        },
+      );
+
+      const requestDuration = Date.now() - requestStartTime;
+      this.logger.log(
+        `[${requestId}] [getOfferPublicationCommandStatusWithOAuthToken] Command status received` as string,
+        {
+          endpoint,
+          commandId,
+          status: response.status,
+          statusText: response.statusText,
+          requestDuration: `${requestDuration}ms`,
+          responseKeys: response.data ? Object.keys(response.data) : [],
+          responseSize: JSON.stringify(response.data).length,
+          responsePreview: JSON.stringify(response.data, null, 2).substring(0, 2000),
+          timestamp: new Date().toISOString(),
+        },
+      );
+
+      return response.data;
+    } catch (error: any) {
+      const requestDuration = Date.now() - requestStartTime;
+      const errorData = error.response?.data || {};
+      const errorDetails = JSON.stringify(errorData, null, 2);
+
+      this.logger.error(
+        `[${requestId}] [getOfferPublicationCommandStatusWithOAuthToken] Failed to fetch publish command status` as string,
+        {
+          endpoint,
+          commandId,
+          url,
+          error: error.message,
+          errorCode: error.code,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          requestDuration: `${requestDuration}ms`,
+          isTimeout: error.code === 'ECONNABORTED' || error.message?.includes('timeout'),
+          errorData,
+          errorDetails,
+          errorResponseKeys: errorData ? Object.keys(errorData) : [],
+          hasErrorsArray: !!(errorData.errors && Array.isArray(errorData.errors)),
+          errorsCount: errorData.errors?.length || 0,
+          firstError: errorData.errors?.[0] ? JSON.stringify(errorData.errors[0], null, 2) : undefined,
+          userMessage: errorData.userMessage,
+          message: errorData.message,
+          code: errorData.code,
+          path: errorData.path,
+          errorDescription: errorData.error_description,
+          responseHeaders: error.response?.headers ? JSON.stringify(error.response.headers) : undefined,
+          timestamp: new Date().toISOString(),
+        },
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Get publish command detailed tasks (per-offer results)
+   * GET /sale/offer-publication-commands/{commandId}/tasks
+   */
+  async getOfferPublicationCommandTasksWithOAuthToken(
+    accessToken: string,
+    commandId: string,
+    params?: { limit?: number; offset?: number },
+  ): Promise<any> {
+    const queryParams: any = {};
+    if (params?.limit !== undefined) queryParams.limit = params.limit;
+    if (params?.offset !== undefined) queryParams.offset = params.offset;
+    const queryString = Object.keys(queryParams).length
+      ? `?${new URLSearchParams(queryParams as any).toString()}`
+      : '';
+
+    const endpoint = `/sale/offer-publication-commands/${commandId}/tasks${queryString}`;
+    const url = `${this.apiUrl}${endpoint}`;
+    const requestId = `api-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const requestStartTime = Date.now();
+
+    try {
+      this.logger.log(
+        `[${requestId}] [getOfferPublicationCommandTasksWithOAuthToken] Fetching publish command tasks` as string,
+        {
+          endpoint,
+          commandId,
+          url,
+          params: queryParams,
+          timestamp: new Date().toISOString(),
+        },
+      );
+
+      const config = {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.allegro.public.v1+json',
+        },
+        timeout: 10000,
+      };
+
+      const httpRequestStartTime = Date.now();
+      const response = await firstValueFrom(this.httpService.get(url, config));
+      const httpRequestDuration = Date.now() - httpRequestStartTime;
+
+      this.logger.log(
+        `[${requestId}] [getOfferPublicationCommandTasksWithOAuthToken] HTTP request completed` as string,
+        {
+          httpRequestDuration: `${httpRequestDuration}ms`,
+          status: response.status,
+          timestamp: new Date().toISOString(),
+        },
+      );
+
+      const requestDuration = Date.now() - requestStartTime;
+      this.logger.log(
+        `[${requestId}] [getOfferPublicationCommandTasksWithOAuthToken] Tasks received` as string,
+        {
+          endpoint,
+          commandId,
+          status: response.status,
+          statusText: response.statusText,
+          requestDuration: `${requestDuration}ms`,
+          responseKeys: response.data ? Object.keys(response.data) : [],
+          responseSize: JSON.stringify(response.data).length,
+          responsePreview: JSON.stringify(response.data, null, 2).substring(0, 2000),
+          timestamp: new Date().toISOString(),
+        },
+      );
+
+      return response.data;
+    } catch (error: any) {
+      const requestDuration = Date.now() - requestStartTime;
+      const errorData = error.response?.data || {};
+      const errorDetails = JSON.stringify(errorData, null, 2);
+
+      this.logger.error(
+        `[${requestId}] [getOfferPublicationCommandTasksWithOAuthToken] Failed to fetch publish command tasks` as string,
+        {
+          endpoint,
+          commandId,
+          url,
+          params: queryParams,
+          error: error.message,
+          errorCode: error.code,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          requestDuration: `${requestDuration}ms`,
+          isTimeout: error.code === 'ECONNABORTED' || error.message?.includes('timeout'),
+          errorData,
+          errorDetails,
+          errorResponseKeys: errorData ? Object.keys(errorData) : [],
+          hasErrorsArray: !!(errorData.errors && Array.isArray(errorData.errors)),
+          errorsCount: errorData.errors?.length || 0,
+          firstError: errorData.errors?.[0] ? JSON.stringify(errorData.errors[0], null, 2) : undefined,
+          userMessage: errorData.userMessage,
+          message: errorData.message,
+          code: errorData.code,
+          path: errorData.path,
+          errorDescription: errorData.error_description,
+          responseHeaders: error.response?.headers ? JSON.stringify(error.response.headers) : undefined,
+          timestamp: new Date().toISOString(),
+        },
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Delete offer
    */
   async deleteOffer(offerId: string) {
