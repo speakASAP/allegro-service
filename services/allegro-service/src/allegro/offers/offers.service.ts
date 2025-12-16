@@ -405,6 +405,27 @@ export class OffersService {
         return [];
       }
       
+      // Check if images are already in correct format [{ url: "..." }]
+      // If all images are objects with ONLY 'url' property, return as-is to avoid double normalization
+      const allAlreadyNormalized = images.every((img: any) => 
+        img && 
+        typeof img === 'object' && 
+        img.url && 
+        typeof img.url === 'string' && 
+        Object.keys(img).length === 1
+      );
+      
+      if (allAlreadyNormalized) {
+        this.logger.log('[transformDtoToAllegroFormat] Images already normalized, skipping normalization', {
+          offerId: existingOffer.id,
+          allegroOfferId: existingOffer.allegroOfferId,
+          source,
+          imagesCount: images.length,
+          firstImage: JSON.stringify(images[0]),
+        });
+        return images;
+      }
+      
       // Log input for debugging
       this.logger.log('[transformDtoToAllegroFormat] Normalizing images', {
         offerId: existingOffer.id,
