@@ -31,14 +31,13 @@ const OrdersPage: React.FC = () => {
   const loadOrders = async () => {
     setLoading(true); // Set loading only during the API call
     try {
-      // Use reasonable timeout for database queries (30 seconds to handle slow connections)
-      // Database queries should complete in <100ms, but network delays can add time
+      // Use reasonable timeout for database queries (5 seconds maximum)
       const response = await api.get('/allegro/orders', {
-        timeout: 30000, // 30 seconds - enough for slow connections but not too long
+        timeout: 5000, // 5 seconds maximum
       });
       if (response.data.success) {
-        setOrders(response.data.data.items || []);
-        setError(null);
+        setOrders(response.data.data.items || []); // Set orders from response data
+        setError(null); // Clear any previous errors
       }
     } catch (err) {
       console.error('Failed to load orders', err);
