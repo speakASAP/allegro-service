@@ -435,20 +435,83 @@ export class OffersService {
             }
           }
           
-          // Return only { url } object - strip all other properties
+          // Validate URL format - must be valid HTTP/HTTPS URL
           if (url && typeof url === 'string' && url.length > 0) {
-            const normalizedImg = { url: url.trim() };
-            // Verify it only has 'url' property
-            if (Object.keys(normalizedImg).length !== 1 || !normalizedImg.url) {
-              this.logger.error('[transformDtoToAllegroFormat] Normalized image has invalid structure', {
+            url = url.trim();
+            
+            // CRITICAL: Allegro API requires publicly accessible URLs
+            // Reject localhost, internal IPs, and invalid URLs
+            try {
+              const urlObj = new URL(url);
+              
+              // Check if URL is publicly accessible
+              const hostname = urlObj.hostname.toLowerCase();
+              const isLocalhost = hostname === 'localhost' || 
+                                 hostname === '127.0.0.1' || 
+                                 hostname.startsWith('192.168.') ||
+                                 hostname.startsWith('10.') ||
+                                 hostname.startsWith('172.16.') ||
+                                 hostname.startsWith('172.17.') ||
+                                 hostname.startsWith('172.18.') ||
+                                 hostname.startsWith('172.19.') ||
+                                 hostname.startsWith('172.20.') ||
+                                 hostname.startsWith('172.21.') ||
+                                 hostname.startsWith('172.22.') ||
+                                 hostname.startsWith('172.23.') ||
+                                 hostname.startsWith('172.24.') ||
+                                 hostname.startsWith('172.25.') ||
+                                 hostname.startsWith('172.26.') ||
+                                 hostname.startsWith('172.27.') ||
+                                 hostname.startsWith('172.28.') ||
+                                 hostname.startsWith('172.29.') ||
+                                 hostname.startsWith('172.30.') ||
+                                 hostname.startsWith('172.31.');
+              
+              // Only accept HTTP/HTTPS protocols
+              const isValidProtocol = urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
+              
+              if (isLocalhost || !isValidProtocol) {
+                this.logger.error('[transformDtoToAllegroFormat] Image URL is not publicly accessible', {
+                  offerId: existingOffer.id,
+                  allegroOfferId: existingOffer.allegroOfferId,
+                  imageIndex: index,
+                  url: url.substring(0, 100),
+                  hostname,
+                  protocol: urlObj.protocol,
+                  isLocalhost,
+                  isValidProtocol,
+                  reason: isLocalhost ? 'localhost_or_internal_ip' : 'invalid_protocol',
+                });
+                return null; // Skip invalid URLs
+              }
+              
+              // Return only { url } object - strip all other properties
+              const normalizedImg = { url: url };
+              
+              // Verify it only has 'url' property
+              if (Object.keys(normalizedImg).length !== 1 || !normalizedImg.url) {
+                this.logger.error('[transformDtoToAllegroFormat] Normalized image has invalid structure', {
+                  offerId: existingOffer.id,
+                  allegroOfferId: existingOffer.allegroOfferId,
+                  imageIndex: index,
+                  normalizedImage: JSON.stringify(normalizedImg),
+                  keys: Object.keys(normalizedImg),
+                });
+                return null;
+              }
+              
+              return normalizedImg;
+            } catch (urlError: any) {
+              // Invalid URL format
+              this.logger.error('[transformDtoToAllegroFormat] Invalid URL format', {
                 offerId: existingOffer.id,
                 allegroOfferId: existingOffer.allegroOfferId,
                 imageIndex: index,
-                normalizedImage: JSON.stringify(normalizedImg),
-                keys: Object.keys(normalizedImg),
+                url: url.substring(0, 100),
+                urlError: urlError.message,
               });
+              return null;
             }
-            return normalizedImg;
           }
           
           // Log invalid image format for debugging
@@ -3928,11 +3991,15 @@ export class OffersService {
               timestamp: new Date().toISOString(),
             });
 
+            // Get publication status from update response
+            const publicationStatus = updateResponse?.publication?.status || offer.publicationStatus || 'INACTIVE';
+
             // Update sync status in database
             const dbUpdateStartTime = Date.now();
             console.log(`[${offerRequestId}] [publishOffersToAllegro] STEP 2.${processedCount}.3.3: Updating database sync status`, {
               offerId,
               syncStatus: 'SYNCED',
+              publicationStatus,
               timestamp: new Date().toISOString(),
               step: `2.${processedCount}.3.3`,
             });
@@ -3944,6 +4011,8 @@ export class OffersService {
                 syncSource: 'MANUAL',
                 lastSyncedAt: new Date(),
                 syncError: null,
+                publicationStatus: publicationStatus,
+                rawData: updateResponse || offer.rawData,
               } as any,
             });
             
@@ -3951,6 +4020,7 @@ export class OffersService {
             console.log(`[${offerRequestId}] [publishOffersToAllegro] STEP 2.${processedCount}.3.3 COMPLETE: Database updated`, {
               offerId,
               dbUpdateDuration: `${dbUpdateDuration}ms`,
+              publicationStatus,
               timestamp: new Date().toISOString(),
             });
 
@@ -3961,8 +4031,26 @@ export class OffersService {
               allegroOfferId: offer.allegroOfferId,
             });
             successful++;
+            
+            // Only add to publish command if offer is not already ACTIVE
+            // Allegro API rejects attempts to activate already active offers
             if (offer.allegroOfferId) {
-              successfulAllegroOfferIds.push(offer.allegroOfferId);
+              if (publicationStatus === 'ACTIVE') {
+                console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Skipping publish - already ACTIVE`, {
+                  offerId,
+                  allegroOfferId: offer.allegroOfferId,
+                  publicationStatus,
+                  timestamp: new Date().toISOString(),
+                });
+              } else {
+                successfulAllegroOfferIds.push(offer.allegroOfferId);
+                console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Added to publish queue`, {
+                  offerId,
+                  allegroOfferId: offer.allegroOfferId,
+                  publicationStatus,
+                  timestamp: new Date().toISOString(),
+                });
+              }
             }
 
             console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: ✅ SUCCESS - Offer updated successfully`, {
@@ -4323,6 +4411,9 @@ export class OffersService {
               timestamp: new Date().toISOString(),
             });
 
+            // Get publication status from created offer response
+            const publicationStatus = createdOffer.publication?.status || 'INACTIVE';
+
             const offerDuration = Date.now() - offerStartTime;
             results.push({
               offerId,
@@ -4331,9 +4422,29 @@ export class OffersService {
             });
             successful++;
 
+            // Only add to publish command if offer is not already ACTIVE
+            // Allegro API rejects attempts to activate already active offers
+            if (publicationStatus === 'ACTIVE') {
+              console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Skipping publish - already ACTIVE`, {
+                offerId,
+                allegroOfferId: createdOffer.id,
+                publicationStatus,
+                timestamp: new Date().toISOString(),
+              });
+            } else {
+              successfulAllegroOfferIds.push(String(createdOffer.id));
+              console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Added to publish queue`, {
+                offerId,
+                allegroOfferId: createdOffer.id,
+                publicationStatus,
+                timestamp: new Date().toISOString(),
+              });
+            }
+
             console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: ✅ SUCCESS - Offer created successfully`, {
               offerId,
               allegroOfferId: createdOffer.id,
+              publicationStatus,
               offerDuration: `${offerDuration}ms`,
               offerDurationSeconds: Math.round(offerDuration / 1000),
               progress: `${processedCount}/${offerIds.length}`,
@@ -4509,15 +4620,30 @@ export class OffersService {
 
     const totalDuration = Date.now() - startTime;
 
+    // Calculate how many offers were skipped (already ACTIVE)
+    const skippedForPublishCount = successful - successfulAllegroOfferIds.length;
+    console.log(`[${finalRequestId}] [publishOffersToAllegro] STEP 2 COMPLETE: Offer processing finished`, {
+      userId,
+      totalOffers: offerIds.length,
+      successful,
+      failed,
+      skippedForPublish: skippedForPublishCount,
+      readyForPublish: successfulAllegroOfferIds.length,
+      timestamp: new Date().toISOString(),
+    });
+
     // After updating offers via PATCH, send a publication command to Allegro
     // so offers are explicitly ACTIVATED using official command pattern.
+    // Only publish offers that are NOT already ACTIVE (skipped offers are already published)
     let publishCommand: { commandId: string; response: any } | null = null;
     if (successfulAllegroOfferIds.length > 0) {
       const publishStartTime = Date.now();
       console.log(`[${finalRequestId}] [publishOffersToAllegro] STEP 3: Sending publish command to Allegro`, {
         userId,
         successfulAllegroOfferIdsCount: successfulAllegroOfferIds.length,
+        skippedAlreadyActive: skippedForPublishCount,
         successfulAllegroOfferIds: successfulAllegroOfferIds.slice(0, 10),
+        allOfferIds: successfulAllegroOfferIds,
         timestamp: new Date().toISOString(),
       });
       try {
@@ -4531,6 +4657,26 @@ export class OffersService {
         });
       } catch (publishError: any) {
         const publishDuration = Date.now() - publishStartTime;
+        const errorData = publishError.response?.data || {};
+        const errorDetails = JSON.stringify(errorData, null, 2);
+        
+        // Extract detailed error message
+        let errorMessage = publishError.message || 'Unknown error';
+        if (errorData.userMessage) {
+          errorMessage = errorData.userMessage;
+        } else if (errorData.message) {
+          errorMessage = errorData.message;
+        } else if (errorData.errors && Array.isArray(errorData.errors) && errorData.errors.length > 0) {
+          const firstErr = errorData.errors[0];
+          if (typeof firstErr === 'string') {
+            errorMessage = firstErr;
+          } else if (firstErr?.userMessage) {
+            errorMessage = firstErr.userMessage;
+          } else if (firstErr?.message) {
+            errorMessage = firstErr.message;
+          }
+        }
+        
         console.error(
           `[${finalRequestId}] [publishOffersToAllegro] STEP 3 FAILED: Failed to send publish command to Allegro`,
           {
@@ -4538,11 +4684,46 @@ export class OffersService {
             error: publishError.message,
             errorCode: publishError.code,
             errorStatus: publishError.response?.status,
-            errorData: publishError.response?.data,
+            errorStatusText: publishError.response?.statusText,
+            extractedErrorMessage: errorMessage,
+            errorData: errorDetails,
+            errorResponseKeys: errorData ? Object.keys(errorData) : [],
+            hasErrorsArray: !!(errorData.errors && Array.isArray(errorData.errors)),
+            errorsCount: errorData.errors?.length || 0,
+            firstError: errorData.errors?.[0] ? JSON.stringify(errorData.errors[0], null, 2) : undefined,
+            offersAttempted: successfulAllegroOfferIds,
+            offersAttemptedCount: successfulAllegroOfferIds.length,
             publishDuration: `${publishDuration}ms`,
             timestamp: new Date().toISOString(),
           },
         );
+        
+        // Update failed offers in database with publish error
+        // Note: We don't know which specific offers failed from the publish command error
+        // The error applies to all offers in the batch
+        for (const allegroOfferId of successfulAllegroOfferIds) {
+          try {
+            // Find offer by allegroOfferId
+            const failedOffer = await this.prisma.allegroOffer.findFirst({
+              where: { allegroOfferId: String(allegroOfferId) },
+            });
+            
+            if (failedOffer) {
+              await this.prisma.allegroOffer.update({
+                where: { id: failedOffer.id },
+                data: {
+                  syncStatus: 'ERROR',
+                  syncError: `Publish command failed: ${errorMessage}`,
+                } as any,
+              });
+            }
+          } catch (dbError: any) {
+            console.error(`[${finalRequestId}] [publishOffersToAllegro] Failed to update offer ${allegroOfferId} with publish error`, {
+              allegroOfferId,
+              dbError: dbError.message,
+            });
+          }
+        }
       }
     }
 
@@ -4550,6 +4731,8 @@ export class OffersService {
       total: offerIds.length,
       successful,
       failed,
+      skipped: skippedForPublishCount, // Offers that were already ACTIVE and skipped from publish command
+      published: publishCommand ? successfulAllegroOfferIds.length : 0, // Offers actually sent to publish command
       results,
       publishCommand,
     };
@@ -4565,6 +4748,7 @@ export class OffersService {
       summary,
       successRate: `${Math.round((successful / offerIds.length) * 100)}%`,
       failureRate: `${Math.round((failed / offerIds.length) * 100)}%`,
+      skippedRate: skippedForPublishCount > 0 ? `${Math.round((skippedForPublishCount / offerIds.length) * 100)}%` : '0%',
     });
 
     return summary;
