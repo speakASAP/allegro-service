@@ -398,28 +398,50 @@ export class OffersService {
 
     // Images - ALWAYS REQUIRED - must have at least one
     // Normalize all image sources to ensure consistent format: [{ url: string }]
-    // The PATCH endpoint requires images to be an array of objects with only 'url' property
+    // The PATCH endpoint requires images to be an array of objects with ONLY 'url' property
+    // Any additional properties will cause "Message is not readable" error
     const normalizeImages = (images: any[]): any[] => {
       if (!Array.isArray(images) || images.length === 0) {
         return [];
       }
       return images
-        .map((img: any) => {
+        .map((img: any, index: number) => {
+          let url: string | null = null;
+          
           // Handle string URLs
           if (typeof img === 'string') {
-            return { url: img };
+            url = img;
           }
           // Handle objects with url property
-          if (img && typeof img === 'object' && img.url) {
-            return { url: img.url };
+          else if (img && typeof img === 'object') {
+            if (img.url && typeof img.url === 'string') {
+              url = img.url;
+            } else if (img.path && typeof img.path === 'string') {
+              url = img.path;
+            } else if (img.href && typeof img.href === 'string') {
+              url = img.href;
+            }
           }
-          // Handle objects with path property
-          if (img && typeof img === 'object' && img.path) {
-            return { url: img.path };
+          
+          // Return only { url } object - strip all other properties
+          if (url && typeof url === 'string' && url.length > 0) {
+            return { url: url.trim() };
           }
+          
+          // Log invalid image format for debugging
+          if (index === 0) {
+            this.logger.warn('[transformDtoToAllegroFormat] Invalid image format detected', {
+              offerId: existingOffer.id,
+              allegroOfferId: existingOffer.allegroOfferId,
+              imageIndex: index,
+              imageType: typeof img,
+              imageValue: typeof img === 'object' ? JSON.stringify(img).substring(0, 200) : String(img).substring(0, 200),
+            });
+          }
+          
           return null;
         })
-        .filter((img: any) => img && img.url && typeof img.url === 'string' && img.url.length > 0);
+        .filter((img: any) => img !== null && img.url && typeof img.url === 'string' && img.url.length > 0);
     };
 
     if (dto.images !== undefined && Array.isArray(dto.images) && dto.images.length > 0) {
@@ -444,6 +466,16 @@ export class OffersService {
         dtoImages: dto.images,
         rawDataImages: rawData.images,
         existingOfferImages: existingOffer.images,
+      });
+    } else {
+      // Log normalized images structure for debugging
+      this.logger.log('[transformDtoToAllegroFormat] Images normalized successfully', {
+        offerId: existingOffer.id,
+        allegroOfferId: existingOffer.allegroOfferId,
+        imagesCount: payload.images.length,
+        firstImage: payload.images[0],
+        firstImageKeys: Object.keys(payload.images[0] || {}),
+        allImagesValid: payload.images.every((img: any) => img && typeof img === 'object' && img.url && typeof img.url === 'string' && Object.keys(img).length === 1),
       });
     }
 
