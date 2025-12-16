@@ -3886,31 +3886,171 @@ export class OffersService {
             // Use current offer from API if available, otherwise use stored rawData
             const sourceOffer = currentAllegroOffer || offer.rawData || offer;
 
-            // CRITICAL: Use EXACT images from current Allegro offer (sourceOffer) if available
-            // This ensures we use the exact format Allegro expects, avoiding any transformation issues
-            // Only use database images if sourceOffer images are not available
+            // EXTENSIVE LOGGING: Log sourceOffer images structure
+            console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: ========== IMAGE DEBUG START ==========`, {
+              offerId,
+              allegroOfferId: offer.allegroOfferId,
+              hasSourceOffer: !!sourceOffer,
+              hasSourceOfferImages: !!sourceOffer?.images,
+              sourceOfferImagesType: sourceOffer?.images ? typeof sourceOffer.images : 'null',
+              sourceOfferImagesIsArray: Array.isArray(sourceOffer?.images),
+              sourceOfferImagesLength: Array.isArray(sourceOffer?.images) ? sourceOffer.images.length : (typeof sourceOffer?.images === 'string' ? sourceOffer.images.length : 'N/A'),
+              sourceOfferImagesPreview: sourceOffer?.images ? (typeof sourceOffer.images === 'string' ? sourceOffer.images.substring(0, 200) : JSON.stringify(sourceOffer.images).substring(0, 500)) : 'null',
+              firstImageRaw: sourceOffer?.images ? (Array.isArray(sourceOffer.images) ? JSON.stringify(sourceOffer.images[0]) : (typeof sourceOffer.images === 'string' ? sourceOffer.images.substring(0, 100) : String(sourceOffer.images).substring(0, 100))) : 'null',
+              timestamp: new Date().toISOString(),
+            });
+
+            // CRITICAL: Normalize images properly - Allegro API may return images in different formats
+            // We need to ensure they're always in [{ url: "..." }] format
             let imagesForUpdate: any[] | undefined = undefined;
             
-            // Priority 1: Use sourceOffer images EXACTLY as they come from Allegro API
-            // These are already in the correct format and haven't been transformed
-            if (sourceOffer?.images && Array.isArray(sourceOffer.images) && sourceOffer.images.length > 0) {
-              // Use images directly from Allegro - they're already in correct format
-              imagesForUpdate = sourceOffer.images;
-              console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Using images from current Allegro offer (exact format)`, {
+            // Priority 1: Use sourceOffer images from Allegro API
+            // But we need to normalize them because Allegro might return them as strings or objects
+            if (sourceOffer?.images) {
+              console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Processing sourceOffer.images`, {
                 offerId,
-                allegroOfferId: offer.allegroOfferId,
-                imagesCount: imagesForUpdate.length,
-                firstImage: JSON.stringify(imagesForUpdate[0]),
-                firstImageKeys: imagesForUpdate[0] ? Object.keys(imagesForUpdate[0]) : [],
-                timestamp: new Date().toISOString(),
+                sourceImagesType: typeof sourceOffer.images,
+                sourceImagesIsArray: Array.isArray(sourceOffer.images),
+                sourceImagesValue: typeof sourceOffer.images === 'string' ? sourceOffer.images.substring(0, 300) : JSON.stringify(sourceOffer.images).substring(0, 500),
               });
+              
+              // Check if images is a string (JSON stringified) or array
+              let sourceImages: any = sourceOffer.images;
+              if (typeof sourceImages === 'string') {
+                console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: sourceOffer.images is a STRING, attempting to parse`, {
+                  offerId,
+                  stringLength: sourceImages.length,
+                  stringPreview: sourceImages.substring(0, 200),
+                });
+                try {
+                  sourceImages = JSON.parse(sourceImages);
+                  console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Successfully parsed images string`, {
+                    offerId,
+                    parsedType: typeof sourceImages,
+                    parsedIsArray: Array.isArray(sourceImages),
+                    parsedLength: Array.isArray(sourceImages) ? sourceImages.length : 'N/A',
+                  });
+                } catch (e) {
+                  console.error(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Failed to parse images string`, {
+                    offerId,
+                    error: (e as Error).message,
+                    stringValue: sourceImages.substring(0, 200),
+                  });
+                  sourceImages = null;
+                }
+              }
+              
+              if (Array.isArray(sourceImages) && sourceImages.length > 0) {
+                console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: sourceImages is array, normalizing each image`, {
+                  offerId,
+                  arrayLength: sourceImages.length,
+                  firstImageType: typeof sourceImages[0],
+                  firstImageValue: JSON.stringify(sourceImages[0]),
+                  firstImageKeys: typeof sourceImages[0] === 'object' && sourceImages[0] !== null ? Object.keys(sourceImages[0]) : [],
+                });
+                
+                // Normalize to [{ url: "..." }] format
+                imagesForUpdate = sourceImages
+                  .map((img: any, idx: number) => {
+                    const imgType = typeof img;
+                    const imgIsObject = img && typeof img === 'object';
+                    const imgHasUrl = imgIsObject && img.url && typeof img.url === 'string';
+                    const imgIsString = typeof img === 'string';
+                    
+                    if (idx === 0) {
+                      console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Processing first image`, {
+                        offerId,
+                        imageIndex: idx,
+                        imageType: imgType,
+                        imageIsObject: imgIsObject,
+                        imageHasUrl: imgHasUrl,
+                        imageIsString: imgIsString,
+                        imageValue: imgIsObject ? JSON.stringify(img) : String(img).substring(0, 100),
+                        imageKeys: imgIsObject && img !== null ? Object.keys(img) : [],
+                      });
+                    }
+                    
+                    // If it's already an object with url, use it
+                    if (imgIsObject && imgHasUrl) {
+                      const normalized = { url: img.url };
+                      if (idx === 0) {
+                        console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Normalized image from object`, {
+                          offerId,
+                          original: JSON.stringify(img),
+                          normalized: JSON.stringify(normalized),
+                          normalizedKeys: Object.keys(normalized),
+                        });
+                      }
+                      return normalized;
+                    }
+                    // If it's a string URL, wrap it
+                    if (imgIsString && img.length > 0) {
+                      const normalized = { url: img };
+                      if (idx === 0) {
+                        console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Normalized image from string`, {
+                          offerId,
+                          original: img.substring(0, 100),
+                          normalized: JSON.stringify(normalized),
+                        });
+                      }
+                      return normalized;
+                    }
+                    
+                    if (idx === 0) {
+                      console.warn(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Image format not recognized, skipping`, {
+                        offerId,
+                        imageType: imgType,
+                        imageValue: JSON.stringify(img).substring(0, 200),
+                      });
+                    }
+                    return null;
+                  })
+                  .filter((img: any) => img !== null && img.url);
+                
+                console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Images normalized from sourceOffer`, {
+                  offerId,
+                  allegroOfferId: offer.allegroOfferId,
+                  sourceType: typeof sourceOffer.images,
+                  sourceIsArray: Array.isArray(sourceOffer.images),
+                  inputCount: sourceImages.length,
+                  outputCount: imagesForUpdate.length,
+                  firstImage: JSON.stringify(imagesForUpdate[0]),
+                  firstImageKeys: imagesForUpdate[0] ? Object.keys(imagesForUpdate[0]) : [],
+                  firstImageUrl: imagesForUpdate[0]?.url,
+                  allImagesValid: imagesForUpdate.every((img: any) => img && typeof img === 'object' && img.url && typeof img.url === 'string' && Object.keys(img).length === 1),
+                  timestamp: new Date().toISOString(),
+                });
+              } else {
+                console.warn(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: sourceImages is not a valid array`, {
+                  offerId,
+                  sourceImagesType: typeof sourceImages,
+                  sourceImagesIsArray: Array.isArray(sourceImages),
+                  sourceImagesValue: JSON.stringify(sourceImages).substring(0, 200),
+                });
+              }
             }
             // Priority 2: Use database images (stored as string array from import)
             else if (offer.images && Array.isArray(offer.images) && offer.images.length > 0) {
+              console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Processing database images`, {
+                offerId,
+                dbImagesType: typeof offer.images,
+                dbImagesIsArray: Array.isArray(offer.images),
+                dbImagesLength: offer.images.length,
+                firstDbImageType: typeof offer.images[0],
+                firstDbImageValue: typeof offer.images[0] === 'string' ? offer.images[0].substring(0, 100) : JSON.stringify(offer.images[0]).substring(0, 200),
+              });
+              
               // Database images are strings, convert to [{ url: "..." }] format
               imagesForUpdate = offer.images
                 .filter((img: any) => img && (typeof img === 'string' || (typeof img === 'object' && img.url)))
-                .map((img: any) => {
+                .map((img: any, idx: number) => {
+                  if (idx === 0) {
+                    console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Processing first DB image`, {
+                      offerId,
+                      imageType: typeof img,
+                      imageValue: typeof img === 'string' ? img.substring(0, 100) : JSON.stringify(img).substring(0, 200),
+                    });
+                  }
                   if (typeof img === 'string') {
                     return { url: img };
                   } else if (img && typeof img === 'object' && img.url) {
@@ -3922,8 +4062,10 @@ export class OffersService {
               console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Using images from database (normalized)`, {
                 offerId,
                 allegroOfferId: offer.allegroOfferId,
-                imagesCount: imagesForUpdate.length,
+                inputCount: offer.images.length,
+                outputCount: imagesForUpdate.length,
                 firstImage: imagesForUpdate[0] ? JSON.stringify(imagesForUpdate[0]) : null,
+                firstImageKeys: imagesForUpdate[0] ? Object.keys(imagesForUpdate[0]) : [],
                 timestamp: new Date().toISOString(),
               });
             }
@@ -3951,6 +4093,20 @@ export class OffersService {
               });
             }
 
+            // EXTENSIVE LOGGING: Log images before passing to transformDtoToAllegroFormat
+            console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Images before transformDtoToAllegroFormat`, {
+              offerId,
+              allegroOfferId: offer.allegroOfferId,
+              imagesForUpdate: imagesForUpdate ? JSON.stringify(imagesForUpdate) : 'undefined',
+              imagesForUpdateType: imagesForUpdate ? typeof imagesForUpdate : 'undefined',
+              imagesForUpdateIsArray: Array.isArray(imagesForUpdate),
+              imagesForUpdateLength: Array.isArray(imagesForUpdate) ? imagesForUpdate.length : 'N/A',
+              firstImage: imagesForUpdate && imagesForUpdate[0] ? JSON.stringify(imagesForUpdate[0]) : 'null',
+              firstImageType: imagesForUpdate && imagesForUpdate[0] ? typeof imagesForUpdate[0] : 'null',
+              firstImageKeys: imagesForUpdate && imagesForUpdate[0] && typeof imagesForUpdate[0] === 'object' ? Object.keys(imagesForUpdate[0]) : [],
+              timestamp: new Date().toISOString(),
+            });
+
             // Transform offer data for update - use database values but preserve all required fields from Allegro
             // We explicitly pass all database values to ensure Allegro is updated with our data
             // CRITICAL: Pass images as undefined if we want to use sourceOffer images directly (they're already in correct format)
@@ -3969,6 +4125,21 @@ export class OffersService {
               },
               { ...offer, rawData: sourceOffer },
             );
+
+            // EXTENSIVE LOGGING: Log images after transformDtoToAllegroFormat
+            console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Images after transformDtoToAllegroFormat`, {
+              offerId,
+              allegroOfferId: offer.allegroOfferId,
+              updatePayloadHasImages: !!updatePayload.images,
+              updatePayloadImagesType: updatePayload.images ? typeof updatePayload.images : 'null',
+              updatePayloadImagesIsArray: Array.isArray(updatePayload.images),
+              updatePayloadImagesLength: Array.isArray(updatePayload.images) ? updatePayload.images.length : 'N/A',
+              updatePayloadFirstImage: updatePayload.images && updatePayload.images[0] ? JSON.stringify(updatePayload.images[0]) : 'null',
+              updatePayloadFirstImageType: updatePayload.images && updatePayload.images[0] ? typeof updatePayload.images[0] : 'null',
+              updatePayloadFirstImageKeys: updatePayload.images && updatePayload.images[0] && typeof updatePayload.images[0] === 'object' ? Object.keys(updatePayload.images[0]) : [],
+              updatePayloadAllImages: updatePayload.images ? JSON.stringify(updatePayload.images).substring(0, 1000) : 'null',
+              timestamp: new Date().toISOString(),
+            });
 
             // Ensure we're updating with database values - override with our data
             // This ensures Allegro is updated with values from our database
@@ -4032,15 +4203,21 @@ export class OffersService {
               delete updatePayload.description;
             }
 
-            // Log payload before sending
+            // EXTENSIVE LOGGING: Log complete payload before sending
             const payloadSize = JSON.stringify(updatePayload).length;
-            console.log(`[${finalRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Preparing update payload`, {
+            const fullPayloadJson = JSON.stringify(updatePayload, null, 2);
+            console.log(`[${finalRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: ========== FINAL PAYLOAD BEFORE SEND ==========`, {
               offerId,
               allegroOfferId: offer.allegroOfferId,
               payloadKeys: Object.keys(updatePayload),
               payloadSize: `${payloadSize} bytes`,
               hasImages: !!updatePayload.images,
               imagesCount: updatePayload.images?.length || 0,
+              imagesType: updatePayload.images ? typeof updatePayload.images : 'null',
+              imagesIsArray: Array.isArray(updatePayload.images),
+              imagesFull: updatePayload.images ? JSON.stringify(updatePayload.images) : 'null',
+              firstImageFull: updatePayload.images && updatePayload.images[0] ? JSON.stringify(updatePayload.images[0]) : 'null',
+              firstImageKeys: updatePayload.images && updatePayload.images[0] && typeof updatePayload.images[0] === 'object' ? Object.keys(updatePayload.images[0]) : [],
               hasParameters: !!updatePayload.parameters,
               parametersCount: updatePayload.parameters?.length || 0,
               hasCategory: !!updatePayload.category,
@@ -4051,7 +4228,8 @@ export class OffersService {
               hasStock: !!updatePayload.stock,
               stockAvailable: updatePayload.stock?.available,
               hasDescription: false, // Always false for PATCH requests
-              payloadPreview: JSON.stringify(updatePayload, null, 2).substring(0, 500),
+              payloadPreview: fullPayloadJson.substring(0, 2000),
+              fullPayload: fullPayloadJson,
               timestamp: new Date().toISOString(),
             });
 
