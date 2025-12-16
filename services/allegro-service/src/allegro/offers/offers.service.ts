@@ -396,10 +396,11 @@ export class OffersService {
       });
     }
 
-    // Images - ALWAYS REQUIRED - must have at least one
+    // Images - NOTE: Images are NOT supported in PATCH requests to /sale/product-offers/{id}
+    // Images can only be set during offer creation (POST), not via PATCH updates
+    // If images are provided, they will be normalized but should be removed before sending PATCH request
     // Normalize all image sources to ensure consistent format: [{ url: string }]
-    // The PATCH endpoint requires images to be an array of objects with ONLY 'url' property
-    // Any additional properties will cause "Message is not readable" error
+    // Format: array of objects with ONLY 'url' property
     const normalizeImages = (images: any[], source: string): any[] => {
       if (!Array.isArray(images) || images.length === 0) {
         return [];
@@ -4203,19 +4204,18 @@ export class OffersService {
               delete updatePayload.description;
             }
 
-            // CRITICAL: Try omitting images from PATCH payload - Allegro API /sale/product-offers/{id} PATCH endpoint
-            // might not support updating images (causes 422 "Message is not readable" error for images[0])
-            // Images might only be set during offer creation, not via PATCH updates
-            // If images are included and causing errors, we'll try without them
-            const hadImages = !!updatePayload.images;
-            const imagesCount = updatePayload.images?.length || 0;
+            // CRITICAL: Remove images from PATCH payload - Allegro API /sale/product-offers/{id} PATCH endpoint
+            // does NOT support updating images (causes 422 "Message is not readable" error for images[0])
+            // Images can only be set during offer creation via POST, not via PATCH updates
+            // This is confirmed by Allegro API behavior - PATCH requests with images fail with 422
             if (updatePayload.images !== undefined) {
-              console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Removing images from PATCH payload (testing if PATCH supports images)`, {
+              const imagesCount = updatePayload.images?.length || 0;
+              console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Removing images from PATCH payload (PATCH does not support image updates)`, {
                 offerId,
                 allegroOfferId: offer.allegroOfferId,
                 hadImages: true,
                 imagesCount: imagesCount,
-                imagesPreview: JSON.stringify(updatePayload.images).substring(0, 200),
+                note: 'Images can only be set during offer creation, not via PATCH',
                 timestamp: new Date().toISOString(),
               });
               delete updatePayload.images;
