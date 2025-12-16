@@ -4203,6 +4203,24 @@ export class OffersService {
               delete updatePayload.description;
             }
 
+            // CRITICAL: Try omitting images from PATCH payload - Allegro API /sale/product-offers/{id} PATCH endpoint
+            // might not support updating images (causes 422 "Message is not readable" error for images[0])
+            // Images might only be set during offer creation, not via PATCH updates
+            // If images are included and causing errors, we'll try without them
+            const hadImages = !!updatePayload.images;
+            const imagesCount = updatePayload.images?.length || 0;
+            if (updatePayload.images !== undefined) {
+              console.log(`[${offerRequestId}] [publishOffersToAllegro] OFFER ${processedCount}: Removing images from PATCH payload (testing if PATCH supports images)`, {
+                offerId,
+                allegroOfferId: offer.allegroOfferId,
+                hadImages: true,
+                imagesCount: imagesCount,
+                imagesPreview: JSON.stringify(updatePayload.images).substring(0, 200),
+                timestamp: new Date().toISOString(),
+              });
+              delete updatePayload.images;
+            }
+
             // EXTENSIVE LOGGING: Log complete payload before sending
             const payloadSize = JSON.stringify(updatePayload).length;
             const fullPayloadJson = JSON.stringify(updatePayload, null, 2);
