@@ -424,6 +424,13 @@ export const allegroAccountApi = {
   },
 
   /**
+   * Deactivate all accounts (set no active account)
+   */
+  deactivateAllAccounts: async () => {
+    return api.post('/settings/allegro-accounts/deactivate');
+  },
+
+  /**
    * Validate account keys
    */
   validateKeys: async (id: string, clientId: string, clientSecret: string) => {

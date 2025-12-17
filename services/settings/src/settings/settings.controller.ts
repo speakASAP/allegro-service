@@ -164,6 +164,16 @@ export class SettingsController {
     return { success: true };
   }
 
+  @Post('allegro-accounts/deactivate')
+  @UseGuards(JwtAuthGuard)
+  async deactivateAllAllegroAccounts(
+    @Request() req: any,
+  ): Promise<{ success: boolean }> {
+    const userId = String(req.user.id);
+    await this.settingsService.deactivateAllAccounts(userId);
+    return { success: true };
+  }
+
   @Post('allegro-accounts/:id/validate')
   @UseGuards(JwtAuthGuard)
   async validateAllegroAccountKeys(
