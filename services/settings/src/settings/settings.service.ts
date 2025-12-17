@@ -983,21 +983,23 @@ export class SettingsService {
               password: dto.clientSecret,
             },
             timeout: (() => {
-              // Use longer timeout for Allegro API validation (external API call)
+              // Use reasonable timeout for Allegro API validation (external API call)
+              // Default to 15 seconds - Allegro API should respond quickly
               const allegroTimeout = this.configService.get<string>('ALLEGRO_VALIDATION_TIMEOUT');
               if (allegroTimeout) {
                 return parseInt(allegroTimeout);
               }
-              const defaultAllegroTimeout = 60000;
+              const defaultAllegroTimeout = 15000; // 15 seconds - reasonable for API validation
               const authTimeout = this.configService.get<string>('AUTH_SERVICE_TIMEOUT');
               const httpTimeout = this.configService.get<string>('HTTP_TIMEOUT');
               const timeout = authTimeout || httpTimeout;
               if (!timeout) {
-                this.logger.log('No timeout configured, using default 60s for Allegro validation', { userId, accountId });
+                this.logger.log('No timeout configured, using default 15s for Allegro validation', { userId, accountId });
                 return defaultAllegroTimeout;
               }
               const configuredTimeout = parseInt(timeout);
-              return Math.max(configuredTimeout, defaultAllegroTimeout);
+              // Use the smaller of configured timeout or 15s for validation (should be quick)
+              return Math.min(configuredTimeout, defaultAllegroTimeout);
             })(),
           },
         ),
@@ -1013,13 +1015,32 @@ export class SettingsService {
       const status = error.response?.status;
       const errorData = error.response?.data || {};
       const errorMessage = errorData.error_description || errorData.error || error.message;
+      const isTimeout = error.code === 'ECONNABORTED' || error.message?.includes('timeout');
 
       this.logger.error('Failed to validate Allegro API keys', {
         userId,
         accountId,
         error: errorMessage,
         status,
+        code: error.code,
+        isTimeout,
       });
+
+      // Handle timeout errors specifically
+      if (isTimeout) {
+        return { 
+          valid: false, 
+          message: 'Validation request timed out. Please check your internet connection and try again. If the problem persists, the Allegro API may be temporarily unavailable.' 
+        };
+      }
+
+      // Handle connection errors
+      if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT') {
+        return { 
+          valid: false, 
+          message: `Cannot connect to Allegro API. Please check your internet connection and verify ALLEGRO_AUTH_URL is correct.` 
+        };
+      }
 
       if (status === 401 || status === 403) {
         const specificMessage = errorData.error_description || errorData.error;
