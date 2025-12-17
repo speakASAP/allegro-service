@@ -149,6 +149,7 @@ const OffersPage: React.FC = () => {
   const [offers, setOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(false); // Start as false to render immediately
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -290,6 +291,7 @@ const OffersPage: React.FC = () => {
     setSelectedOffer(offer);
     setShowDetailModal(true);
     setError(null);
+    setSuccess(null);
     
     // Only fetch if we don't have rawData (optimization: skip fetch if data is already complete)
     const rawData = offer.rawData as AllegroRawData | undefined;
@@ -373,6 +375,7 @@ const OffersPage: React.FC = () => {
     setIsEditMode(false);
     setEditedOffer(null);
     setError(null);
+    setSuccess(null);
   };
 
   const handleSyncToAllegro = async () => {
@@ -385,6 +388,7 @@ const OffersPage: React.FC = () => {
     console.log('[handleSyncToAllegro] Starting sync', { offerId: selectedOffer.id, allegroOfferId: selectedOffer.allegroOfferId });
     setSyncingToAllegro(true);
     setError(null);
+    setSuccess(null);
     try {
       console.log('[handleSyncToAllegro] Sending POST request', { url: `/allegro/offers/${selectedOffer.id}/sync-to-allegro` });
       const response = await api.post(`/allegro/offers/${selectedOffer.id}/sync-to-allegro`);
@@ -393,9 +397,19 @@ const OffersPage: React.FC = () => {
         console.log('[handleSyncToAllegro] Sync successful, fetching updated offer details');
         const detailResponse = await api.get(`/allegro/offers/${selectedOffer.id}`);
         if (detailResponse.data.success) {
-          setSelectedOffer(detailResponse.data.data);
+          const updatedOffer = detailResponse.data.data;
+          setSelectedOffer(updatedOffer);
           loadOffers();
           console.log('[handleSyncToAllegro] Offer details updated');
+          
+          // Check sync status and provide appropriate feedback
+          if (updatedOffer.syncStatus === 'SYNCED') {
+            setSuccess('Sync to Allegro completed successfully!');
+          } else if (updatedOffer.syncStatus === 'ERROR') {
+            setError(updatedOffer.syncError || 'Sync to Allegro failed. Please try again.');
+          } else {
+            setSuccess('Sync to Allegro initiated successfully. The sync is running in the background and may take several minutes. Please check back later or refresh the offer details.');
+          }
         }
       } else {
         console.warn('[handleSyncToAllegro] Response success is false', response.data);
@@ -423,6 +437,7 @@ const OffersPage: React.FC = () => {
 
     setSyncingFromAllegro(true);
     setError(null);
+    setSuccess(null);
     try {
       const response = await api.post(`/allegro/offers/${selectedOffer.id}/sync-from-allegro`);
       if (response.data.success) {
@@ -430,6 +445,7 @@ const OffersPage: React.FC = () => {
         if (detailResponse.data.success) {
           setSelectedOffer(detailResponse.data.data);
           loadOffers();
+          setSuccess('Successfully synced offer data from Allegro!');
         }
       }
     } catch (err) {
@@ -620,6 +636,19 @@ const OffersPage: React.FC = () => {
         return 'text-green-600 bg-green-100';
       case 'INACTIVE':
         return 'text-gray-600 bg-gray-100';
+      default:
+        return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const getSyncStatusColor = (status?: string) => {
+    switch (status?.toUpperCase()) {
+      case 'SYNCED':
+        return 'text-green-600 bg-green-100';
+      case 'PENDING':
+        return 'text-yellow-600 bg-yellow-100';
+      case 'ERROR':
+        return 'text-red-600 bg-red-100';
       default:
         return 'text-gray-600 bg-gray-100';
     }
@@ -1241,6 +1270,8 @@ const OffersPage: React.FC = () => {
         isOpen={showDetailModal}
         onClose={() => {
           setShowDetailModal(false);
+          setSuccess(null);
+          setError(null);
           setSelectedOffer(null);
           setIsEditMode(false);
           setEditedOffer(null);
@@ -1309,6 +1340,12 @@ const OffersPage: React.FC = () => {
             {error && (
               <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded text-sm">
                 {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="p-3 bg-green-100 border border-green-400 text-green-700 rounded text-sm">
+                {success}
               </div>
             )}
 
@@ -1546,6 +1583,17 @@ const OffersPage: React.FC = () => {
                   <div>
                     <div className="text-sm text-gray-600">Sync Source</div>
                     <div className="font-medium">{selectedOffer.syncSource}</div>
+                  </div>
+                )}
+                {selectedOffer.syncStatus && (
+                  <div>
+                    <div className="text-sm text-gray-600">Sync Status</div>
+                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getSyncStatusColor(selectedOffer.syncStatus)}`}>
+                      {selectedOffer.syncStatus}
+                    </span>
+                    {selectedOffer.syncStatus === 'ERROR' && selectedOffer.syncError && (
+                      <div className="mt-1 text-xs text-red-600">{selectedOffer.syncError}</div>
+                    )}
                   </div>
                 )}
             {selectedOffer.allegroProduct && (
