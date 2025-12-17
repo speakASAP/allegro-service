@@ -844,6 +844,43 @@ export class SettingsService {
   }
 
   /**
+   * Deactivate all accounts (set no active account)
+   */
+  async deactivateAllAccounts(userId: string): Promise<void> {
+    this.logger.log('Deactivating all Allegro accounts', { userId });
+
+    // Set all accounts to inactive
+    await this.prisma.allegroAccount.updateMany({
+      where: { userId },
+      data: { isActive: false },
+    });
+
+    // Update preferences to remove active account
+    const settings = await this.prisma.userSettings.findUnique({
+      where: { userId },
+    });
+
+    if (settings) {
+      const preferences = (settings.preferences || {}) as any;
+      preferences.activeAllegroAccountId = null;
+      await this.prisma.userSettings.update({
+        where: { userId },
+        data: { preferences },
+      });
+    } else {
+      await this.prisma.userSettings.create({
+        data: {
+          userId,
+          preferences: { activeAllegroAccountId: null },
+          supplierConfigs: [],
+        },
+      });
+    }
+
+    this.logger.log('All Allegro accounts deactivated', { userId });
+  }
+
+  /**
    * Get active Allegro account
    */
   async getActiveAccount(userId: string): Promise<any | null> {

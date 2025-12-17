@@ -67,14 +67,20 @@ export const AllegroAccountSelector: React.FC<AllegroAccountSelectorProps> = ({ 
     }
 
     try {
-      await allegroAccountApi.setActiveAccount(accountId);
-      setActiveAccountId(accountId);
+      // Handle "No Active Account" (empty string)
+      if (accountId === '') {
+        await allegroAccountApi.deactivateAllAccounts();
+        setActiveAccountId(null);
+      } else {
+        await allegroAccountApi.setActiveAccount(accountId);
+        setActiveAccountId(accountId);
+      }
       
       // Reload accounts to update active status
       await loadAccounts();
       
       if (onAccountChange) {
-        onAccountChange(accountId);
+        onAccountChange(accountId === '' ? null : accountId);
       }
     } catch (err) {
       if (err instanceof AxiosError) {
