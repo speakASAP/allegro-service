@@ -511,48 +511,52 @@ export class SettingsService {
       
       this.logger.log('Found Allegro accounts', { userId, count: accounts.length });
 
-    return await Promise.all(accounts.map(async (account) => {
-      const accountData: any = {
-        id: account.id,
-        name: account.name,
-        isActive: account.isActive,
-        createdAt: account.createdAt,
-        updatedAt: account.updatedAt,
-      };
+      return await Promise.all(accounts.map(async (account) => {
+        const accountData: any = {
+          id: account.id,
+          name: account.name,
+          isActive: account.isActive,
+          createdAt: account.createdAt,
+          updatedAt: account.updatedAt,
+        };
 
-      // Decrypt client secret if present
-      if (account.clientSecret) {
-        try {
+        // Decrypt client secret if present
+        if (account.clientSecret) {
+          try {
+            accountData.clientId = account.clientId;
+            accountData.clientSecret = this.decrypt(account.clientSecret);
+          } catch (error: any) {
+            this.logger.error('Failed to decrypt account client secret', {
+              userId,
+              accountId: account.id,
+              error: error.message,
+            });
+            accountData.clientId = account.clientId;
+            accountData.clientSecret = null;
+          }
+        } else {
           accountData.clientId = account.clientId;
-          accountData.clientSecret = this.decrypt(account.clientSecret);
-        } catch (error: any) {
-          this.logger.error('Failed to decrypt account client secret', {
-            userId,
-            accountId: account.id,
-            error: error.message,
-          });
-          accountData.clientId = account.clientId;
-          accountData.clientSecret = null;
         }
-      } else {
-        accountData.clientId = account.clientId;
-      }
 
-      // Add OAuth status
-      if (account.accessToken) {
-        accountData.oauthStatus = {
-          authorized: true,
-          expiresAt: account.tokenExpiresAt ? (account.tokenExpiresAt instanceof Date ? account.tokenExpiresAt.toISOString() : account.tokenExpiresAt) : undefined,
-          scopes: account.tokenScopes || undefined,
-        };
-      } else {
-        accountData.oauthStatus = {
-          authorized: false,
-        };
-      }
+        // Add OAuth status
+        if (account.accessToken) {
+          accountData.oauthStatus = {
+            authorized: true,
+            expiresAt: account.tokenExpiresAt ? (account.tokenExpiresAt instanceof Date ? account.tokenExpiresAt.toISOString() : account.tokenExpiresAt) : undefined,
+            scopes: account.tokenScopes || undefined,
+          };
+        } else {
+          accountData.oauthStatus = {
+            authorized: false,
+          };
+        }
 
-      return accountData;
-    }));
+        return accountData;
+      }));
+    } catch (error: any) {
+      this.logger.error('Error getting Allegro accounts', { userId, error: error.message, stack: error.stack });
+      throw error;
+    }
   }
 
   /**
