@@ -1767,10 +1767,10 @@ export class OffersService {
           });
 
           try {
-            // Attempt to force refresh the token
-            this.logger.log('[importApprovedOffers] Forcing OAuth token refresh', { userId });
-            oauthToken = await this.allegroAuth.refreshUserToken(userId);
-            this.logger.log('[importApprovedOffers] Token refreshed successfully, retrying API call', {
+            // Attempt to force refresh the token by getting it again (will auto-refresh if expired)
+            this.logger.log('[importApprovedOffersFromSalesCenter] Forcing OAuth token refresh', { userId });
+            oauthToken = await this.allegroAuth.getUserAccessToken(userId);
+            this.logger.log('[importApprovedOffersFromSalesCenter] Token refreshed successfully, retrying API call', {
               userId,
               newTokenLength: oauthToken?.length || 0,
             });
@@ -2402,9 +2402,9 @@ export class OffersService {
           });
 
           try {
-            // Attempt to force refresh the token
+            // Attempt to force refresh the token by getting it again (will auto-refresh if expired)
             this.logger.log('[importApprovedOffersFromSalesCenter] Forcing OAuth token refresh', { userId });
-            oauthToken = await this.allegroAuth.refreshUserToken(userId);
+            oauthToken = await this.allegroAuth.getUserAccessToken(userId);
             this.logger.log('[importApprovedOffersFromSalesCenter] Token refreshed successfully, retrying API call', {
               userId,
               newTokenLength: oauthToken?.length || 0,
@@ -2562,20 +2562,26 @@ export class OffersService {
     return { totalImported };
   }
 
-  private async getUserOAuthToken(userId: string): Promise<string> {
-    console.log('[getUserOAuthToken] ========== METHOD CALLED ==========', { userId });
+  private async getUserOAuthToken(userId: string, accountId?: string): Promise<string> {
+    console.log('[getUserOAuthToken] ========== METHOD CALLED ==========', { userId, accountId });
     const tokenStartTime = Date.now();
     try {
       console.log('[getUserOAuthToken] About to call logger.log for START');
       this.logger.log('[getUserOAuthToken] Retrieving OAuth token - START', { 
         userId,
+        accountId,
         timestamp: new Date().toISOString(),
       });
       console.log('[getUserOAuthToken] logger.log for START completed');
       
       console.log('[getUserOAuthToken] About to call allegroAuth.getUserAccessToken');
       const dbQueryStartTime = Date.now();
-      const token = await this.allegroAuth.getUserAccessToken(userId);
+      let token: string;
+      if (accountId) {
+        token = await this.allegroAuth.getUserAccessTokenForAccount(userId, accountId);
+      } else {
+        token = await this.allegroAuth.getUserAccessToken(userId);
+      }
       const dbQueryDuration = Date.now() - dbQueryStartTime;
       const totalDuration = Date.now() - tokenStartTime;
       console.log('[getUserOAuthToken] allegroAuth.getUserAccessToken completed', { 
@@ -2586,6 +2592,7 @@ export class OffersService {
       
       this.logger.log('[getUserOAuthToken] OAuth token retrieved successfully - COMPLETE', {
         userId,
+        accountId,
         tokenLength: token?.length || 0,
         tokenFirstChars: token?.substring(0, 20) || 'N/A',
         dbQueryDuration: `${dbQueryDuration}ms`,
@@ -2597,6 +2604,7 @@ export class OffersService {
       const totalDuration = Date.now() - tokenStartTime;
       this.logger.error('[getUserOAuthToken] Failed to get OAuth token - ERROR', {
         userId,
+        accountId,
         error: error.message,
         errorCode: error.code,
         errorStatus: error.status,
@@ -2609,7 +2617,9 @@ export class OffersService {
           success: false,
           error: {
             code: 'OAUTH_REQUIRED',
-            message: 'OAuth authorization required. Please authorize the application in Settings to access your Allegro offers.',
+            message: accountId 
+              ? 'OAuth authorization required for this account. Please authorize the application in Settings.'
+              : 'OAuth authorization required. Please select an active account and authorize the application in Settings to access your Allegro offers.',
             status: HttpStatus.FORBIDDEN,
           },
         },

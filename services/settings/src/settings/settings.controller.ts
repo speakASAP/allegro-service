@@ -17,7 +17,7 @@ import {
 import { SettingsService } from './settings.service';
 import { JwtAuthGuard } from '@allegro/shared';
 import { LoggerService } from '@allegro/shared';
-import { UpdateSettingsDto, AddSupplierConfigDto, UpdateSupplierConfigDto, ValidateAllegroKeysDto } from './dto/update-settings.dto';
+import { UpdateSettingsDto, AddSupplierConfigDto, UpdateSupplierConfigDto, ValidateAllegroKeysDto, CreateAllegroAccountDto, UpdateAllegroAccountDto } from './dto/update-settings.dto';
 
 @Controller('settings')
 export class SettingsController {
@@ -61,32 +61,7 @@ export class SettingsController {
   ): Promise<{ success: boolean; data: any }> {
     const userId = String(req.user.id); // Convert to string as Prisma expects String
     
-    const logData = {
-      userId,
-      hasClientId: !!dto.allegroClientId,
-      clientIdLength: dto.allegroClientId?.length,
-      hasClientSecret: !!dto.allegroClientSecret,
-      clientSecretLength: dto.allegroClientSecret?.length,
-      clientSecretFirstChars: dto.allegroClientSecret?.substring(0, 5) + '...',
-      dtoKeys: Object.keys(dto),
-    };
-    this.logger.log('SettingsController.updateSettings called', logData);
-    console.log('[SettingsController] updateSettings called', JSON.stringify(logData, null, 2));
-    
     const settings = await this.settingsService.updateSettings(userId, dto);
-    
-    const completedLogData = {
-      userId,
-      resultSuccess: settings?.success !== false,
-      hasResultData: !!settings,
-      resultKeys: settings ? Object.keys(settings) : [],
-      hasClientId: !!settings?.allegroClientId,
-      hasClientSecret: !!settings?.allegroClientSecret,
-      clientSecretLength: settings?.allegroClientSecret?.length,
-      hasDecryptionError: !!settings?._allegroClientSecretDecryptionError,
-    };
-    this.logger.log('SettingsController.updateSettings completed', completedLogData);
-    console.log('[SettingsController] updateSettings completed', JSON.stringify(completedLogData, null, 2));
     
     return { success: true, data: settings };
   }
@@ -125,19 +100,85 @@ export class SettingsController {
     return { success: true };
   }
 
-  @Post('validate/allegro')
+  @Get('allegro-accounts')
   @UseGuards(JwtAuthGuard)
-  async validateAllegroKeys(
+  async getAllegroAccounts(@Request() req: any): Promise<{ success: boolean; data: any }> {
+    const userId = String(req.user.id);
+    const accounts = await this.settingsService.getAllegroAccounts(userId);
+    return { success: true, data: accounts };
+  }
+
+  @Get('allegro-accounts/:id')
+  @UseGuards(JwtAuthGuard)
+  async getAllegroAccount(
     @Request() req: any,
+    @Param('id') accountId: string,
+  ): Promise<{ success: boolean; data: any }> {
+    const userId = String(req.user.id);
+    const account = await this.settingsService.getAllegroAccount(userId, accountId);
+    return { success: true, data: account };
+  }
+
+  @Post('allegro-accounts')
+  @UseGuards(JwtAuthGuard)
+  async createAllegroAccount(
+    @Request() req: any,
+    @Body() dto: CreateAllegroAccountDto,
+  ): Promise<{ success: boolean; data: any }> {
+    const userId = String(req.user.id);
+    const account = await this.settingsService.createAllegroAccount(userId, dto);
+    return { success: true, data: account };
+  }
+
+  @Put('allegro-accounts/:id')
+  @UseGuards(JwtAuthGuard)
+  async updateAllegroAccount(
+    @Request() req: any,
+    @Param('id') accountId: string,
+    @Body() dto: UpdateAllegroAccountDto,
+  ): Promise<{ success: boolean; data: any }> {
+    const userId = String(req.user.id);
+    const account = await this.settingsService.updateAllegroAccount(userId, accountId, dto);
+    return { success: true, data: account };
+  }
+
+  @Delete('allegro-accounts/:id')
+  @UseGuards(JwtAuthGuard)
+  async deleteAllegroAccount(
+    @Request() req: any,
+    @Param('id') accountId: string,
+  ): Promise<{ success: boolean }> {
+    const userId = String(req.user.id);
+    await this.settingsService.deleteAllegroAccount(userId, accountId);
+    return { success: true };
+  }
+
+  @Post('allegro-accounts/:id/activate')
+  @UseGuards(JwtAuthGuard)
+  async activateAllegroAccount(
+    @Request() req: any,
+    @Param('id') accountId: string,
+  ): Promise<{ success: boolean }> {
+    const userId = String(req.user.id);
+    await this.settingsService.setActiveAccount(userId, accountId);
+    return { success: true };
+  }
+
+  @Post('allegro-accounts/:id/validate')
+  @UseGuards(JwtAuthGuard)
+  async validateAllegroAccountKeys(
+    @Request() req: any,
+    @Param('id') accountId: string,
     @Body() dto: ValidateAllegroKeysDto,
   ): Promise<{ success: boolean; data: any }> {
-    const userId = String(req.user.id); // Convert to string as Prisma expects String
+    const userId = String(req.user.id);
     try {
-      const result = await this.settingsService.validateAllegroKeys(userId, dto);
+      const result = await this.settingsService.validateAllegroKeys(userId, accountId, dto);
       return { success: true, data: result };
     } catch (error: any) {
-      this.logger.error('SettingsController.validateAllegroKeys error', {
+      this.logger.error('SettingsController.validateAllegroAccountKeys error', {
         userId,
+        accountId,
         error: error.message,
         errorStack: error.stack,
       });

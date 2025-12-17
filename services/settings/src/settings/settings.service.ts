@@ -9,7 +9,7 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import * as crypto from 'crypto';
-import { UpdateSettingsDto, AddSupplierConfigDto, UpdateSupplierConfigDto, ValidateAllegroKeysDto } from './dto/update-settings.dto';
+import { UpdateSettingsDto, AddSupplierConfigDto, UpdateSupplierConfigDto, ValidateAllegroKeysDto, CreateAllegroAccountDto, UpdateAllegroAccountDto } from './dto/update-settings.dto';
 
 @Injectable()
 export class SettingsService {
@@ -124,9 +124,6 @@ export class SettingsService {
     this.logger.log('SettingsService.getSettings: Database query completed', {
       userId,
       found: !!settings,
-      hasClientId: !!settings?.allegroClientId,
-      hasClientSecret: !!settings?.allegroClientSecret,
-      clientSecretLength: settings?.allegroClientSecret?.length,
     });
 
     if (!settings) {
@@ -145,58 +142,7 @@ export class SettingsService {
       });
     }
 
-    // Decrypt sensitive data before returning
-    this.logger.log('SettingsService.getSettings: Preparing to decrypt Client Secret', {
-      userId,
-      hasClientSecret: !!settings.allegroClientSecret,
-      clientSecretLength: settings.allegroClientSecret?.length,
-    });
-    
     const result: any = { ...settings };
-    
-    if (result.allegroClientSecret) {
-      this.logger.log('SettingsService.getSettings: Attempting to decrypt Client Secret', {
-        userId,
-        encryptedLength: result.allegroClientSecret.length,
-        encryptedFirstChars: result.allegroClientSecret.substring(0, 20) + '...',
-      });
-      
-      try {
-        const decryptedSecret = this.decrypt(result.allegroClientSecret);
-        result.allegroClientSecret = decryptedSecret;
-        
-        this.logger.log('SettingsService.getSettings: Client Secret decrypted successfully', {
-          userId,
-          decryptedLength: decryptedSecret.length,
-          decryptedFirstChars: decryptedSecret.substring(0, 5) + '...',
-        });
-      } catch (error: any) {
-        this.logger.error('SettingsService.getSettings: Failed to decrypt allegroClientSecret', {
-          userId,
-          error: error.message,
-          errorStack: error.stack,
-          encryptedLength: result.allegroClientSecret?.length,
-        });
-        
-        // Set to null to indicate it exists but decryption failed
-        result.allegroClientSecret = null;
-        
-        // Add detailed error information
-        result._allegroClientSecretDecryptionError = {
-          exists: true,
-          error: error.message || 'Unknown decryption error',
-          errorType: error.constructor?.name || 'Error',
-          suggestion: 'This usually happens when the encryption key has changed or the data was encrypted with a different key. Please re-enter your Client Secret.',
-        };
-        
-        this.logger.log('SettingsService.getSettings: Added decryption error to response', {
-          userId,
-          errorInfo: result._allegroClientSecretDecryptionError,
-        });
-      }
-    } else {
-      this.logger.log('SettingsService.getSettings: No Client Secret in database', { userId });
-    }
 
     // Decrypt API keys in supplier configs
     if (result.supplierConfigs && Array.isArray(result.supplierConfigs)) {
@@ -213,38 +159,72 @@ export class SettingsService {
       });
     }
 
-    // Add OAuth status to the result (from database, no API call needed)
-    if (result.allegroAccessToken) {
-      result.oauthStatus = {
-        authorized: true,
-        expiresAt: result.allegroTokenExpiresAt 
-          ? (result.allegroTokenExpiresAt instanceof Date 
-              ? result.allegroTokenExpiresAt.toISOString() 
-              : result.allegroTokenExpiresAt)
-          : undefined,
-        scopes: result.allegroTokenScopes || undefined,
-      };
-    } else {
-      result.oauthStatus = {
-        authorized: false,
-      };
-    }
+    // Get Allegro accounts for user
+    const accounts = await this.prisma.allegroAccount.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'asc' },
+    });
 
-    // Don't expose sensitive OAuth tokens in response
-    delete result.allegroAccessToken;
-    delete result.allegroRefreshToken;
-    delete result.allegroOAuthState;
-    delete result.allegroOAuthCodeVerifier;
+    // Decrypt account credentials and add OAuth status
+    result.allegroAccounts = await Promise.all(accounts.map(async (account) => {
+      const accountData: any = {
+        id: account.id,
+        name: account.name,
+        isActive: account.isActive,
+        createdAt: account.createdAt,
+        updatedAt: account.updatedAt,
+      };
+
+      // Decrypt client secret if present
+      if (account.clientSecret) {
+        try {
+          accountData.clientId = account.clientId;
+          accountData.clientSecret = this.decrypt(account.clientSecret);
+        } catch (error: any) {
+          this.logger.error('Failed to decrypt account client secret', {
+            userId,
+            accountId: account.id,
+            error: error.message,
+          });
+          accountData.clientId = account.clientId;
+          accountData.clientSecret = null;
+          accountData._clientSecretDecryptionError = {
+            exists: true,
+            error: error.message || 'Unknown decryption error',
+            errorType: error.constructor?.name || 'Error',
+            suggestion: 'Please re-enter your Client Secret.',
+          };
+        }
+      } else {
+        accountData.clientId = account.clientId;
+      }
+
+      // Add OAuth status
+      if (account.accessToken) {
+        accountData.oauthStatus = {
+          authorized: true,
+          expiresAt: account.tokenExpiresAt ? (account.tokenExpiresAt instanceof Date ? account.tokenExpiresAt.toISOString() : account.tokenExpiresAt) : undefined,
+          scopes: account.tokenScopes || undefined,
+        };
+      } else {
+        accountData.oauthStatus = {
+          authorized: false,
+        };
+      }
+
+      return accountData;
+    }));
+
+    // Get active account ID from preferences
+    const preferences = (result.preferences || {}) as any;
+    result.activeAllegroAccountId = preferences.activeAllegroAccountId || null;
 
     const totalDuration = Date.now() - startTime;
     this.logger.log(`[${new Date().toISOString()}] [TIMING] SettingsService.getSettings: Returning result (${totalDuration}ms total)`, {
       userId,
       resultKeys: Object.keys(result),
-      hasClientId: !!result.allegroClientId,
-      hasClientSecret: !!result.allegroClientSecret,
-      clientSecretLength: result.allegroClientSecret?.length,
-      hasDecryptionError: !!result._allegroClientSecretDecryptionError,
-      oauthAuthorized: result.oauthStatus?.authorized,
+      accountsCount: result.allegroAccounts?.length || 0,
+      activeAccountId: result.activeAllegroAccountId,
       totalDurationMs: totalDuration,
     });
 
@@ -257,64 +237,11 @@ export class SettingsService {
   async updateSettings(userId: string, dto: UpdateSettingsDto): Promise<any> {
     const startLogData = {
       userId,
-      hasClientId: !!dto.allegroClientId,
-      clientId: dto.allegroClientId?.substring(0, 8) + '...',
-      clientIdLength: dto.allegroClientId?.length,
-      hasClientSecret: !!dto.allegroClientSecret,
-      clientSecretLength: dto.allegroClientSecret?.length,
-      clientSecretFirstChars: dto.allegroClientSecret?.substring(0, 5) + '...',
       dtoKeys: Object.keys(dto),
     };
     this.logger.log('SettingsService.updateSettings START', startLogData);
-    console.log('[SettingsService] updateSettings START', JSON.stringify(startLogData, null, 2));
 
     const updateData: any = {};
-
-    if (dto.allegroClientId !== undefined) {
-      updateData.allegroClientId = dto.allegroClientId;
-      const logData = { userId, clientIdLength: updateData.allegroClientId?.length };
-      this.logger.log('SettingsService.updateSettings: Added Client ID to updateData', logData);
-      console.log('[SettingsService] Added Client ID to updateData', JSON.stringify(logData, null, 2));
-    } else {
-      this.logger.log('SettingsService.updateSettings: Client ID not provided', { userId });
-      console.log('[SettingsService] Client ID not provided', { userId });
-    }
-
-    if (dto.allegroClientSecret !== undefined) {
-      const encryptLogData = {
-        userId,
-        clientSecretLength: dto.allegroClientSecret.length,
-        clientSecretFirstChars: dto.allegroClientSecret.substring(0, 5) + '...',
-      };
-      this.logger.log('SettingsService.updateSettings: Encrypting Client Secret', encryptLogData);
-      console.log('[SettingsService] Encrypting Client Secret', JSON.stringify(encryptLogData, null, 2));
-      
-      try {
-        // Encrypt the secret before storing
-        const encryptedSecret = this.encrypt(dto.allegroClientSecret);
-        updateData.allegroClientSecret = encryptedSecret;
-        
-        const successLogData = {
-          userId,
-          encryptedLength: encryptedSecret.length,
-          encryptedFirstChars: encryptedSecret.substring(0, 20) + '...',
-        };
-        this.logger.log('SettingsService.updateSettings: Client Secret encrypted successfully', successLogData);
-        console.log('[SettingsService] Client Secret encrypted successfully', JSON.stringify(successLogData, null, 2));
-      } catch (error: any) {
-        const errorLogData = {
-          userId,
-          error: error.message,
-          errorStack: error.stack,
-        };
-        this.logger.error('SettingsService.updateSettings: Failed to encrypt Client Secret', errorLogData);
-        console.error('[SettingsService] Failed to encrypt Client Secret', JSON.stringify(errorLogData, null, 2));
-        throw error;
-      }
-    } else {
-      this.logger.log('SettingsService.updateSettings: Client Secret not provided', { userId });
-      console.log('[SettingsService] Client Secret not provided', { userId });
-    }
 
     if (dto.supplierConfigs !== undefined) {
       // Encrypt API keys in supplier configs
@@ -335,16 +262,6 @@ export class SettingsService {
       updateData.preferences = dto.preferences;
     }
 
-    const upsertLogData = {
-      userId,
-      updateDataKeys: Object.keys(updateData),
-      hasClientId: !!updateData.allegroClientId,
-      hasClientSecret: !!updateData.allegroClientSecret,
-      clientSecretEncryptedLength: updateData.allegroClientSecret?.length,
-    };
-    this.logger.log('SettingsService.updateSettings: Preparing database upsert', upsertLogData);
-    console.log('[SettingsService] Preparing database upsert', JSON.stringify(upsertLogData, null, 2));
-    
     const settings = await this.prisma.userSettings.upsert({
       where: { userId },
       update: updateData,
@@ -356,77 +273,12 @@ export class SettingsService {
       },
     });
     
-    const completedLogData = {
+    this.logger.log('SettingsService.updateSettings: Database upsert completed', {
       userId,
       settingsId: settings.id,
-      hasStoredClientId: !!settings.allegroClientId,
-      hasStoredClientSecret: !!settings.allegroClientSecret,
-      storedClientSecretLength: settings.allegroClientSecret?.length,
-    };
-    this.logger.log('SettingsService.updateSettings: Database upsert completed', completedLogData);
-    console.log('[SettingsService] Database upsert completed', JSON.stringify(completedLogData, null, 2));
-
-    // Decrypt for response
-    this.logger.log('SettingsService.updateSettings: Preparing response', {
-      userId,
-      hasStoredClientSecret: !!settings.allegroClientSecret,
-      storedClientSecretLength: settings.allegroClientSecret?.length,
     });
-    
+
     const result: any = { ...settings };
-    
-    if (result.allegroClientSecret) {
-      this.logger.log('SettingsService.updateSettings: Attempting to decrypt Client Secret for response', {
-        userId,
-        encryptedLength: result.allegroClientSecret.length,
-        encryptedFirstChars: result.allegroClientSecret.substring(0, 20) + '...',
-      });
-      
-      try {
-        const decryptedSecret = this.decrypt(result.allegroClientSecret);
-        result.allegroClientSecret = decryptedSecret;
-        
-        this.logger.log('SettingsService.updateSettings: Client Secret decrypted successfully', { 
-          userId, 
-          decryptedLength: decryptedSecret.length,
-          decryptedFirstChars: decryptedSecret.substring(0, 5) + '...',
-        });
-      } catch (error: any) {
-        this.logger.error('SettingsService.updateSettings: Failed to decrypt Client Secret', { 
-          userId, 
-          error: error.message, 
-          errorStack: error.stack,
-          encryptedLength: result.allegroClientSecret?.length,
-        });
-        
-        // Set to null to indicate it exists but decryption failed
-        result.allegroClientSecret = null;
-        
-        // Add detailed error information (same as getSettings)
-        result._allegroClientSecretDecryptionError = {
-          exists: true,
-          error: error.message || 'Unknown decryption error',
-          errorType: error.constructor?.name || 'Error',
-          suggestion: 'This usually happens when the encryption key has changed or the data was encrypted with a different key. Please re-enter your Client Secret.',
-        };
-        
-        this.logger.log('SettingsService.updateSettings: Added decryption error to response', {
-          userId,
-          errorInfo: result._allegroClientSecretDecryptionError,
-        });
-      }
-    } else {
-      this.logger.log('SettingsService.updateSettings: No Client Secret in database', { userId });
-    }
-
-    this.logger.log('SettingsService.updateSettings: Returning result', {
-      userId,
-      resultKeys: Object.keys(result),
-      hasClientId: !!result.allegroClientId,
-      hasClientSecret: !!result.allegroClientSecret,
-      clientSecretLength: result.allegroClientSecret?.length,
-      hasDecryptionError: !!result._allegroClientSecretDecryptionError,
-    });
 
     return result;
   }
@@ -761,6 +613,506 @@ export class SettingsService {
     } catch (error) {
       this.logger.error('Failed to decrypt OAuth code verifier', { userId, error: error.message });
       return null;
+    }
+  }
+
+  /**
+   * Get all Allegro accounts for user
+   */
+  async getAllegroAccounts(userId: string): Promise<any[]> {
+    this.logger.log('Getting Allegro accounts', { userId });
+
+    const accounts = await this.prisma.allegroAccount.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return await Promise.all(accounts.map(async (account) => {
+      const accountData: any = {
+        id: account.id,
+        name: account.name,
+        isActive: account.isActive,
+        createdAt: account.createdAt,
+        updatedAt: account.updatedAt,
+      };
+
+      // Decrypt client secret if present
+      if (account.clientSecret) {
+        try {
+          accountData.clientId = account.clientId;
+          accountData.clientSecret = this.decrypt(account.clientSecret);
+        } catch (error: any) {
+          this.logger.error('Failed to decrypt account client secret', {
+            userId,
+            accountId: account.id,
+            error: error.message,
+          });
+          accountData.clientId = account.clientId;
+          accountData.clientSecret = null;
+        }
+      } else {
+        accountData.clientId = account.clientId;
+      }
+
+      // Add OAuth status
+      if (account.accessToken) {
+        accountData.oauthStatus = {
+          authorized: true,
+          expiresAt: account.tokenExpiresAt ? (account.tokenExpiresAt instanceof Date ? account.tokenExpiresAt.toISOString() : account.tokenExpiresAt) : undefined,
+          scopes: account.tokenScopes || undefined,
+        };
+      } else {
+        accountData.oauthStatus = {
+          authorized: false,
+        };
+      }
+
+      return accountData;
+    }));
+  }
+
+  /**
+   * Get specific Allegro account
+   */
+  async getAllegroAccount(userId: string, accountId: string): Promise<any> {
+    this.logger.log('Getting Allegro account', { userId, accountId });
+
+    const account = await this.prisma.allegroAccount.findFirst({
+      where: {
+        id: accountId,
+        userId,
+      },
+    });
+
+    if (!account) {
+      throw new NotFoundException(`Allegro account with ID ${accountId} not found`);
+    }
+
+    const accountData: any = {
+      id: account.id,
+      name: account.name,
+      isActive: account.isActive,
+      createdAt: account.createdAt,
+      updatedAt: account.updatedAt,
+    };
+
+    // Decrypt client secret if present
+    if (account.clientSecret) {
+      try {
+        accountData.clientId = account.clientId;
+        accountData.clientSecret = this.decrypt(account.clientSecret);
+      } catch (error: any) {
+        this.logger.error('Failed to decrypt account client secret', {
+          userId,
+          accountId: account.id,
+          error: error.message,
+        });
+        accountData.clientId = account.clientId;
+        accountData.clientSecret = null;
+      }
+    } else {
+      accountData.clientId = account.clientId;
+    }
+
+    // Add OAuth status
+    if (account.accessToken) {
+      accountData.oauthStatus = {
+        authorized: true,
+        expiresAt: account.tokenExpiresAt ? (account.tokenExpiresAt instanceof Date ? account.tokenExpiresAt.toISOString() : account.tokenExpiresAt) : undefined,
+        scopes: account.tokenScopes || undefined,
+      };
+    } else {
+      accountData.oauthStatus = {
+        authorized: false,
+      };
+    }
+
+    return accountData;
+  }
+
+  /**
+   * Create new Allegro account
+   */
+  async createAllegroAccount(userId: string, dto: CreateAllegroAccountDto): Promise<any> {
+    this.logger.log('Creating Allegro account', { userId, accountName: dto.name });
+
+    // Check if account name already exists for this user
+    const existing = await this.prisma.allegroAccount.findFirst({
+      where: {
+        userId,
+        name: dto.name,
+      },
+    });
+
+    if (existing) {
+      throw new BadRequestException(`Account with name "${dto.name}" already exists`);
+    }
+
+    const account = await this.prisma.allegroAccount.create({
+      data: {
+        userId,
+        name: dto.name,
+        clientId: dto.clientId,
+        clientSecret: this.encrypt(dto.clientSecret),
+        isActive: false,
+      },
+    });
+
+    this.logger.log('Allegro account created', { userId, accountId: account.id, accountName: dto.name });
+
+    return {
+      id: account.id,
+      name: account.name,
+      clientId: account.clientId,
+      isActive: account.isActive,
+      oauthStatus: {
+        authorized: false,
+      },
+      createdAt: account.createdAt,
+      updatedAt: account.updatedAt,
+    };
+  }
+
+  /**
+   * Update Allegro account
+   */
+  async updateAllegroAccount(userId: string, accountId: string, dto: UpdateAllegroAccountDto): Promise<any> {
+    this.logger.log('Updating Allegro account', { userId, accountId });
+
+    const account = await this.prisma.allegroAccount.findFirst({
+      where: {
+        id: accountId,
+        userId,
+      },
+    });
+
+    if (!account) {
+      throw new NotFoundException(`Allegro account with ID ${accountId} not found`);
+    }
+
+    // Check if name is being changed and if new name already exists
+    if (dto.name && dto.name !== account.name) {
+      const existing = await this.prisma.allegroAccount.findFirst({
+        where: {
+          userId,
+          name: dto.name,
+          id: { not: accountId },
+        },
+      });
+
+      if (existing) {
+        throw new BadRequestException(`Account with name "${dto.name}" already exists`);
+      }
+    }
+
+    const updateData: any = {};
+    if (dto.name !== undefined) updateData.name = dto.name;
+    if (dto.clientId !== undefined) updateData.clientId = dto.clientId;
+    if (dto.clientSecret !== undefined) updateData.clientSecret = this.encrypt(dto.clientSecret);
+
+    const updated = await this.prisma.allegroAccount.update({
+      where: { id: accountId },
+      data: updateData,
+    });
+
+    this.logger.log('Allegro account updated', { userId, accountId });
+
+    const accountData: any = {
+      id: updated.id,
+      name: updated.name,
+      isActive: updated.isActive,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt,
+    };
+
+    // Decrypt client secret if present
+    if (updated.clientSecret) {
+      try {
+        accountData.clientId = updated.clientId;
+        accountData.clientSecret = this.decrypt(updated.clientSecret);
+      } catch (error: any) {
+        this.logger.error('Failed to decrypt account client secret', {
+          userId,
+          accountId: updated.id,
+          error: error.message,
+        });
+        accountData.clientId = updated.clientId;
+        accountData.clientSecret = null;
+      }
+    } else {
+      accountData.clientId = updated.clientId;
+    }
+
+    // Add OAuth status
+    if (updated.accessToken) {
+      accountData.oauthStatus = {
+        authorized: true,
+        expiresAt: updated.tokenExpiresAt ? (updated.tokenExpiresAt instanceof Date ? updated.tokenExpiresAt.toISOString() : updated.tokenExpiresAt) : undefined,
+        scopes: updated.tokenScopes || undefined,
+      };
+    } else {
+      accountData.oauthStatus = {
+        authorized: false,
+      };
+    }
+
+    return accountData;
+  }
+
+  /**
+   * Delete Allegro account
+   */
+  async deleteAllegroAccount(userId: string, accountId: string): Promise<void> {
+    this.logger.log('Deleting Allegro account', { userId, accountId });
+
+    const account = await this.prisma.allegroAccount.findFirst({
+      where: {
+        id: accountId,
+        userId,
+      },
+    });
+
+    if (!account) {
+      throw new NotFoundException(`Allegro account with ID ${accountId} not found`);
+    }
+
+    await this.prisma.allegroAccount.delete({
+      where: { id: accountId },
+    });
+
+    // If deleted account was active, clear active account from preferences
+    if (account.isActive) {
+      const settings = await this.prisma.userSettings.findUnique({
+        where: { userId },
+      });
+
+      if (settings) {
+        const preferences = (settings.preferences || {}) as any;
+        if (preferences.activeAllegroAccountId === accountId) {
+          delete preferences.activeAllegroAccountId;
+          await this.prisma.userSettings.update({
+            where: { userId },
+            data: { preferences },
+          });
+        }
+      }
+    }
+
+    this.logger.log('Allegro account deleted', { userId, accountId });
+  }
+
+  /**
+   * Set active Allegro account
+   */
+  async setActiveAccount(userId: string, accountId: string): Promise<void> {
+    this.logger.log('Setting active Allegro account', { userId, accountId });
+
+    const account = await this.prisma.allegroAccount.findFirst({
+      where: {
+        id: accountId,
+        userId,
+      },
+    });
+
+    if (!account) {
+      throw new NotFoundException(`Allegro account with ID ${accountId} not found`);
+    }
+
+    // Set all accounts to inactive
+    await this.prisma.allegroAccount.updateMany({
+      where: { userId },
+      data: { isActive: false },
+    });
+
+    // Set selected account as active
+    await this.prisma.allegroAccount.update({
+      where: { id: accountId },
+      data: { isActive: true },
+    });
+
+    // Update preferences
+    const settings = await this.prisma.userSettings.findUnique({
+      where: { userId },
+    });
+
+    if (settings) {
+      const preferences = (settings.preferences || {}) as any;
+      preferences.activeAllegroAccountId = accountId;
+      await this.prisma.userSettings.update({
+        where: { userId },
+        data: { preferences },
+      });
+    } else {
+      await this.prisma.userSettings.create({
+        data: {
+          userId,
+          preferences: { activeAllegroAccountId: accountId },
+          supplierConfigs: [],
+        },
+      });
+    }
+
+    this.logger.log('Active Allegro account set', { userId, accountId });
+  }
+
+  /**
+   * Get active Allegro account
+   */
+  async getActiveAccount(userId: string): Promise<any | null> {
+    this.logger.log('Getting active Allegro account', { userId });
+
+    const account = await this.prisma.allegroAccount.findFirst({
+      where: {
+        userId,
+        isActive: true,
+      },
+    });
+
+    if (!account) {
+      return null;
+    }
+
+    const accountData: any = {
+      id: account.id,
+      name: account.name,
+      isActive: account.isActive,
+      createdAt: account.createdAt,
+      updatedAt: account.updatedAt,
+    };
+
+    // Decrypt client secret if present
+    if (account.clientSecret) {
+      try {
+        accountData.clientId = account.clientId;
+        accountData.clientSecret = this.decrypt(account.clientSecret);
+      } catch (error: any) {
+        this.logger.error('Failed to decrypt account client secret', {
+          userId,
+          accountId: account.id,
+          error: error.message,
+        });
+        accountData.clientId = account.clientId;
+        accountData.clientSecret = null;
+      }
+    } else {
+      accountData.clientId = account.clientId;
+    }
+
+    // Add OAuth status
+    if (account.accessToken) {
+      accountData.oauthStatus = {
+        authorized: true,
+        expiresAt: account.tokenExpiresAt ? (account.tokenExpiresAt instanceof Date ? account.tokenExpiresAt.toISOString() : account.tokenExpiresAt) : undefined,
+        scopes: account.tokenScopes || undefined,
+      };
+    } else {
+      accountData.oauthStatus = {
+        authorized: false,
+      };
+    }
+
+    return accountData;
+  }
+
+  /**
+   * Validate Allegro API keys for specific account
+   */
+  async validateAllegroKeys(userId: string, accountId: string, dto: ValidateAllegroKeysDto): Promise<{ valid: boolean; message?: string }> {
+    // Always use real ALLEGRO_AUTH_URL for both environments
+    const tokenUrl = this.configService.get<string>('ALLEGRO_AUTH_URL');
+    if (!tokenUrl) {
+      this.logger.error('ALLEGRO_AUTH_URL not configured', { userId, accountId });
+      throw new HttpException(
+        {
+          success: false,
+          error: {
+            code: 'CONFIGURATION_ERROR',
+            message: 'ALLEGRO_AUTH_URL must be configured in .env file',
+          },
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+
+    this.logger.log('Validating Allegro API keys for account', {
+      userId,
+      accountId,
+      tokenUrl,
+      clientId: dto.clientId.substring(0, 8) + '...',
+    });
+
+    try {
+      // Use the same authentication method as allegro-auth.service
+      const response = await firstValueFrom(
+        this.httpService.post(
+          tokenUrl,
+          new URLSearchParams({
+            grant_type: 'client_credentials',
+          }),
+          {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            auth: {
+              username: dto.clientId,
+              password: dto.clientSecret,
+            },
+            timeout: (() => {
+              // Use longer timeout for Allegro API validation (external API call)
+              const allegroTimeout = this.configService.get<string>('ALLEGRO_VALIDATION_TIMEOUT');
+              if (allegroTimeout) {
+                return parseInt(allegroTimeout);
+              }
+              const defaultAllegroTimeout = 60000;
+              const authTimeout = this.configService.get<string>('AUTH_SERVICE_TIMEOUT');
+              const httpTimeout = this.configService.get<string>('HTTP_TIMEOUT');
+              const timeout = authTimeout || httpTimeout;
+              if (!timeout) {
+                this.logger.log('No timeout configured, using default 60s for Allegro validation', { userId, accountId });
+                return defaultAllegroTimeout;
+              }
+              const configuredTimeout = parseInt(timeout);
+              return Math.max(configuredTimeout, defaultAllegroTimeout);
+            })(),
+          },
+        ),
+      );
+
+      if (response.data && response.data.access_token) {
+        this.logger.log('Allegro API keys validated successfully', { userId, accountId });
+        return { valid: true, message: 'Validated successfully' };
+      }
+
+      return { valid: false, message: 'Invalid response from Allegro API' };
+    } catch (error: any) {
+      const status = error.response?.status;
+      const errorData = error.response?.data || {};
+      const errorMessage = errorData.error_description || errorData.error || error.message;
+
+      this.logger.error('Failed to validate Allegro API keys', {
+        userId,
+        accountId,
+        error: errorMessage,
+        status,
+      });
+
+      if (status === 401 || status === 403) {
+        const specificMessage = errorData.error_description || errorData.error;
+        if (specificMessage && specificMessage !== 'invalid_client') {
+          return { valid: false, message: `Invalid API credentials: ${specificMessage}` };
+        }
+        return { valid: false, message: 'Invalid API credentials. Please check your Client ID and Client Secret.' };
+      }
+
+      if (status === 404) {
+        return { valid: false, message: `OAuth endpoint not found. Please check ALLEGRO_AUTH_URL configuration.` };
+      }
+
+      const detailedMessage = errorMessage
+        ? `Validation failed: ${errorMessage}${status ? ` (HTTP ${status})` : ''}`
+        : `Validation failed: ${error.message || 'Unknown error'}`;
+
+      return { valid: false, message: detailedMessage };
     }
   }
 }

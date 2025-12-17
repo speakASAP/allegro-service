@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AxiosError } from 'axios';
-import api, { oauthApi } from '../services/api';
+import api, { oauthApi, allegroAccountApi } from '../services/api';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
@@ -17,42 +17,50 @@ interface SupplierConfig {
   apiConfig?: Record<string, unknown>;
 }
 
-interface Settings {
+interface AllegroAccount {
   id: string;
-  userId: string;
-  allegroClientId?: string;
-  allegroClientSecret?: string;
-  supplierConfigs?: SupplierConfig[];
-  preferences?: Record<string, unknown>;
+  name: string;
+  clientId?: string;
+  clientSecret?: string;
+  isActive: boolean;
   oauthStatus?: {
     authorized: boolean;
     expiresAt?: string;
     scopes?: string;
   };
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface Settings {
+  id: string;
+  userId: string;
+  supplierConfigs?: SupplierConfig[];
+  preferences?: Record<string, unknown>;
+  allegroAccounts?: AllegroAccount[];
+  activeAllegroAccountId?: string | null;
 }
 
 const SettingsPage: React.FC = () => {
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [loading, setLoading] = useState(false); // Start as false to render immediately
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-
-  const [allegroClientId, setAllegroClientId] = useState('');
-  const [allegroClientSecret, setAllegroClientSecret] = useState('');
 
   const [newSupplierName, setNewSupplierName] = useState('');
   const [newSupplierEndpoint, setNewSupplierEndpoint] = useState('');
   const [newSupplierKey, setNewSupplierKey] = useState('');
   const [showAddSupplier, setShowAddSupplier] = useState(false);
 
-  // OAuth state - initialize immediately so page can render
-  const [oauthStatus, setOauthStatus] = useState<{
-    authorized: boolean;
-    expiresAt?: string;
-    scopes?: string;
-  }>({ authorized: false }); // Initialize with default value
-  const [oauthLoading, setOauthLoading] = useState(false);
+  // Allegro Account state
+  const [accounts, setAccounts] = useState<AllegroAccount[]>([]);
+  const [showAddAccount, setShowAddAccount] = useState(false);
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+  const [newAccountName, setNewAccountName] = useState('');
+  const [newAccountClientId, setNewAccountClientId] = useState('');
+  const [newAccountClientSecret, setNewAccountClientSecret] = useState('');
+  const [oauthLoadingAccountId, setOauthLoadingAccountId] = useState<string | null>(null);
 
   useEffect(() => {
     // Load settings in background (non-blocking)
@@ -67,58 +75,13 @@ const SettingsPage: React.FC = () => {
   }, []);
 
   const loadSettings = async () => {
-    setLoading(true); // Set loading only during the API call
+    setLoading(true);
     try {
       const response = await api.get('/settings');
       if (response.data.success) {
         const data = response.data.data;
         setSettings(data);
-        setAllegroClientId(data.allegroClientId || '');
-        
-        // Set OAuth status from settings response (from database, instant)
-        if (data.oauthStatus) {
-          setOauthStatus(data.oauthStatus);
-        } else {
-          // If oauthStatus is not in response, set as not authorized
-          setOauthStatus({ authorized: false });
-        }
-        
-        // Debug logging
-        console.log('[SettingsPage] loadSettings response:', {
-          hasClientSecret: !!data.allegroClientSecret,
-          clientSecretLength: data.allegroClientSecret?.length,
-          hasDecryptionError: !!data._allegroClientSecretDecryptionError,
-          decryptionError: data._allegroClientSecretDecryptionError,
-          oauthStatus: data.oauthStatus,
-        });
-        
-        // Check if Client Secret exists in database (regardless of decryption success)
-        // If _allegroClientSecretDecryptionError exists, it means the secret exists but decryption failed
-        const secretExistsInDb = data._allegroClientSecretDecryptionError || (data.allegroClientSecret && data.allegroClientSecret.length > 0);
-        
-        if (data._allegroClientSecretDecryptionError && data.allegroClientSecret === null) {
-          // Secret exists in DB but decryption failed - clear field and show error
-          const errorInfo = data._allegroClientSecretDecryptionError;
-          const errorMessage = errorInfo && typeof errorInfo === 'object'
-            ? `Client Secret Decryption Error:\n\n` +
-              `• Status: Client Secret exists in database but could not be decrypted\n` +
-              `• Error Type: ${errorInfo.errorType || 'Unknown'}\n` +
-              `• Error Details: ${errorInfo.error || 'Unknown error'}\n\n` +
-              `• Solution: ${errorInfo.suggestion || 'Please re-enter your Client Secret and save it again.'}\n\n` +
-              `This typically occurs when the encryption key has changed or the data was encrypted with a different configuration.`
-            : 'Client Secret exists in database but could not be decrypted. Please re-enter your Client Secret and save it again.';
-          setError(errorMessage);
-          setAllegroClientSecret(''); // Clear field if decryption failed - user needs to re-enter
-          console.log('[SettingsPage] Setting Client Secret to empty (decryption failed - user must re-enter)');
-        } else if (secretExistsInDb && data.allegroClientSecret) {
-          // Client Secret exists in database and was successfully decrypted - show actual value for visual verification
-          setAllegroClientSecret(data.allegroClientSecret);
-          console.log('[SettingsPage] Setting Client Secret to actual decrypted value (length: ' + data.allegroClientSecret.length + ')');
-        } else {
-          // No Client Secret in database - show empty
-          setAllegroClientSecret('');
-          console.log('[SettingsPage] Setting Client Secret to empty (does not exist)');
-        }
+        setAccounts(data.allegroAccounts || []);
       }
     } catch (err: unknown) {
       if (err instanceof AxiosError) {
@@ -136,85 +99,112 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleSaveAllegro = async () => {
-    console.log('[SettingsPage] handleSaveAllegro START', {
-      allegroClientId: allegroClientId || 'EMPTY',
-      allegroClientIdLength: allegroClientId?.length || 0,
-      allegroClientSecret: allegroClientSecret ? (allegroClientSecret.substring(0, 10) + '...') : 'EMPTY',
-      allegroClientSecretLength: allegroClientSecret?.length || 0,
-      allegroClientSecretIsMasked: allegroClientSecret === '********',
-      allegroClientSecretIsEmpty: !allegroClientSecret || allegroClientSecret.length === 0,
-      allegroClientSecretType: typeof allegroClientSecret,
-    });
-    
+  // Allegro Account handlers
+  const handleAddAccount = async () => {
+    if (!newAccountName || !newAccountClientId || !newAccountClientSecret) {
+      setError('Please fill all account fields');
+      return;
+    }
+
     setSaving(true);
     setError('');
     setSuccess('');
 
     try {
-      // Only send Client Secret if it was actually changed (not masked value)
-      const payload: any = {
-        allegroClientId,
-      };
-      
-      // Only include Client Secret if it's not empty
-      if (allegroClientSecret && allegroClientSecret.length > 0) {
-        payload.allegroClientSecret = allegroClientSecret;
-        console.log('[SettingsPage] Including Client Secret in payload', {
-          clientSecretLength: allegroClientSecret.length,
-          clientSecretFirstChars: allegroClientSecret.substring(0, 5) + '...',
-        });
-      } else {
-        console.log('[SettingsPage] NOT including Client Secret in payload', {
-          reason: 'empty',
-          allegroClientSecret,
-        });
-      }
-      
-      console.log('[SettingsPage] Sending PUT /settings request', JSON.stringify({
-        payloadKeys: Object.keys(payload),
-        hasClientId: !!payload.allegroClientId,
-        clientId: payload.allegroClientId || 'EMPTY',
-        clientIdLength: payload.allegroClientId?.length || 0,
-        hasClientSecret: !!payload.allegroClientSecret,
-        clientSecretLength: payload.allegroClientSecret?.length || 0,
-        clientSecretFirstChars: payload.allegroClientSecret ? (payload.allegroClientSecret.substring(0, 10) + '...') : 'EMPTY',
-      }, null, 2));
-      
-      const response = await api.put('/settings', payload);
-      
-      console.log('[SettingsPage] Received PUT /settings response', JSON.stringify({
-        success: response.data?.success,
-        hasData: !!response.data?.data,
-        responseKeys: response.data ? Object.keys(response.data) : [],
-        dataKeys: response.data?.data ? Object.keys(response.data.data) : [],
-        hasClientId: !!response.data?.data?.allegroClientId,
-        clientId: response.data?.data?.allegroClientId || 'EMPTY',
-        hasClientSecret: !!response.data?.data?.allegroClientSecret,
-        clientSecretLength: response.data?.data?.allegroClientSecret?.length || 0,
-        clientSecretFirstChars: response.data?.data?.allegroClientSecret ? (response.data?.data?.allegroClientSecret.substring(0, 10) + '...') : 'EMPTY',
-        hasDecryptionError: !!response.data?.data?._allegroClientSecretDecryptionError,
-        decryptionError: response.data?.data?._allegroClientSecretDecryptionError || 'NONE',
-      }, null, 2));
+      const response = await allegroAccountApi.createAccount({
+        name: newAccountName,
+        clientId: newAccountClientId,
+        clientSecret: newAccountClientSecret,
+      });
 
       if (response.data.success) {
-        setSuccess('Allegro settings saved successfully');
-        // Reload settings (which now includes OAuth status from database)
+        setSuccess('Allegro account created successfully');
+        setNewAccountName('');
+        setNewAccountClientId('');
+        setNewAccountClientSecret('');
+        setShowAddAccount(false);
         loadSettings();
       }
     } catch (err: unknown) {
       const errorMessage =
         err instanceof AxiosError && err.response?.data?.error?.message
           ? err.response.data.error.message
-          : 'Failed to save settings';
+          : 'Failed to create account';
       setError(errorMessage);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleValidateAllegro = async () => {
-    if (!allegroClientId || !allegroClientSecret) {
+  const handleUpdateAccount = async (accountId: string) => {
+    const account = accounts.find(acc => acc.id === accountId);
+    if (!account) return;
+
+    setSaving(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const updateData: any = {};
+      if (newAccountName) updateData.name = newAccountName;
+      if (newAccountClientId) updateData.clientId = newAccountClientId;
+      if (newAccountClientSecret) updateData.clientSecret = newAccountClientSecret;
+
+      const response = await allegroAccountApi.updateAccount(accountId, updateData);
+
+      if (response.data.success) {
+        setSuccess('Allegro account updated successfully');
+        setEditingAccountId(null);
+        setNewAccountName('');
+        setNewAccountClientId('');
+        setNewAccountClientSecret('');
+        loadSettings();
+      }
+    } catch (err: unknown) {
+      const errorMessage =
+        err instanceof AxiosError && err.response?.data?.error?.message
+          ? err.response.data.error.message
+          : 'Failed to update account';
+      setError(errorMessage);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteAccount = async (accountId: string) => {
+    if (!confirm('Are you sure you want to delete this account? This will also remove all OAuth tokens.')) {
+      return;
+    }
+
+    try {
+      await allegroAccountApi.deleteAccount(accountId);
+      setSuccess('Allegro account deleted successfully');
+      loadSettings();
+    } catch (err: unknown) {
+      const errorMessage =
+        err instanceof AxiosError && err.response?.data?.error?.message
+          ? err.response.data.error.message
+          : 'Failed to delete account';
+      setError(errorMessage);
+    }
+  };
+
+  const handleSetActiveAccount = async (accountId: string) => {
+    try {
+      await allegroAccountApi.setActiveAccount(accountId);
+      setSuccess('Active account updated successfully');
+      loadSettings();
+    } catch (err: unknown) {
+      const errorMessage =
+        err instanceof AxiosError && err.response?.data?.error?.message
+          ? err.response.data.error.message
+          : 'Failed to set active account';
+      setError(errorMessage);
+    }
+  };
+
+  const handleValidateAccountKeys = async (accountId: string, clientId: string, clientSecret: string) => {
+    if (!clientId || !clientSecret) {
       setError('Please enter both Client ID and Client Secret');
       return;
     }
@@ -224,13 +214,7 @@ const SettingsPage: React.FC = () => {
     setSuccess('');
 
     try {
-      // Use longer timeout for Allegro API validation (external API can be slow, up to 60s)
-      const response = await api.post('/settings/validate/allegro', {
-        clientId: allegroClientId,
-        clientSecret: allegroClientSecret,
-      }, {
-        timeout: 120000, // 120 seconds - API Gateway has 90s timeout, plus network overhead and Allegro API response time
-      });
+      const response = await allegroAccountApi.validateKeys(accountId, clientId, clientSecret);
 
       if (response.data.success && response.data.data && response.data.data.valid === true) {
         setSuccess('Allegro API keys validated successfully');
@@ -242,12 +226,10 @@ const SettingsPage: React.FC = () => {
       }
     } catch (err: unknown) {
       if (err instanceof AxiosError) {
-        // Check if it's a connection error
         const axiosError = err as AxiosError & { isConnectionError?: boolean; serviceErrorMessage?: string };
         if (axiosError.isConnectionError && axiosError.serviceErrorMessage) {
           setError(axiosError.serviceErrorMessage);
         } else {
-          // Check if the response has error data
           const errorMessage = err.response?.data?.error?.message 
             || err.response?.data?.data?.message
             || err.response?.data?.message
@@ -317,21 +299,24 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleAuthorizeOAuth = async () => {
-    // Check if Client ID is configured (Client Secret might not be returned by API for security)
-    const hasClientId = allegroClientId || settings?.allegroClientId;
-    
-    if (!hasClientId) {
-      setError('Please configure and save your Allegro Client ID and Client Secret first');
+  const handleAuthorizeOAuth = async (accountId: string) => {
+    const account = accounts.find(acc => acc.id === accountId);
+    if (!account) {
+      setError('Account not found');
       return;
     }
 
-    setOauthLoading(true);
+    if (!account.clientId) {
+      setError('Please configure Client ID and Client Secret for this account first');
+      return;
+    }
+
+    setOauthLoadingAccountId(accountId);
     setError('');
     setSuccess('');
 
     try {
-      const response = await oauthApi.authorize();
+      const response = await oauthApi.authorize(accountId);
       if (response.data.success && response.data.data?.authorizationUrl) {
         // Redirect to Allegro authorization page
         window.location.href = response.data.data.authorizationUrl;
@@ -344,31 +329,29 @@ const SettingsPage: React.FC = () => {
         if (axiosError.isConnectionError && axiosError.serviceErrorMessage) {
           setError(axiosError.serviceErrorMessage);
         } else {
-          // Backend will return specific error if credentials are missing
           setError(err.response?.data?.error?.message || 'Failed to start OAuth authorization');
         }
       } else {
         setError('Failed to start OAuth authorization');
       }
     } finally {
-      setOauthLoading(false);
+      setOauthLoadingAccountId(null);
     }
   };
 
-  const handleRevokeOAuth = async () => {
+  const handleRevokeOAuth = async (accountId: string) => {
     if (!confirm('Are you sure you want to revoke OAuth authorization? You will need to re-authorize to import offers.')) {
       return;
     }
 
-    setOauthLoading(true);
+    setOauthLoadingAccountId(accountId);
     setError('');
     setSuccess('');
 
     try {
-      const response = await oauthApi.revoke();
+      const response = await oauthApi.revoke(accountId);
       if (response.data.success) {
         setSuccess('OAuth authorization revoked successfully');
-        // Reload settings (which includes OAuth status from database)
         loadSettings();
       } else {
         setError('Failed to revoke OAuth authorization');
@@ -385,8 +368,22 @@ const SettingsPage: React.FC = () => {
         setError('Failed to revoke OAuth authorization');
       }
     } finally {
-      setOauthLoading(false);
+      setOauthLoadingAccountId(null);
     }
+  };
+
+  const startEditAccount = (account: AllegroAccount) => {
+    setEditingAccountId(account.id);
+    setNewAccountName(account.name);
+    setNewAccountClientId(account.clientId || '');
+    setNewAccountClientSecret('');
+  };
+
+  const cancelEditAccount = () => {
+    setEditingAccountId(null);
+    setNewAccountName('');
+    setNewAccountClientId('');
+    setNewAccountClientSecret('');
   };
 
   // Page renders immediately, no blocking loading screen
@@ -409,84 +406,195 @@ const SettingsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Allegro Settings */}
-      <Card title="Allegro API Configuration">
+      {/* Allegro Accounts */}
+      <Card title="Allegro Accounts">
         <div className="space-y-4">
-          <Input
-            label="Client ID"
-            type="text"
-            value={allegroClientId}
-            onChange={(e) => setAllegroClientId(e.target.value)}
-            placeholder="Enter your Allegro Client ID"
-          />
-
-          <Input
-            label="Client Secret"
-            type="text"
-            value={allegroClientSecret}
-            onChange={(e) => setAllegroClientSecret(e.target.value)}
-            placeholder="Enter your Allegro Client Secret"
-          />
-
-          <div className="flex space-x-4">
-            <Button onClick={handleSaveAllegro} disabled={saving}>
-              {saving ? 'Saving...' : 'Save'}
-            </Button>
-            <Button variant="secondary" onClick={handleValidateAllegro} disabled={saving}>
-              Validate Keys
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      {/* OAuth Authorization */}
-      <Card title="OAuth Authorization">
-        <div className="space-y-4">
-          {oauthStatus.authorized ? (
-            <div className="space-y-3">
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                <span className="text-green-700 font-semibold">Authorized</span>
-              </div>
-              {oauthStatus.expiresAt && (
-                <div className="text-sm text-gray-600">
-                  <strong>Expires:</strong> {new Date(oauthStatus.expiresAt).toLocaleString()}
+          {accounts.length > 0 ? (
+            <div className="space-y-4">
+              {accounts.map((account) => (
+                <div key={account.id} className="p-4 border rounded-lg">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <h4 className="font-semibold text-lg">{account.name}</h4>
+                        {account.isActive && (
+                          <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded">
+                            Active
+                          </span>
+                        )}
+                        {account.oauthStatus?.authorized ? (
+                          <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
+                            ✓ Authorized
+                          </span>
+                        ) : (
+                          <span className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded">
+                            ⚠ Not Authorized
+                          </span>
+                        )}
+                      </div>
+                      {account.oauthStatus?.authorized && account.oauthStatus.expiresAt && (
+                        <div className="text-sm text-gray-600 mb-2">
+                          <strong>Expires:</strong> {new Date(account.oauthStatus.expiresAt).toLocaleString()}
+                        </div>
+                      )}
+                      {editingAccountId === account.id ? (
+                        <div className="space-y-3 mt-3">
+                          <Input
+                            label="Account Name"
+                            type="text"
+                            value={newAccountName}
+                            onChange={(e) => setNewAccountName(e.target.value)}
+                            placeholder="e.g., statexcz, flipflop"
+                          />
+                          <Input
+                            label="Client ID"
+                            type="text"
+                            value={newAccountClientId}
+                            onChange={(e) => setNewAccountClientId(e.target.value)}
+                            placeholder="Enter Client ID"
+                          />
+                          <Input
+                            label="Client Secret"
+                            type="password"
+                            value={newAccountClientSecret}
+                            onChange={(e) => setNewAccountClientSecret(e.target.value)}
+                            placeholder="Enter Client Secret (leave empty to keep current)"
+                          />
+                          <div className="flex space-x-2">
+                            <Button onClick={() => handleUpdateAccount(account.id)} disabled={saving}>
+                              {saving ? 'Saving...' : 'Save'}
+                            </Button>
+                            <Button variant="secondary" onClick={cancelEditAccount} disabled={saving}>
+                              Cancel
+                            </Button>
+                            {newAccountClientId && newAccountClientSecret && (
+                              <Button
+                                variant="secondary"
+                                onClick={() => handleValidateAccountKeys(account.id, newAccountClientId, newAccountClientSecret)}
+                                disabled={saving}
+                              >
+                                Validate Keys
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex space-x-2 mt-3">
+                          {!account.isActive && (
+                            <Button
+                              variant="secondary"
+                              size="small"
+                              onClick={() => handleSetActiveAccount(account.id)}
+                            >
+                              Set Active
+                            </Button>
+                          )}
+                          <Button
+                            variant="secondary"
+                            size="small"
+                            onClick={() => startEditAccount(account)}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            variant="danger"
+                            size="small"
+                            onClick={() => handleDeleteAccount(account.id)}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t">
+                    <div className="flex items-center space-x-2">
+                      {account.oauthStatus?.authorized ? (
+                        <>
+                          <Button
+                            variant="danger"
+                            size="small"
+                            onClick={() => handleRevokeOAuth(account.id)}
+                            disabled={oauthLoadingAccountId === account.id}
+                          >
+                            {oauthLoadingAccountId === account.id ? 'Revoking...' : 'Revoke OAuth'}
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            size="small"
+                            onClick={() => handleAuthorizeOAuth(account.id)}
+                            disabled={oauthLoadingAccountId === account.id || !account.clientId}
+                          >
+                            {oauthLoadingAccountId === account.id ? 'Starting...' : 'Authorize OAuth'}
+                          </Button>
+                          {!account.clientId && (
+                            <span className="text-sm text-yellow-600">
+                              Please configure Client ID and Client Secret first
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              )}
-              {oauthStatus.scopes && (
-                <div className="text-sm text-gray-600">
-                  <strong>Scopes:</strong> {oauthStatus.scopes}
-                </div>
-              )}
-              <div className="pt-2">
-                <Button variant="danger" onClick={handleRevokeOAuth} disabled={oauthLoading}>
-                  {oauthLoading ? 'Revoking...' : 'Revoke Authorization'}
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-600">No Allegro accounts configured yet.</p>
+          )}
+
+          {showAddAccount ? (
+            <div className="p-4 border rounded-lg space-y-4">
+              <h4 className="font-semibold">Add New Allegro Account</h4>
+              <Input
+                label="Account Name"
+                type="text"
+                value={newAccountName}
+                onChange={(e) => setNewAccountName(e.target.value)}
+                placeholder="e.g., statexcz, flipflop"
+              />
+              <Input
+                label="Client ID"
+                type="text"
+                value={newAccountClientId}
+                onChange={(e) => setNewAccountClientId(e.target.value)}
+                placeholder="Enter your Allegro Client ID"
+              />
+              <Input
+                label="Client Secret"
+                type="password"
+                value={newAccountClientSecret}
+                onChange={(e) => setNewAccountClientSecret(e.target.value)}
+                placeholder="Enter your Allegro Client Secret"
+              />
+              <div className="flex space-x-4">
+                <Button onClick={handleAddAccount} disabled={saving}>
+                  {saving ? 'Adding...' : 'Add Account'}
                 </Button>
+                <Button variant="secondary" onClick={() => setShowAddAccount(false)}>
+                  Cancel
+                </Button>
+                {newAccountClientId && newAccountClientSecret && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      // For new account, we need to create it first, then validate
+                      // For now, just show message
+                      setError('Please add the account first, then you can validate keys');
+                    }}
+                    disabled={saving}
+                  >
+                    Validate Keys
+                  </Button>
+                )}
               </div>
             </div>
           ) : (
-            <div className="space-y-3">
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                <span className="text-red-700 font-semibold">Not Authorized</span>
-              </div>
-              <p className="text-sm text-gray-600">
-                OAuth authorization is required to import offers from Allegro. Click the button below to authorize the application.
-              </p>
-              <div className="pt-2">
-                <Button 
-                  onClick={handleAuthorizeOAuth} 
-                  disabled={oauthLoading || !(allegroClientId || settings?.allegroClientId)}
-                >
-                  {oauthLoading ? 'Starting Authorization...' : 'Authorize with Allegro'}
-                </Button>
-              </div>
-              {!(allegroClientId || settings?.allegroClientId) && (
-                <p className="text-sm text-yellow-600">
-                  Please configure and save your Allegro Client ID and Client Secret first.
-                </p>
-              )}
-            </div>
+            <Button variant="secondary" onClick={() => setShowAddAccount(true)}>
+              + Add Allegro Account
+            </Button>
           )}
         </div>
       </Card>

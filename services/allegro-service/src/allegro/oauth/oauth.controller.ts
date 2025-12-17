@@ -104,27 +104,56 @@ export class OAuthController {
 
   /**
    * Generate authorization URL
-   * GET /allegro/oauth/authorize
+   * GET /allegro/oauth/authorize?accountId=xxx
    */
   @Get('authorize')
   @UseGuards(JwtAuthGuard)
-  async authorize(@Req() req: any) {
+  async authorize(@Req() req: any, @Query('accountId') accountId?: string) {
     const userId = String(req.user.id);
 
-    this.logger.log('Generating Allegro OAuth authorization URL', { userId });
+    this.logger.log('Generating Allegro OAuth authorization URL', { userId, accountId });
 
-    // Get user settings to retrieve client ID
-    const settings = await this.prisma.userSettings.findUnique({
-      where: { userId },
+    if (!accountId) {
+      throw new HttpException(
+        {
+          success: false,
+          error: {
+            code: 'ACCOUNT_ID_REQUIRED',
+            message: 'Account ID is required. Please specify accountId query parameter.',
+          },
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // Get account by accountId and userId
+    const account = await this.prisma.allegroAccount.findFirst({
+      where: {
+        id: accountId,
+        userId,
+      },
     });
 
-    if (!settings?.allegroClientId) {
+    if (!account) {
+      throw new HttpException(
+        {
+          success: false,
+          error: {
+            code: 'ACCOUNT_NOT_FOUND',
+            message: 'Allegro account not found.',
+          },
+        },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    if (!account.clientId) {
       throw new HttpException(
         {
           success: false,
           error: {
             code: 'CREDENTIALS_REQUIRED',
-            message: 'Allegro API credentials not configured. Please configure Client ID and Client Secret in Settings first.',
+            message: 'Allegro API credentials not configured for this account. Please configure Client ID and Client Secret in Settings first.',
           },
         },
         HttpStatus.BAD_REQUEST,
@@ -151,37 +180,29 @@ export class OAuthController {
 
     this.logger.log('Generating authorization URL with normalized redirect URI', {
       userId,
+      accountId,
       redirectUri: normalizedRedirectUri,
       originalRedirectUri: redirectUri,
     });
 
     // Generate authorization URL with PKCE
     const { url, state, codeVerifier } = this.oauthService.generateAuthorizationUrl(
-      settings.allegroClientId,
+      account.clientId,
       normalizedRedirectUri,
     );
 
-    // Clear any old OAuth state first to prevent conflicts with old encrypted data
-    // Then store new state and code verifier in database
-    await this.prisma.userSettings.update({
-      where: { userId },
-      data: {
-        allegroOAuthState: null,
-        allegroOAuthCodeVerifier: null,
-      },
-    });
-
-    // Now store the new state and code verifier (trim state for consistency)
+    // Clear any old OAuth state first to prevent conflicts
+    // Then store new state and code verifier in account
     const trimmedState = state.trim();
-    await this.prisma.userSettings.update({
-      where: { userId },
+    await this.prisma.allegroAccount.update({
+      where: { id: accountId },
       data: {
-        allegroOAuthState: trimmedState,
-        allegroOAuthCodeVerifier: this.encrypt(codeVerifier),
+        oAuthState: trimmedState,
+        oAuthCodeVerifier: this.encrypt(codeVerifier),
       },
     });
 
-    this.logger.log('Generated OAuth authorization URL', { userId, state });
+    this.logger.log('Generated OAuth authorization URL', { userId, accountId, state });
 
     return {
       success: true,
@@ -249,12 +270,12 @@ export class OAuthController {
     console.log('[OAuth Callback] Processing callback', JSON.stringify(processingLog, null, 2));
 
     try {
-      // Find user by OAuth state (use trimmed state)
-      const settings = await this.prisma.userSettings.findFirst({
-        where: { allegroOAuthState: trimmedState },
+      // Find account by OAuth state (use trimmed state)
+      const account = await this.prisma.allegroAccount.findFirst({
+        where: { oAuthState: trimmedState },
       });
 
-      if (!settings) {
+      if (!account) {
         this.logger.error('OAuth state not found', { 
           state: trimmedState,
           stateLength: trimmedState.length,
@@ -262,27 +283,29 @@ export class OAuthController {
         return res.redirect(`${this.getFrontendUrl()}/auth/callback?error=invalid_state`);
       }
 
-      this.logger.log('Found OAuth state for user', { 
-        userId: settings.userId, 
+      this.logger.log('Found OAuth state for account', { 
+        userId: account.userId,
+        accountId: account.id,
         state: trimmedState,
-        hasCodeVerifier: !!settings.allegroOAuthCodeVerifier,
+        hasCodeVerifier: !!account.oAuthCodeVerifier,
       });
-      console.log('[OAuth Callback] Found OAuth state for user', { 
-        userId: settings.userId, 
+      console.log('[OAuth Callback] Found OAuth state for account', { 
+        userId: account.userId,
+        accountId: account.id,
         state: trimmedState, 
-        hasCodeVerifier: !!settings.allegroOAuthCodeVerifier 
+        hasCodeVerifier: !!account.oAuthCodeVerifier 
       });
 
       // Validate state
-      if (!this.oauthService.validateState(trimmedState, settings.allegroOAuthState || '')) {
+      if (!this.oauthService.validateState(trimmedState, account.oAuthState || '')) {
         this.logger.error('OAuth state validation failed', { 
           receivedState: trimmedState, 
-          storedState: settings.allegroOAuthState,
-          statesMatch: trimmedState === settings.allegroOAuthState,
+          storedState: account.oAuthState,
+          statesMatch: trimmedState === account.oAuthState,
         });
         console.error('[OAuth Callback] State validation failed', { 
           receivedState: trimmedState, 
-          storedState: settings.allegroOAuthState 
+          storedState: account.oAuthState 
         });
         return res.redirect(`${this.getFrontendUrl()}/auth/callback?error=state_mismatch`);
       }
@@ -290,18 +313,18 @@ export class OAuthController {
       // Get code verifier
       let codeVerifier: string;
       try {
-        console.log('[OAuth Callback] Attempting to decrypt code verifier', { userId: settings.userId, codeVerifierLength: settings.allegroOAuthCodeVerifier?.length });
-        codeVerifier = this.decrypt(settings.allegroOAuthCodeVerifier || '');
-        console.log('[OAuth Callback] Successfully decrypted code verifier', { userId: settings.userId });
+        console.log('[OAuth Callback] Attempting to decrypt code verifier', { userId: account.userId, accountId: account.id, codeVerifierLength: account.oAuthCodeVerifier?.length });
+        codeVerifier = this.decrypt(account.oAuthCodeVerifier || '');
+        console.log('[OAuth Callback] Successfully decrypted code verifier', { userId: account.userId, accountId: account.id });
       } catch (error) {
-        this.logger.error('Failed to decrypt code verifier', { userId: settings.userId, error: error.message });
-        console.error('[OAuth Callback] Failed to decrypt code verifier', { userId: settings.userId, error: error.message, errorStack: error.stack });
+        this.logger.error('Failed to decrypt code verifier', { userId: account.userId, accountId: account.id, error: error.message });
+        console.error('[OAuth Callback] Failed to decrypt code verifier', { userId: account.userId, accountId: account.id, error: error.message, errorStack: error.stack });
         // Clear the invalid OAuth state so user can try again
-        await this.prisma.userSettings.update({
-          where: { userId: settings.userId },
+        await this.prisma.allegroAccount.update({
+          where: { id: account.id },
           data: {
-            allegroOAuthState: null,
-            allegroOAuthCodeVerifier: null,
+            oAuthState: null,
+            oAuthCodeVerifier: null,
           },
         });
         return res.redirect(`${this.getFrontendUrl()}/auth/callback?error=decryption_failed`);
@@ -317,67 +340,73 @@ export class OAuthController {
       const normalizedRedirectUri = redirectUri.trim().replace(/\/+$/, '');
 
       this.logger.log('Exchanging code for token', {
-        userId: settings.userId,
+        userId: account.userId,
+        accountId: account.id,
         redirectUri: normalizedRedirectUri,
         originalRedirectUri: redirectUri,
         codeLength: code?.length,
         codeVerifierLength: codeVerifier?.length,
-        clientId: settings.allegroClientId?.substring(0, 8) + '...',
+        clientId: account.clientId?.substring(0, 8) + '...',
       });
 
       // Validate client ID
-      if (!settings.allegroClientId || settings.allegroClientId.trim().length === 0) {
-        this.logger.error('Client ID is missing for OAuth token exchange', { userId: settings.userId });
+      if (!account.clientId || account.clientId.trim().length === 0) {
+        this.logger.error('Client ID is missing for OAuth token exchange', { userId: account.userId, accountId: account.id });
         return res.redirect(`${this.getFrontendUrl()}/auth/callback?error=client_id_missing`);
       }
 
       // Decrypt client secret
       let clientSecret: string;
       try {
-        if (!settings.allegroClientSecret) {
+        if (!account.clientSecret) {
           this.logger.error('Client Secret is missing for OAuth token exchange', { 
-            userId: settings.userId,
-            hasClientSecret: !!settings.allegroClientSecret,
-            clientSecretLength: settings.allegroClientSecret?.length,
+            userId: account.userId,
+            accountId: account.id,
+            hasClientSecret: !!account.clientSecret,
+            clientSecretLength: account.clientSecret?.length,
           });
           return res.redirect(`${this.getFrontendUrl()}/auth/callback?error=client_secret_missing`);
         }
-        clientSecret = this.decrypt(settings.allegroClientSecret);
+        clientSecret = this.decrypt(account.clientSecret);
         
         // Validate decrypted secret is not empty
         if (!clientSecret || clientSecret.trim().length === 0) {
           this.logger.error('Client Secret is empty after decryption', { 
-            userId: settings.userId,
-            encryptedLength: settings.allegroClientSecret?.length,
+            userId: account.userId,
+            accountId: account.id,
+            encryptedLength: account.clientSecret?.length,
           });
           return res.redirect(`${this.getFrontendUrl()}/auth/callback?error=client_secret_empty`);
         }
         
         this.logger.log('Client Secret decrypted successfully', {
-          userId: settings.userId,
+          userId: account.userId,
+          accountId: account.id,
           decryptedLength: clientSecret.length,
         });
       } catch (error) {
         this.logger.error('Failed to decrypt client secret', { 
-          userId: settings.userId, 
+          userId: account.userId,
+          accountId: account.id,
           error: error.message,
           errorStack: error.stack,
-          encryptedLength: settings.allegroClientSecret?.length,
+          encryptedLength: account.clientSecret?.length,
         });
         return res.redirect(`${this.getFrontendUrl()}/auth/callback?error=decryption_failed`);
       }
 
       // Validate all parameters before exchange
       this.logger.log('Validating parameters before token exchange', {
-        userId: settings.userId,
+        userId: account.userId,
+        accountId: account.id,
         hasCode: !!trimmedCode,
         codeLength: trimmedCode?.length,
         hasCodeVerifier: !!codeVerifier,
         codeVerifierLength: codeVerifier?.length,
         hasRedirectUri: !!normalizedRedirectUri,
         redirectUri: normalizedRedirectUri,
-        hasClientId: !!settings.allegroClientId,
-        clientId: settings.allegroClientId.substring(0, 8) + '...',
+        hasClientId: !!account.clientId,
+        clientId: account.clientId.substring(0, 8) + '...',
         hasClientSecret: !!clientSecret,
         clientSecretLength: clientSecret?.length,
       });
@@ -387,7 +416,7 @@ export class OAuthController {
         trimmedCode,
         codeVerifier,
         normalizedRedirectUri,
-        settings.allegroClientId,
+        account.clientId,
         clientSecret,
       );
 
@@ -398,7 +427,8 @@ export class OAuthController {
       
       // Log lengths for debugging
       this.logger.log('Token lengths before database save', {
-        userId: settings.userId,
+        userId: account.userId,
+        accountId: account.id,
         accessTokenLength: tokenResponse.access_token.length,
         encryptedAccessTokenLength: encryptedAccessToken.length,
         refreshTokenLength: (tokenResponse.refresh_token || '').length,
@@ -406,7 +436,8 @@ export class OAuthController {
         scopesLength: scopes.length,
       });
       console.log('[OAuth Callback] Token lengths before database save', {
-        userId: settings.userId,
+        userId: account.userId,
+        accountId: account.id,
         accessTokenLength: tokenResponse.access_token.length,
         encryptedAccessTokenLength: encryptedAccessToken.length,
         refreshTokenLength: (tokenResponse.refresh_token || '').length,
@@ -415,40 +446,43 @@ export class OAuthController {
       });
 
       // Truncate scopes if they exceed database limit (safety check)
-      const maxScopesLength = 1000; // Will be updated in schema, but safety check here
+      const maxScopesLength = 1000;
       const truncatedScopes = scopes.length > maxScopesLength 
         ? scopes.substring(0, maxScopesLength) 
         : scopes;
       
       if (scopes.length > maxScopesLength) {
         this.logger.warn('Scopes truncated due to length limit', {
-          userId: settings.userId,
+          userId: account.userId,
+          accountId: account.id,
           originalLength: scopes.length,
           truncatedLength: truncatedScopes.length,
         });
         console.warn('[OAuth Callback] Scopes truncated due to length limit', {
-          userId: settings.userId,
+          userId: account.userId,
+          accountId: account.id,
           originalLength: scopes.length,
           truncatedLength: truncatedScopes.length,
         });
       }
 
-      // Store tokens
+      // Store tokens in account
       const expiresAt = new Date(Date.now() + tokenResponse.expires_in * 1000);
-      await this.prisma.userSettings.update({
-        where: { userId: settings.userId },
+      await this.prisma.allegroAccount.update({
+        where: { id: account.id },
         data: {
-          allegroAccessToken: encryptedAccessToken,
-          allegroRefreshToken: encryptedRefreshToken,
-          allegroTokenExpiresAt: expiresAt,
-          allegroTokenScopes: truncatedScopes,
-          allegroOAuthState: null,
-          allegroOAuthCodeVerifier: null,
+          accessToken: encryptedAccessToken,
+          refreshToken: encryptedRefreshToken,
+          tokenExpiresAt: expiresAt,
+          tokenScopes: truncatedScopes,
+          oAuthState: null,
+          oAuthCodeVerifier: null,
         },
       });
 
       this.logger.log('OAuth authorization successful', {
-        userId: settings.userId,
+        userId: account.userId,
+        accountId: account.id,
         expiresAt,
         scopes: tokenResponse.scope,
       });
@@ -467,24 +501,43 @@ export class OAuthController {
 
   /**
    * Verify OAuth configuration
-   * GET /allegro/oauth/verify-config
+   * GET /allegro/oauth/verify-config?accountId=xxx (optional)
    * Returns configuration details for debugging (without sensitive data)
    */
   @Get('verify-config')
   @UseGuards(JwtAuthGuard)
-  async verifyConfig(@Req() req: any) {
+  async verifyConfig(@Req() req: any, @Query('accountId') accountId?: string) {
     const userId = String(req.user.id);
 
     try {
-      const settings = await this.prisma.userSettings.findUnique({
-        where: { userId },
-        select: {
-          allegroClientId: true,
-          allegroClientSecret: true,
-          allegroOAuthState: true,
-          allegroOAuthCodeVerifier: true,
-        },
-      });
+      let account;
+      if (accountId) {
+        account = await this.prisma.allegroAccount.findFirst({
+          where: {
+            id: accountId,
+            userId,
+          },
+          select: {
+            clientId: true,
+            clientSecret: true,
+            oAuthState: true,
+            oAuthCodeVerifier: true,
+          },
+        });
+      } else {
+        account = await this.prisma.allegroAccount.findFirst({
+          where: {
+            userId,
+            isActive: true,
+          },
+          select: {
+            clientId: true,
+            clientSecret: true,
+            oAuthState: true,
+            oAuthCodeVerifier: true,
+          },
+        });
+      }
 
       const redirectUri = this.configService.get<string>('ALLEGRO_REDIRECT_URI');
       const normalizedRedirectUri = redirectUri ? redirectUri.trim().replace(/\/+$/, '') : null;
@@ -492,18 +545,18 @@ export class OAuthController {
       return {
         success: true,
         data: {
-          hasClientId: !!settings?.allegroClientId,
-          clientIdPreview: settings?.allegroClientId ? settings.allegroClientId.substring(0, 8) + '...' : null,
-          hasClientSecret: !!settings?.allegroClientSecret,
-          hasOAuthState: !!settings?.allegroOAuthState,
-          hasCodeVerifier: !!settings?.allegroOAuthCodeVerifier,
+          hasClientId: !!account?.clientId,
+          clientIdPreview: account?.clientId ? account.clientId.substring(0, 8) + '...' : null,
+          hasClientSecret: !!account?.clientSecret,
+          hasOAuthState: !!account?.oAuthState,
+          hasCodeVerifier: !!account?.oAuthCodeVerifier,
           redirectUri: normalizedRedirectUri,
           redirectUriConfigured: !!redirectUri,
           redirectUriNormalized: normalizedRedirectUri !== redirectUri,
         },
       };
     } catch (error: any) {
-      this.logger.error('Failed to verify OAuth configuration', { userId, error: error.message });
+      this.logger.error('Failed to verify OAuth configuration', { userId, accountId, error: error.message });
       throw new HttpException(
         {
           success: false,
@@ -519,49 +572,56 @@ export class OAuthController {
 
   /**
    * Get OAuth authorization status
-   * GET /allegro/oauth/status
+   * GET /allegro/oauth/status?accountId=xxx (optional)
    */
   @Get('status')
   @UseGuards(JwtAuthGuard)
-  async getStatus(@Req() req: any) {
+  async getStatus(@Req() req: any, @Query('accountId') accountId?: string) {
     const userId = String(req.user.id);
     const startTime = Date.now();
 
-    this.logger.log('Getting OAuth status', { userId });
+    this.logger.log('Getting OAuth status', { userId, accountId });
 
     try {
-      const queryStartTime = Date.now();
-      const settings = await this.prisma.userSettings.findUnique({
-        where: { userId },
-        select: {
-          allegroAccessToken: true,
-          allegroTokenExpiresAt: true,
-          allegroTokenScopes: true,
-        },
-      });
-      const queryDuration = Date.now() - queryStartTime;
-
-      if (queryDuration > 1000) {
-        this.logger.warn('OAuth status query took longer than expected', {
-          userId,
-          queryDuration: `${queryDuration}ms`,
+      let account;
+      
+      if (accountId) {
+        // Get specific account
+        account = await this.prisma.allegroAccount.findFirst({
+          where: {
+            id: accountId,
+            userId,
+          },
+          select: {
+            accessToken: true,
+            tokenExpiresAt: true,
+            tokenScopes: true,
+          },
         });
       } else {
-        this.logger.debug('OAuth status query completed', {
-          userId,
-          queryDuration: `${queryDuration}ms`,
+        // Get active account
+        account = await this.prisma.allegroAccount.findFirst({
+          where: {
+            userId,
+            isActive: true,
+          },
+          select: {
+            accessToken: true,
+            tokenExpiresAt: true,
+            tokenScopes: true,
+          },
         });
       }
 
       const totalDuration = Date.now() - startTime;
       this.logger.log('OAuth status retrieved', {
         userId,
-        authorized: !!settings?.allegroAccessToken,
+        accountId,
+        authorized: !!account?.accessToken,
         totalDuration: `${totalDuration}ms`,
-        queryDuration: `${queryDuration}ms`,
       });
 
-      if (!settings?.allegroAccessToken) {
+      if (!account?.accessToken) {
         return {
           success: true,
           data: {
@@ -574,14 +634,15 @@ export class OAuthController {
         success: true,
         data: {
           authorized: true,
-          expiresAt: settings.allegroTokenExpiresAt || undefined,
-          scopes: settings.allegroTokenScopes || undefined,
+          expiresAt: account.tokenExpiresAt || undefined,
+          scopes: account.tokenScopes || undefined,
         },
       };
     } catch (error: any) {
       const totalDuration = Date.now() - startTime;
       this.logger.error('Failed to get OAuth status', {
         userId,
+        accountId,
         error: error.message,
         errorStack: error.stack,
         totalDuration: `${totalDuration}ms`,
@@ -592,28 +653,61 @@ export class OAuthController {
 
   /**
    * Revoke OAuth authorization
-   * POST /allegro/oauth/revoke
+   * POST /allegro/oauth/revoke?accountId=xxx
    */
   @Post('revoke')
   @UseGuards(JwtAuthGuard)
-  async revoke(@Req() req: any) {
+  async revoke(@Req() req: any, @Query('accountId') accountId?: string) {
     const userId = String(req.user.id);
 
-    this.logger.log('Revoking OAuth authorization', { userId });
+    this.logger.log('Revoking OAuth authorization', { userId, accountId });
 
-    await this.prisma.userSettings.update({
-      where: { userId },
-      data: {
-        allegroAccessToken: null,
-        allegroRefreshToken: null,
-        allegroTokenExpiresAt: null,
-        allegroTokenScopes: null,
-        allegroOAuthState: null,
-        allegroOAuthCodeVerifier: null,
+    if (!accountId) {
+      throw new HttpException(
+        {
+          success: false,
+          error: {
+            code: 'ACCOUNT_ID_REQUIRED',
+            message: 'Account ID is required. Please specify accountId query parameter.',
+          },
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const account = await this.prisma.allegroAccount.findFirst({
+      where: {
+        id: accountId,
+        userId,
       },
     });
 
-    this.logger.log('OAuth authorization revoked', { userId });
+    if (!account) {
+      throw new HttpException(
+        {
+          success: false,
+          error: {
+            code: 'ACCOUNT_NOT_FOUND',
+            message: 'Allegro account not found.',
+          },
+        },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    await this.prisma.allegroAccount.update({
+      where: { id: accountId },
+      data: {
+        accessToken: null,
+        refreshToken: null,
+        tokenExpiresAt: null,
+        tokenScopes: null,
+        oAuthState: null,
+        oAuthCodeVerifier: null,
+      },
+    });
+
+    this.logger.log('OAuth authorization revoked', { userId, accountId });
 
     return {
       success: true,
