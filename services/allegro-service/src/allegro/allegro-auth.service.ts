@@ -80,81 +80,116 @@ export class AllegroAuthService {
   }
 
   /**
-   * Get user's OAuth access token (with auto-refresh)
+   * Get user's OAuth access token from active account (with auto-refresh)
    */
   async getUserAccessToken(userId: string): Promise<string> {
     console.log('[getUserAccessToken] ========== METHOD CALLED ==========', { userId });
-    const dbStartTime = Date.now();
-    console.log('[getUserAccessToken] About to query database');
-    const settings = await this.prisma.userSettings.findUnique({
-      where: { userId },
-    });
-    const dbDuration = Date.now() - dbStartTime;
-    console.log('[getUserAccessToken] Database query completed', { 
-      dbDuration: `${dbDuration}ms`,
-      hasSettings: !!settings,
-      hasToken: !!settings?.allegroAccessToken,
+    
+    // Get active account
+    const account = await this.prisma.allegroAccount.findFirst({
+      where: {
+        userId,
+        isActive: true,
+      },
     });
 
-    if (!settings?.allegroAccessToken) {
+    if (!account) {
+      throw new Error('No active Allegro account found. Please select an active account in Settings.');
+    }
+
+    return await this.getUserAccessTokenForAccount(userId, account.id);
+  }
+
+  /**
+   * Get user's OAuth access token for specific account (with auto-refresh)
+   */
+  async getUserAccessTokenForAccount(userId: string, accountId: string): Promise<string> {
+    console.log('[getUserAccessTokenForAccount] ========== METHOD CALLED ==========', { userId, accountId });
+    const dbStartTime = Date.now();
+    console.log('[getUserAccessTokenForAccount] About to query database');
+    const account = await this.prisma.allegroAccount.findFirst({
+      where: {
+        id: accountId,
+        userId,
+      },
+    });
+    const dbDuration = Date.now() - dbStartTime;
+    console.log('[getUserAccessTokenForAccount] Database query completed', { 
+      dbDuration: `${dbDuration}ms`,
+      hasAccount: !!account,
+      hasToken: !!account?.accessToken,
+    });
+
+    if (!account) {
+      throw new Error(`Allegro account with ID ${accountId} not found.`);
+    }
+
+    if (!account.accessToken) {
       throw new Error('OAuth authorization required. Please authorize the application in Settings.');
     }
 
     // Check if token is expired (with 5-minute buffer)
-    const expiresAt = settings.allegroTokenExpiresAt;
+    const expiresAt = account.tokenExpiresAt;
     const now = new Date();
     const bufferTime = 5 * 60 * 1000; // 5 minutes
 
     if (expiresAt && new Date(expiresAt.getTime() - bufferTime) <= now) {
       // Token expires soon or is expired, refresh it
-      console.log('[getUserAccessToken] Token expired or expiring soon, refreshing');
-      this.logger.log('OAuth token expired or expiring soon, refreshing', { userId });
-      return await this.refreshUserToken(userId);
+      console.log('[getUserAccessTokenForAccount] Token expired or expiring soon, refreshing');
+      this.logger.log('OAuth token expired or expiring soon, refreshing', { userId, accountId });
+      return await this.refreshUserTokenForAccount(userId, accountId);
     }
 
     // Decrypt and return access token
     try {
-      console.log('[getUserAccessToken] About to decrypt token');
+      console.log('[getUserAccessTokenForAccount] About to decrypt token');
       const decryptStartTime = Date.now();
-      const accessToken = this.decrypt(settings.allegroAccessToken);
+      const accessToken = this.decrypt(account.accessToken);
       const decryptDuration = Date.now() - decryptStartTime;
-      console.log('[getUserAccessToken] Token decrypted', { 
+      console.log('[getUserAccessTokenForAccount] Token decrypted', { 
         decryptDuration: `${decryptDuration}ms`,
         tokenLength: accessToken?.length || 0,
       });
       return accessToken;
     } catch (error) {
-      console.log('[getUserAccessToken] Decryption failed', { error: error.message });
-      this.logger.error('Failed to decrypt OAuth access token', { userId, error: error.message });
+      console.log('[getUserAccessTokenForAccount] Decryption failed', { error: error.message });
+      this.logger.error('Failed to decrypt OAuth access token', { userId, accountId, error: error.message });
       throw new Error('Failed to decrypt OAuth token. Please re-authorize.');
     }
   }
 
   /**
-   * Refresh user's OAuth access token
+   * Refresh user's OAuth access token for specific account
    */
-  async refreshUserToken(userId: string): Promise<string> {
-    const settings = await this.prisma.userSettings.findUnique({
-      where: { userId },
+  async refreshUserTokenForAccount(userId: string, accountId: string): Promise<string> {
+    const account = await this.prisma.allegroAccount.findFirst({
+      where: {
+        id: accountId,
+        userId,
+      },
     });
 
-    if (!settings?.allegroRefreshToken) {
+    if (!account) {
+      throw new Error(`Allegro account with ID ${accountId} not found.`);
+    }
+
+    if (!account.refreshToken) {
       throw new Error('Refresh token not found. Please re-authorize the application.');
     }
 
-    if (!settings?.allegroClientId || !settings?.allegroClientSecret) {
+    if (!account.clientId || !account.clientSecret) {
       throw new Error('Allegro API credentials not found. Please configure them in Settings.');
     }
 
     try {
       // Decrypt refresh token and client secret
-      const refreshToken = this.decrypt(settings.allegroRefreshToken);
-      const clientSecret = this.decrypt(settings.allegroClientSecret);
+      const refreshToken = this.decrypt(account.refreshToken);
+      const clientSecret = this.decrypt(account.clientSecret);
 
       // Refresh token via OAuth service
       const tokenResponse = await this.oauthService.refreshAccessToken(
         refreshToken,
-        settings.allegroClientId,
+        account.clientId,
         clientSecret,
       );
 
@@ -165,21 +200,21 @@ export class AllegroAuthService {
       const encryptedAccessToken = this.encrypt(tokenResponse.access_token);
       const encryptedRefreshToken = tokenResponse.refresh_token
         ? this.encrypt(tokenResponse.refresh_token)
-        : settings.allegroRefreshToken; // Keep existing if not provided
+        : account.refreshToken; // Keep existing if not provided
 
-      await this.prisma.userSettings.update({
-        where: { userId },
+      await this.prisma.allegroAccount.update({
+        where: { id: accountId },
         data: {
-          allegroAccessToken: encryptedAccessToken,
-          allegroRefreshToken: encryptedRefreshToken,
-          allegroTokenExpiresAt: expiresAt,
+          accessToken: encryptedAccessToken,
+          refreshToken: encryptedRefreshToken,
+          tokenExpiresAt: expiresAt,
         },
       });
 
-      this.logger.log('Successfully refreshed OAuth token', { userId, expiresAt });
+      this.logger.log('Successfully refreshed OAuth token', { userId, accountId, expiresAt });
       return tokenResponse.access_token;
-    } catch (error) {
-      this.logger.error('Failed to refresh OAuth token', { userId, error: error.message });
+    } catch (error: any) {
+      this.logger.error('Failed to refresh OAuth token', { userId, accountId, error: error.message });
       throw new Error(`Failed to refresh token: ${error.message}. Please re-authorize.`);
     }
   }

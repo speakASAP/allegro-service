@@ -358,22 +358,75 @@ export const oauthApi = {
   /**
    * Get OAuth authorization status
    */
-  getStatus: async () => {
-    return api.get('/allegro/oauth/status');
+  getStatus: async (accountId?: string) => {
+    const params = accountId ? { accountId } : {};
+    return api.get('/allegro/oauth/status', { params });
   },
 
   /**
    * Get authorization URL
    */
-  authorize: async () => {
-    return api.get('/allegro/oauth/authorize');
+  authorize: async (accountId: string) => {
+    return api.get('/allegro/oauth/authorize', { params: { accountId } });
   },
 
   /**
    * Revoke OAuth authorization
    */
-  revoke: async () => {
-    return api.post('/allegro/oauth/revoke');
+  revoke: async (accountId: string) => {
+    return api.post('/allegro/oauth/revoke', null, { params: { accountId } });
+  },
+};
+
+// Allegro Account methods
+export const allegroAccountApi = {
+  /**
+   * Get all Allegro accounts
+   */
+  getAccounts: async () => {
+    return api.get('/settings/allegro-accounts');
+  },
+
+  /**
+   * Get specific Allegro account
+   */
+  getAccount: async (id: string) => {
+    return api.get(`/settings/allegro-accounts/${id}`);
+  },
+
+  /**
+   * Create Allegro account
+   */
+  createAccount: async (data: { name: string; clientId: string; clientSecret: string }) => {
+    return api.post('/settings/allegro-accounts', data);
+  },
+
+  /**
+   * Update Allegro account
+   */
+  updateAccount: async (id: string, data: { name?: string; clientId?: string; clientSecret?: string }) => {
+    return api.put(`/settings/allegro-accounts/${id}`, data);
+  },
+
+  /**
+   * Delete Allegro account
+   */
+  deleteAccount: async (id: string) => {
+    return api.delete(`/settings/allegro-accounts/${id}`);
+  },
+
+  /**
+   * Set active account
+   */
+  setActiveAccount: async (id: string) => {
+    return api.post(`/settings/allegro-accounts/${id}/activate`);
+  },
+
+  /**
+   * Validate account keys
+   */
+  validateKeys: async (id: string, clientId: string, clientSecret: string) => {
+    return api.post(`/settings/allegro-accounts/${id}/validate`, { clientId, clientSecret });
   },
 };
 

@@ -7,14 +7,6 @@ import { Type } from 'class-transformer';
 
 export class UpdateSettingsDto {
   @IsOptional()
-  @IsString()
-  allegroClientId?: string;
-
-  @IsOptional()
-  @IsString()
-  allegroClientSecret?: string;
-
-  @IsOptional()
   @IsObject()
   supplierConfigs?: any;
 
@@ -80,6 +72,31 @@ export class ValidateAllegroKeysDto {
 
   @IsString()
   clientSecret: string;
+}
+
+export class CreateAllegroAccountDto {
+  @IsString()
+  name: string;
+
+  @IsString()
+  clientId: string;
+
+  @IsString()
+  clientSecret: string;
+}
+
+export class UpdateAllegroAccountDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  clientId?: string;
+
+  @IsOptional()
+  @IsString()
+  clientSecret?: string;
 }
 
 export class AllegroOAuthCallbackDto {

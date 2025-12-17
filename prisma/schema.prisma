@@ -383,28 +383,49 @@ model SupplierProduct {
   @@map("supplier_products")
 }
 
+// Allegro accounts - multiple accounts per user
+model AllegroAccount {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.VarChar(255) // Links to auth-microservice user ID
+
+  // Account name (user-provided, e.g., "statexcz", "flipflop")
+  name String @db.VarChar(255)
+
+  // Allegro API configuration
+  clientId     String? @db.VarChar(255)
+  clientSecret String? @db.Text // Encrypted (can be up to ~1000 chars when encrypted, use Text to avoid truncation)
+
+  // Allegro OAuth tokens (for accessing user-specific resources)
+  accessToken       String?   @db.VarChar(5000) // Encrypted
+  refreshToken      String?   @db.VarChar(5000) // Encrypted
+  tokenExpiresAt    DateTime? @db.Timestamp(6)
+  tokenScopes       String?   @db.VarChar(1000) // Comma-separated scopes
+  oAuthState        String?   @db.VarChar(255) // For OAuth state verification
+  oAuthCodeVerifier String?   @db.VarChar(500) // Encrypted, for PKCE
+
+  // Active account flag (only one active per user)
+  isActive Boolean @default(false)
+
+  // Timestamps
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @db.Timestamp(6)
+
+  @@index([userId])
+  @@index([isActive])
+  @@index([userId, isActive])
+  @@map("allegro_accounts")
+}
+
 // User settings for API keys and configuration
 model UserSettings {
   id     String @id @default(uuid()) @db.Uuid
   userId String @unique @db.VarChar(255) // Links to auth-microservice user ID
 
-  // Allegro API configuration
-  allegroClientId     String? @db.VarChar(255)
-  allegroClientSecret String? @db.Text // Encrypted (can be up to ~1000 chars when encrypted, use Text to avoid truncation)
-
-  // Allegro OAuth tokens (for accessing user-specific resources)
-  allegroAccessToken       String?   @db.VarChar(5000) // Encrypted
-  allegroRefreshToken      String?   @db.VarChar(5000) // Encrypted
-  allegroTokenExpiresAt    DateTime? @db.Timestamp(6)
-  allegroTokenScopes       String?   @db.VarChar(1000) // Comma-separated scopes
-  allegroOAuthState        String?   @db.VarChar(255) // For OAuth state verification
-  allegroOAuthCodeVerifier String?   @db.VarChar(500) // Encrypted, for PKCE
-
   // Generic supplier configurations
   supplierConfigs Json? // Array of supplier configurations: [{ id, name, apiEndpoint, apiKey, apiConfig }]
 
   // User preferences
-  preferences Json? // User preferences and settings
+  preferences Json? // User preferences and settings (activeAllegroAccountId stored here)
 
   // Timestamps
   createdAt DateTime @default(now()) @db.Timestamp(6)

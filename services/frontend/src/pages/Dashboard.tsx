@@ -6,6 +6,7 @@ import React from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/useAuth';
 import { Button } from '../components/Button';
+import { AllegroAccountSelector } from '../components/AllegroAccountSelector';
 
 const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
@@ -39,9 +40,12 @@ const Dashboard: React.FC = () => {
                 </p>
               )}
             </div>
-            <Button variant="secondary" onClick={handleLogout}>
-              Logout
-            </Button>
+            <div className="flex items-center space-x-4">
+              <AllegroAccountSelector />
+              <Button variant="secondary" onClick={handleLogout}>
+                Logout
+              </Button>
+            </div>
           </div>
         </div>
       </header>
