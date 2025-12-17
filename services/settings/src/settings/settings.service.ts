@@ -114,6 +114,14 @@ export class SettingsService {
     const dbQueryStartTime = Date.now();
     let settings = await this.prisma.userSettings.findUnique({
       where: { userId },
+      select: {
+        id: true,
+        userId: true,
+        supplierConfigs: true,
+        preferences: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
     const dbQueryDuration = Date.now() - dbQueryStartTime;
     this.logger.log(`[${new Date().toISOString()}] [TIMING] SettingsService.getSettings: Database query completed (${dbQueryDuration}ms)`, {
