@@ -15,6 +15,9 @@ services:
       - settings
       - imports
     restart: unless-stopped
+    # Note: nginx configuration uses dynamic DNS resolution (resolver + variables in proxy_pass)
+    # This prevents stale IP caching when services restart and get new IP addresses
+    # DNS is re-resolved every 10 seconds, and variables in proxy_pass force resolution on each request
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "--tries=1", "http://127.0.0.1/health"]
       interval: 10s
