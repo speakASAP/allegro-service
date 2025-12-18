@@ -793,56 +793,74 @@ export class SettingsService {
    * Set active Allegro account
    */
   async setActiveAccount(userId: string, accountId: string): Promise<void> {
-    this.logger.log('Setting active Allegro account', { userId, accountId });
+    const startTime = Date.now();
+    this.logger.log('[setActiveAccount] START', { userId, accountId, timestamp: new Date().toISOString() });
 
-    // Verify account exists and belongs to user
-    const account = await this.prisma.allegroAccount.findFirst({
-      where: {
-        id: accountId,
-        userId,
-      },
-    });
-
-    if (!account) {
-      throw new NotFoundException(`Allegro account with ID ${accountId} not found`);
-    }
-
-    // Update accounts - no transaction needed, these are simple flag updates
-    // Set all accounts to inactive first, then set selected account as active
-    await Promise.all([
-      this.prisma.allegroAccount.updateMany({
-        where: { userId, id: { not: accountId } },
-        data: { isActive: false },
-      }),
-      this.prisma.allegroAccount.update({
-        where: { id: accountId },
-        data: { isActive: true },
-      }),
-    ]);
-
-    // Update preferences
-    const existingSettings = await this.prisma.userSettings.findUnique({
-      where: { userId },
-    });
-
-    if (existingSettings) {
-      const preferences = (existingSettings.preferences || {}) as any;
-      preferences.activeAllegroAccountId = accountId;
-      await this.prisma.userSettings.update({
-        where: { userId },
-        data: { preferences },
-      });
-    } else {
-      await this.prisma.userSettings.create({
-        data: {
+    try {
+      // Verify account exists and belongs to user
+      const verifyStart = Date.now();
+      this.logger.log('[setActiveAccount] Verifying account exists', { userId, accountId });
+      const account = await this.prisma.allegroAccount.findFirst({
+        where: {
+          id: accountId,
           userId,
-          preferences: { activeAllegroAccountId: accountId },
-          supplierConfigs: [],
         },
       });
-    }
+      const verifyDuration = Date.now() - verifyStart;
+      this.logger.log('[setActiveAccount] Account verification completed', { userId, accountId, duration: `${verifyDuration}ms`, found: !!account });
 
-    this.logger.log('Active Allegro account set', { userId, accountId });
+      if (!account) {
+        throw new NotFoundException(`Allegro account with ID ${accountId} not found`);
+      }
+
+      // Update accounts - no transaction needed, these are simple flag updates
+      // Set all accounts to inactive first, then set selected account as active
+      const updateStart = Date.now();
+      this.logger.log('[setActiveAccount] Updating account flags', { userId, accountId });
+      await Promise.all([
+        this.prisma.allegroAccount.updateMany({
+          where: { userId, id: { not: accountId } },
+          data: { isActive: false },
+        }),
+        this.prisma.allegroAccount.update({
+          where: { id: accountId },
+          data: { isActive: true },
+        }),
+      ]);
+      const updateDuration = Date.now() - updateStart;
+      this.logger.log('[setActiveAccount] Account flags updated', { userId, accountId, duration: `${updateDuration}ms` });
+
+      // Update preferences
+      const prefsStart = Date.now();
+      this.logger.log('[setActiveAccount] Updating preferences', { userId, accountId });
+      const existingSettings = await this.prisma.userSettings.findUnique({
+        where: { userId },
+      });
+
+      if (existingSettings) {
+        const preferences = (existingSettings.preferences || {}) as any;
+        preferences.activeAllegroAccountId = accountId;
+        await this.prisma.userSettings.update({
+          where: { userId },
+          data: { preferences },
+        });
+      } else {
+        await this.prisma.userSettings.create({
+          data: {
+            userId,
+            preferences: { activeAllegroAccountId: accountId },
+            supplierConfigs: [],
+          },
+        });
+      }
+      const prefsDuration = Date.now() - prefsStart;
+      const totalDuration = Date.now() - startTime;
+      this.logger.log('[setActiveAccount] COMPLETE', { userId, accountId, totalDuration: `${totalDuration}ms`, prefsDuration: `${prefsDuration}ms` });
+    } catch (error: any) {
+      const totalDuration = Date.now() - startTime;
+      this.logger.error('[setActiveAccount] ERROR', { userId, accountId, error: error.message, stack: error.stack, duration: `${totalDuration}ms` });
+      throw error;
+    }
   }
 
   /**
