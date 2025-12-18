@@ -42,7 +42,9 @@ export const AllegroAccountSelector: React.FC<AllegroAccountSelectorProps> = ({ 
       });
       
       if (response.data?.success) {
-        const accountsData = response.data.data || [];
+        // Ensure data is an array
+        const rawData = response.data.data;
+        const accountsData = Array.isArray(rawData) ? rawData : [];
         console.log('[AllegroAccountSelector] Setting accounts:', accountsData);
         setAccounts(accountsData);
         
