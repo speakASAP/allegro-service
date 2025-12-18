@@ -582,21 +582,33 @@ export class GatewayService implements OnModuleInit {
       const promiseCreationTime = Date.now();
       let axiosPromise;
       
+      // Log body details before making request
+      const bodyStr = body ? (typeof body === 'object' ? JSON.stringify(body) : String(body)) : 'undefined';
+      console.log(`[${new Date().toISOString()}] [TIMING] GatewayService: About to make ${method} request`, {
+        requestId,
+        url,
+        hasBody: !!body,
+        bodyType: typeof body,
+        bodyLength: bodyStr.length,
+        bodyPreview: bodyStr.substring(0, 200),
+      });
+
       switch (method.toUpperCase()) {
         case 'GET':
           axiosPromise = firstValueFrom(this.httpService.get(url, config));
           break;
         case 'POST':
-          axiosPromise = firstValueFrom(this.httpService.post(url, body, config));
+          // For POST requests, always send body (even if undefined/empty) to ensure proper Content-Length header
+          axiosPromise = firstValueFrom(this.httpService.post(url, body || {}, config));
           break;
         case 'PUT':
-          axiosPromise = firstValueFrom(this.httpService.put(url, body, config));
+          axiosPromise = firstValueFrom(this.httpService.put(url, body || {}, config));
           break;
         case 'DELETE':
           axiosPromise = firstValueFrom(this.httpService.delete(url, config));
           break;
         case 'PATCH':
-          axiosPromise = firstValueFrom(this.httpService.patch(url, body, config));
+          axiosPromise = firstValueFrom(this.httpService.patch(url, body || {}, config));
           break;
         default:
           throw new Error(`Unsupported method: ${method}`);
