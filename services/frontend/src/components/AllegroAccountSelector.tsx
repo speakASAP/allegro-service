@@ -47,11 +47,20 @@ export const AllegroAccountSelector: React.FC<AllegroAccountSelectorProps> = ({ 
         }
       }
     } catch (err) {
+      // Truncate long error messages (like API Gateway connection errors)
+      let errorMessage = 'Failed to load accounts';
       if (err instanceof AxiosError) {
-        setError(err.response?.data?.error?.message || 'Failed to load accounts');
-      } else {
-        setError('Failed to load accounts');
+        const fullMessage = err.response?.data?.error?.message || err.message || 'Failed to load accounts';
+        // Truncate if message is too long (likely a connection error with instructions)
+        if (fullMessage.length > 100) {
+          errorMessage = fullMessage.split('\n')[0] + '...';
+        } else {
+          errorMessage = fullMessage;
+        }
       }
+      setError(errorMessage);
+      // Don't clear accounts on error - show existing accounts if available
+      // This allows graceful degradation
     } finally {
       setLoading(false);
     }
@@ -91,7 +100,10 @@ export const AllegroAccountSelector: React.FC<AllegroAccountSelectorProps> = ({ 
     }
   };
 
-  if (loading) {
+  const activeAccount = accounts.find(acc => acc.id === activeAccountId);
+
+  // Show loading state
+  if (loading && accounts.length === 0) {
     return (
       <div className="text-sm text-gray-600">
         Loading accounts...
@@ -99,35 +111,34 @@ export const AllegroAccountSelector: React.FC<AllegroAccountSelectorProps> = ({ 
     );
   }
 
-  if (error) {
-    return (
-      <div className="text-sm text-red-600">
-        {error}
-      </div>
-    );
-  }
-
-  const activeAccount = accounts.find(acc => acc.id === activeAccountId);
-
+  // Show dropdown even if there's an error (graceful degradation)
+  // Display error as a warning tooltip or small text, but don't block the UI
   return (
     <div className="flex items-center space-x-2">
       <label htmlFor="account-selector" className="text-sm font-medium text-gray-700">
         Allegro Account:
       </label>
-      <select
-        id="account-selector"
-        value={activeAccountId || ''}
-        onChange={(e) => handleAccountChange(e.target.value)}
-        className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-      >
-        <option value="">-- No Active Account --</option>
-        {accounts.map((account) => (
-          <option key={account.id} value={account.id}>
-            {account.name}
-            {account.oauthStatus?.authorized ? ' ✓' : ' (Not Authorized)'}
-          </option>
-        ))}
-      </select>
+      <div className="flex flex-col">
+        <select
+          id="account-selector"
+          value={activeAccountId || ''}
+          onChange={(e) => handleAccountChange(e.target.value)}
+          className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        >
+          <option value="">-- No Active Account --</option>
+          {accounts.map((account) => (
+            <option key={account.id} value={account.id}>
+              {account.name}
+              {account.oauthStatus?.authorized ? ' ✓' : ' (Not Authorized)'}
+            </option>
+          ))}
+        </select>
+        {error && (
+          <span className="text-xs text-red-500 mt-1" title={error}>
+            {error.length > 50 ? error.substring(0, 50) + '...' : error}
+          </span>
+        )}
+      </div>
       {activeAccount && (
         <span className="text-xs text-gray-500">
           {activeAccount.oauthStatus?.authorized ? '✓ Authorized' : '⚠ Not Authorized'}
