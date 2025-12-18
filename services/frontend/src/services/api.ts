@@ -383,9 +383,10 @@ export const oauthApi = {
 export const allegroAccountApi = {
   /**
    * Get all Allegro accounts
+   * Uses shorter timeout (10s) for faster failure in case of issues
    */
   getAccounts: async () => {
-    return api.get('/settings/allegro-accounts');
+    return api.get('/settings/allegro-accounts', { timeout: 10000 });
   },
 
   /**
