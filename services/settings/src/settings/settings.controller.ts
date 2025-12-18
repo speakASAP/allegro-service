@@ -159,9 +159,19 @@ export class SettingsController {
     @Request() req: any,
     @Param('id') accountId: string,
   ): Promise<{ success: boolean }> {
+    const startTime = Date.now();
     const userId = String(req.user.id);
-    await this.settingsService.setActiveAccount(userId, accountId);
-    return { success: true };
+    this.logger.log('[activateAllegroAccount] Request received', { userId, accountId, timestamp: new Date().toISOString() });
+    try {
+      await this.settingsService.setActiveAccount(userId, accountId);
+      const duration = Date.now() - startTime;
+      this.logger.log('[activateAllegroAccount] Completed successfully', { userId, accountId, duration: `${duration}ms` });
+      return { success: true };
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      this.logger.error('[activateAllegroAccount] Failed', { userId, accountId, error: error.message, duration: `${duration}ms` });
+      throw error;
+    }
   }
 
   @Post('allegro-accounts/deactivate')
