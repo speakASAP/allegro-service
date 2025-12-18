@@ -6,6 +6,16 @@ import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosError } from 'ax
 import { isConnectionError, getConnectionErrorMessage } from '../utils/serviceErrorHandler';
 import { authService } from './auth';
 
+// Extended AxiosRequestConfig with metadata for timing
+interface RequestMetadata {
+  startTime: number;
+  timestamp: string;
+}
+
+interface ExtendedAxiosRequestConfig extends InternalAxiosRequestConfig {
+  metadata?: RequestMetadata;
+}
+
 // Determine API URL:
 // 1. Use VITE_API_URL if set during build (from FRONTEND_API_URL in .env)
 // 2. Auto-detect from current origin (if on production domain)
@@ -85,7 +95,7 @@ api.interceptors.request.use(
       : config.url || 'unknown';
     
     // Store start time for timing measurement
-    (config as any).metadata = {
+    (config as ExtendedAxiosRequestConfig).metadata = {
       startTime: Date.now(),
       timestamp: new Date().toISOString(),
     };
@@ -144,7 +154,7 @@ let refreshPromise: Promise<string> | null = null;
 api.interceptors.response.use(
   (response) => {
     // Calculate duration from request start time
-    const metadata = (response.config as any).metadata;
+    const metadata = (response.config as ExtendedAxiosRequestConfig).metadata;
     const duration = metadata?.startTime ? Date.now() - metadata.startTime : null;
     const timestamp = new Date().toISOString();
     
@@ -172,7 +182,7 @@ api.interceptors.response.use(
     const connectionError = error as ConnectionAxiosError;
     
     // Calculate duration from request start time
-    const metadata = (error.config as any)?.metadata;
+    const metadata = (error.config as ExtendedAxiosRequestConfig | undefined)?.metadata;
     const duration = metadata?.startTime ? Date.now() - metadata.startTime : null;
     const timestamp = new Date().toISOString();
     
@@ -383,10 +393,9 @@ export const oauthApi = {
 export const allegroAccountApi = {
   /**
    * Get all Allegro accounts
-   * Uses shorter timeout (10s) for faster failure in case of issues
    */
   getAccounts: async () => {
-    return api.get('/settings/allegro-accounts', { timeout: 10000 });
+    return api.get('/settings/allegro-accounts');
   },
 
   /**
