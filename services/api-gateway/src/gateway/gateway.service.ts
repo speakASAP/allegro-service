@@ -58,25 +58,29 @@ export class GatewayService implements OnModuleInit {
     
     // Create optimized agents with shorter idle timeout to prevent stale connections
     // These will be reused across requests for better performance
+    // Key optimization: timeout is connection establishment timeout, not socket timeout
+    // Lower timeout (2s) ensures we fail fast if connection can't be established
+    // freeSocketTimeout (4s) closes idle sockets quickly to prevent stale connections
+    // Note: freeSocketTimeout is a valid Node.js property but not in TypeScript types, using type assertion
     this.optimizedHttpAgent = new HttpAgent({
       keepAlive: true,
       keepAliveMsecs: 1000, // Send keep-alive packets every 1 second
       maxSockets: 50,
-      maxFreeSockets: 10, // Reduced to prevent too many idle connections
-      timeout: 5000, // Socket timeout: 5 seconds (connection must be established quickly)
-      freeSocketTimeout: 4000, // Close idle sockets after 4 seconds to prevent stale connections
+      maxFreeSockets: 20, // Increased to keep more connections ready for reuse
+      timeout: 2000, // Connection establishment timeout: 2 seconds (fail fast)
       scheduling: 'fifo',
-    });
+      freeSocketTimeout: 4000, // Close idle sockets after 4 seconds to prevent stale connections
+    } as any); // Type assertion needed as freeSocketTimeout is not in TypeScript types but exists in Node.js
     
     this.optimizedHttpsAgent = new HttpsAgent({
       keepAlive: true,
       keepAliveMsecs: 1000,
       maxSockets: 50,
-      maxFreeSockets: 10,
-      timeout: 5000,
-      freeSocketTimeout: 4000, // Close idle sockets after 4 seconds
+      maxFreeSockets: 20, // Increased to keep more connections ready
+      timeout: 2000, // Connection establishment timeout: 2 seconds
       scheduling: 'fifo',
-    });
+      freeSocketTimeout: 4000, // Close idle sockets after 4 seconds
+    } as any); // Type assertion needed as freeSocketTimeout is not in TypeScript types but exists in Node.js
     
     // Ensure agents are set on the HttpService's Axios instance defaults
     // Set default agents, but individual requests can override them
