@@ -19,10 +19,10 @@ export class GatewayService implements OnModuleInit {
   private readonly serviceUrls: Record<string, string>;
   private readonly httpAgent: HttpAgent;
   private readonly httpsAgent: HttpsAgent;
-  // Fresh agents without keep-alive - shared across all requests to avoid connection reuse issues
-  // Creating new agents per request was causing delays, so we use shared agents without keep-alive
-  private readonly freshHttpAgent: HttpAgent;
-  private readonly freshHttpsAgent: HttpsAgent;
+  // External agents without keep-alive - used only for external HTTPS services
+  // Internal Docker services use keep-alive agents for connection pooling
+  private readonly externalHttpAgent: HttpAgent;
+  private readonly externalHttpsAgent: HttpsAgent;
 
   constructor(
     private readonly httpService: HttpService,
@@ -37,40 +37,47 @@ export class GatewayService implements OnModuleInit {
     const existingHttpAgent = this.httpService.axiosRef.defaults.httpAgent as HttpAgent;
     const existingHttpsAgent = this.httpService.axiosRef.defaults.httpsAgent as HttpsAgent;
     
-    // Create agents with aggressive keep-alive settings to prevent connection delays
-    // maxFreeSockets increased to 20 to keep more connections ready for instant reuse
+    // Create agents with aggressive keep-alive settings for internal Docker services
+    // Optimized for connection pooling and reuse
     this.httpAgent = existingHttpAgent || new HttpAgent({
       keepAlive: true,
       keepAliveMsecs: 1000,
-      maxSockets: 50,
-      maxFreeSockets: 20, // Keep more idle connections ready
-      timeout: 60000,
+      maxSockets: 100, // Increased for higher concurrency
+      maxFreeSockets: 50, // Keep more idle connections ready for instant reuse
+      timeout: 30000, // Match Axios timeout
       scheduling: 'fifo', // Reuse oldest connections first
     });
-    
+
     this.httpsAgent = existingHttpsAgent || new HttpsAgent({
       keepAlive: true,
       keepAliveMsecs: 1000,
-      maxSockets: 50,
-      maxFreeSockets: 20, // Keep more idle connections ready
-      timeout: 60000,
+      maxSockets: 100, // Increased for higher concurrency
+      maxFreeSockets: 50, // Keep more idle connections ready for instant reuse
+      timeout: 30000, // Match Axios timeout
       scheduling: 'fifo', // Reuse oldest connections first
     });
-    
-    // Create shared fresh agents without keep-alive for all requests
-    // This prevents stale connection reuse while avoiding overhead of creating new agents per request
-    // Increased maxSockets to prevent connection pool exhaustion
-    // Increased timeout to allow for connection establishment delays
-    this.freshHttpAgent = new HttpAgent({
-      keepAlive: false, // No keep-alive to prevent stale connections
-      maxSockets: 200, // Increased from 50 to prevent connection pool exhaustion
+
+    // Add error handlers to agents to prevent unhandled socket errors
+    this.httpAgent.on('error', (err: any) => {
+      console.error(`[${new Date().toISOString()}] [AGENT] HTTP Agent error:`, err.message);
+    });
+
+    this.httpsAgent.on('error', (err: any) => {
+      console.error(`[${new Date().toISOString()}] [AGENT] HTTPS Agent error:`, err.message);
+    });
+
+    // Create external agents without keep-alive for external HTTPS services only
+    // Internal Docker services will use the keep-alive agents above for connection pooling
+    this.externalHttpAgent = new HttpAgent({
+      keepAlive: false, // No keep-alive for external services
+      maxSockets: 50,
       maxFreeSockets: 0, // No free sockets since keep-alive is disabled
       timeout: 30000, // 30 second socket timeout (matches Axios timeout)
     });
-    
-    this.freshHttpsAgent = new HttpsAgent({
-      keepAlive: false, // No keep-alive to prevent stale connections
-      maxSockets: 200, // Increased from 50 to prevent connection pool exhaustion
+
+    this.externalHttpsAgent = new HttpsAgent({
+      keepAlive: false, // No keep-alive for external services
+      maxSockets: 50,
       maxFreeSockets: 0, // No free sockets since keep-alive is disabled
       timeout: 30000, // 30 second socket timeout (matches Axios timeout)
     });
@@ -323,6 +330,12 @@ export class GatewayService implements OnModuleInit {
         error: error instanceof Error ? error.message : String(error),
       });
     }
+
+    // Log agent stats every 60 seconds for monitoring
+    setInterval(() => {
+      const stats = this.getAgentStats();
+      this.logger.debug('[AGENT STATS] Connection pool status', stats);
+    }, 60000);
   }
 
   /**
@@ -396,6 +409,29 @@ export class GatewayService implements OnModuleInit {
   }
 
   /**
+   * Get current agent statistics for monitoring
+   */
+  getAgentStats(): any {
+    return {
+      httpAgent: {
+        sockets: Object.keys(this.httpAgent.sockets || {}).length,
+        freeSockets: Object.keys(this.httpAgent.freeSockets || {}).length,
+        requests: Object.keys(this.httpAgent.requests || {}).length,
+        maxSockets: this.httpAgent.maxSockets,
+        maxFreeSockets: this.httpAgent.maxFreeSockets,
+      },
+      httpsAgent: {
+        sockets: Object.keys(this.httpsAgent.sockets || {}).length,
+        freeSockets: Object.keys(this.httpsAgent.freeSockets || {}).length,
+        requests: Object.keys(this.httpsAgent.requests || {}).length,
+        maxSockets: this.httpsAgent.maxSockets,
+        maxFreeSockets: this.httpsAgent.maxFreeSockets,
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
    * Forward request to service
    * Returns response data and status code, or full response object if redirect
    */
@@ -440,24 +476,32 @@ export class GatewayService implements OnModuleInit {
     
     // Determine if URL is HTTPS or HTTP to use correct agent
     const isHttps = url.startsWith('https://');
-    
+
+    // Determine if this is an internal Docker service or external service
+    const isInternalService = ['allegro', 'import', 'settings'].includes(serviceName);
+    const isExternalService = serviceName === 'auth' && isHttps;
+
     // Generate request ID for tracking (must be before config to use in metadata)
     const requestId = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
-    // Use shared fresh agents without keep-alive for ALL requests
-    // This prevents stale connection reuse while avoiding overhead of creating new agents per request
+
+    // Use keep-alive agents for internal services, external agents for external services
     const config: AxiosRequestConfig = {
       headers: {
         'Content-Type': 'application/json',
-        'Connection': 'close', // Always close connections to prevent reuse issues
+        // Only use Connection: close for external services
+        ...(isExternalService ? { 'Connection': 'close' } : {}),
         ...headers,
       },
       timeout,
       maxRedirects: followRedirects ? 5 : 0,
       validateStatus: (status) => status >= 200 && status < 600, // Accept all HTTP status codes (including errors)
-      // Use shared fresh agents without keep-alive for all requests
-      httpAgent: isHttps ? undefined : this.freshHttpAgent,
-      httpsAgent: isHttps ? this.freshHttpsAgent : undefined,
+      // Use keep-alive agents for internal services, external agents for external services
+      httpAgent: isHttps
+        ? undefined
+        : (isInternalService ? this.httpAgent : this.externalHttpAgent),
+      httpsAgent: isHttps
+        ? (isExternalService ? this.externalHttpsAgent : this.httpsAgent)
+        : undefined,
         // Pass metadata to interceptors
         metadata: {
           requestId,
@@ -492,8 +536,10 @@ export class GatewayService implements OnModuleInit {
       axiosDefaultsHttpsAgent: !!this.httpService.axiosRef.defaults.httpsAgent,
     };
     console.log(`[${new Date().toISOString()}] [TIMING] GatewayService: Agent check (${Date.now() - agentCheckTime}ms) for ${url}`, agentInfo);
-    // Log agent type - always using fresh agents now
-    const agentType = 'fresh agent (no keep-alive)';
+    // Log agent type based on service type
+    const agentType = isInternalService
+      ? 'keep-alive agent (pooled connections)'
+      : 'external agent (no keep-alive)';
     this.logger.debug(`[${requestId}] Using ${agentType} for ${method} ${url}`, agentInfo);
     
     // Log timeout configuration for debugging bulk operations
