@@ -493,7 +493,7 @@ export class GatewayService implements OnModuleInit {
         ...headers,
       },
       timeout,
-      maxRedirects: followRedirects ? 5 : 0,
+      maxRedirects: 0, // Disable follow-redirects to prevent 30s connection delays
       validateStatus: (status) => status >= 200 && status < 600, // Accept all HTTP status codes (including errors)
       // Use keep-alive agents for internal services, external agents for external services
       httpAgent: isHttps
