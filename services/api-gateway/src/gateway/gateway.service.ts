@@ -423,20 +423,21 @@ export class GatewayService implements OnModuleInit {
     // Generate request ID for tracking (must be before config to use in metadata)
     const requestId = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
-      // For POST requests, don't reuse connections to avoid potential hanging issues
-      // GET requests can reuse connections for better performance
-      const useKeepAlive = method.toUpperCase() !== 'POST';
+      // Disable keep-alive for all requests to avoid connection reuse issues
+      // This prevents timeouts where responses are sent but not received through stale connections
+      // Performance impact is minimal as connections are still pooled per request
+      const useKeepAlive = false; // Disabled for all requests to prevent timeout issues
       
-      // For POST requests, create a new agent without keep-alive to force new connections
+      // Create new agents without keep-alive to force fresh connections
       // This prevents connection reuse issues that cause timeouts
-      let postHttpAgent: HttpAgent | undefined;
-      let postHttpsAgent: HttpsAgent | undefined;
+      let freshHttpAgent: HttpAgent | undefined;
+      let freshHttpsAgent: HttpsAgent | undefined;
       if (!useKeepAlive) {
-        postHttpAgent = new HttpAgent({
+        freshHttpAgent = new HttpAgent({
           keepAlive: false,
           maxSockets: 50,
         });
-        postHttpsAgent = new HttpsAgent({
+        freshHttpsAgent = new HttpsAgent({
           keepAlive: false,
           maxSockets: 50,
         });
@@ -450,10 +451,10 @@ export class GatewayService implements OnModuleInit {
         timeout,
         maxRedirects: followRedirects ? 5 : 0,
         validateStatus: (status) => status >= 200 && status < 600, // Accept all HTTP status codes (including errors)
-        // For POST requests, use new agent without keep-alive to avoid connection reuse issues
-        // For GET requests, use keep-alive for better performance
-        httpAgent: useKeepAlive ? this.httpAgent : postHttpAgent,
-        httpsAgent: useKeepAlive ? this.httpsAgent : postHttpsAgent,
+        // Use fresh agents without keep-alive to avoid connection reuse issues
+        // This prevents timeouts where responses are sent but not received
+        httpAgent: useKeepAlive ? this.httpAgent : freshHttpAgent,
+        httpsAgent: useKeepAlive ? this.httpsAgent : freshHttpsAgent,
         // Pass metadata to interceptors
         metadata: {
           requestId,
