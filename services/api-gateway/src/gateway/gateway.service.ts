@@ -54,7 +54,8 @@ export class GatewayService implements OnModuleInit {
     });
     
     // Ensure agents are set on the HttpService's Axios instance defaults
-    // This ensures all requests use keep-alive agents
+    // Set default agents, but individual requests can override them
+    // POST requests will override to undefined to avoid connection reuse issues
     this.httpService.axiosRef.defaults.httpAgent = this.httpAgent;
     this.httpService.axiosRef.defaults.httpsAgent = this.httpsAgent;
     
