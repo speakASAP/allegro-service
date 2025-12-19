@@ -89,6 +89,7 @@ Create a `.env` file in the root directory with the following variables:
 
 ### Application Configuration
 
+- `DOMAIN` - Service domain used by nginx-microservice for auto-registry (required for correct domain detection, default: allegro.statex.cz)
 - `NODE_ENV` - Environment (production/development)
 - `SERVICE_NAME` - Service name (allegro)
 
@@ -259,11 +260,13 @@ All services use centralized logging via the logging-microservice. Logs are also
 ### Import Offers from Allegro
 
 **Via Frontend (Recommended)**:
+
 1. Navigate to the **Import Jobs** page in the web interface
 2. Click **"📥 Import All Offers from Allegro"** button
 3. All offers will be imported automatically
 
 **Via API**:
+
 ```bash
 # Port configured in allegro/.env: API_GATEWAY_PORT (default: 3411)
 # Requires OAuth authorization (see Settings page)
@@ -272,6 +275,7 @@ curl -X GET http://localhost:${API_GATEWAY_PORT:-3411}/api/allegro/offers/import
 ```
 
 **Response**:
+
 ```json
 {
   "success": true,
