@@ -19,6 +19,9 @@ export class GatewayService implements OnModuleInit {
   private readonly serviceUrls: Record<string, string>;
   private readonly httpAgent: HttpAgent;
   private readonly httpsAgent: HttpsAgent;
+  // Optimized agents for requests - reused across requests for better performance
+  private readonly optimizedHttpAgent: HttpAgent;
+  private readonly optimizedHttpsAgent: HttpsAgent;
 
   constructor(
     private readonly httpService: HttpService,
@@ -53,9 +56,30 @@ export class GatewayService implements OnModuleInit {
       scheduling: 'fifo', // Reuse oldest connections first
     });
     
+    // Create optimized agents with shorter idle timeout to prevent stale connections
+    // These will be reused across requests for better performance
+    this.optimizedHttpAgent = new HttpAgent({
+      keepAlive: true,
+      keepAliveMsecs: 1000, // Send keep-alive packets every 1 second
+      maxSockets: 50,
+      maxFreeSockets: 10, // Reduced to prevent too many idle connections
+      timeout: 5000, // Socket timeout: 5 seconds (connection must be established quickly)
+      freeSocketTimeout: 4000, // Close idle sockets after 4 seconds to prevent stale connections
+      scheduling: 'fifo',
+    });
+    
+    this.optimizedHttpsAgent = new HttpsAgent({
+      keepAlive: true,
+      keepAliveMsecs: 1000,
+      maxSockets: 50,
+      maxFreeSockets: 10,
+      timeout: 5000,
+      freeSocketTimeout: 4000, // Close idle sockets after 4 seconds
+      scheduling: 'fifo',
+    });
+    
     // Ensure agents are set on the HttpService's Axios instance defaults
     // Set default agents, but individual requests can override them
-    // POST requests will override to undefined to avoid connection reuse issues
     this.httpService.axiosRef.defaults.httpAgent = this.httpAgent;
     this.httpService.axiosRef.defaults.httpsAgent = this.httpsAgent;
     
@@ -422,39 +446,21 @@ export class GatewayService implements OnModuleInit {
     
     // Generate request ID for tracking (must be before config to use in metadata)
     const requestId = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
-      // Disable keep-alive for all requests to avoid connection reuse issues
-      // This prevents timeouts where responses are sent but not received through stale connections
-      // Performance impact is minimal as connections are still pooled per request
-      const useKeepAlive = false; // Disabled for all requests to prevent timeout issues
       
-      // Create new agents without keep-alive to force fresh connections
-      // This prevents connection reuse issues that cause timeouts
-      let freshHttpAgent: HttpAgent | undefined;
-      let freshHttpsAgent: HttpsAgent | undefined;
-      if (!useKeepAlive) {
-        freshHttpAgent = new HttpAgent({
-          keepAlive: false,
-          maxSockets: 50,
-        });
-        freshHttpsAgent = new HttpsAgent({
-          keepAlive: false,
-          maxSockets: 50,
-        });
-      }
-      
-      const config: AxiosRequestConfig = {
-        headers: {
-          'Content-Type': 'application/json',
-          ...headers,
-        },
-        timeout,
-        maxRedirects: followRedirects ? 5 : 0,
-        validateStatus: (status) => status >= 200 && status < 600, // Accept all HTTP status codes (including errors)
-        // Use fresh agents without keep-alive to avoid connection reuse issues
-        // This prevents timeouts where responses are sent but not received
-        httpAgent: useKeepAlive ? this.httpAgent : freshHttpAgent,
-        httpsAgent: useKeepAlive ? this.httpsAgent : freshHttpsAgent,
+    const config: AxiosRequestConfig = {
+      headers: {
+        'Content-Type': 'application/json',
+        'Connection': 'keep-alive', // Explicitly set keep-alive header
+        ...headers,
+      },
+      timeout,
+      maxRedirects: followRedirects ? 5 : 0,
+      validateStatus: (status) => status >= 200 && status < 600, // Accept all HTTP status codes (including errors)
+      // Use optimized agents with keep-alive for better performance
+      // Short freeSocketTimeout (4s) ensures stale connections are cleaned up quickly
+      // This prevents the 16-98 second delays while maintaining connection reuse benefits
+      httpAgent: isHttps ? undefined : this.optimizedHttpAgent,
+      httpsAgent: isHttps ? this.optimizedHttpsAgent : undefined,
         // Pass metadata to interceptors
         metadata: {
           requestId,
@@ -489,7 +495,7 @@ export class GatewayService implements OnModuleInit {
       axiosDefaultsHttpsAgent: !!this.httpService.axiosRef.defaults.httpsAgent,
     };
     console.log(`[${new Date().toISOString()}] [TIMING] GatewayService: Agent check (${Date.now() - agentCheckTime}ms) for ${url}`, agentInfo);
-    const agentType = useKeepAlive ? 'keep-alive' : 'new connection (no keep-alive)';
+    const agentType = config.httpAgent || config.httpsAgent ? 'optimized keep-alive (4s idle timeout)' : 'default';
     this.logger.debug(`[${requestId}] Using ${agentType} for ${method} ${url}`, agentInfo);
     
     // Log timeout configuration for debugging bulk operations
