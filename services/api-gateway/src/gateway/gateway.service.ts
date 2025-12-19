@@ -58,8 +58,8 @@ export class GatewayService implements OnModuleInit {
     
     // Create optimized agents with shorter idle timeout to prevent stale connections
     // These will be reused across requests for better performance
-    // Key optimization: timeout is connection establishment timeout, not socket timeout
-    // Lower timeout (2s) ensures we fail fast if connection can't be established
+    // Key optimization: timeout is socket timeout (how long to wait for response), not connection establishment
+    // Increased timeout to 10s to allow for slower connections while still failing reasonably fast
     // freeSocketTimeout (4s) closes idle sockets quickly to prevent stale connections
     // Note: freeSocketTimeout is a valid Node.js property but not in TypeScript types, using type assertion
     this.optimizedHttpAgent = new HttpAgent({
@@ -67,7 +67,7 @@ export class GatewayService implements OnModuleInit {
       keepAliveMsecs: 1000, // Send keep-alive packets every 1 second
       maxSockets: 50,
       maxFreeSockets: 20, // Increased to keep more connections ready for reuse
-      timeout: 2000, // Connection establishment timeout: 2 seconds (fail fast)
+      timeout: 10000, // Socket timeout: 10 seconds (allow time for connection establishment and response)
       scheduling: 'fifo',
       freeSocketTimeout: 4000, // Close idle sockets after 4 seconds to prevent stale connections
     } as any); // Type assertion needed as freeSocketTimeout is not in TypeScript types but exists in Node.js
@@ -77,7 +77,7 @@ export class GatewayService implements OnModuleInit {
       keepAliveMsecs: 1000,
       maxSockets: 50,
       maxFreeSockets: 20, // Increased to keep more connections ready
-      timeout: 2000, // Connection establishment timeout: 2 seconds
+      timeout: 10000, // Socket timeout: 10 seconds
       scheduling: 'fifo',
       freeSocketTimeout: 4000, // Close idle sockets after 4 seconds
     } as any); // Type assertion needed as freeSocketTimeout is not in TypeScript types but exists in Node.js
