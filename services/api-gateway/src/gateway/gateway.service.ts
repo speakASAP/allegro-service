@@ -473,7 +473,8 @@ export class GatewayService implements OnModuleInit {
       axiosDefaultsHttpsAgent: !!this.httpService.axiosRef.defaults.httpsAgent,
     };
     console.log(`[${new Date().toISOString()}] [TIMING] GatewayService: Agent check (${Date.now() - agentCheckTime}ms) for ${url}`, agentInfo);
-    this.logger.debug(`[${requestId}] Using keep-alive agents for ${url}`, agentInfo);
+    const agentType = useKeepAlive ? 'keep-alive' : 'new connection (no keep-alive)';
+    this.logger.debug(`[${requestId}] Using ${agentType} for ${method} ${url}`, agentInfo);
     
     // Log timeout configuration for debugging bulk operations
     if (isBulkOperation) {
