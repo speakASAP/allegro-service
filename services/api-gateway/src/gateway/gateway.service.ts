@@ -451,42 +451,32 @@ export class GatewayService implements OnModuleInit {
     // Generate request ID for tracking (must be before config to use in metadata)
     const requestId = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       
-    // For POST/PUT/PATCH requests, create fresh agents without keep-alive to avoid connection reuse issues
-    // GET requests can use keep-alive for better performance
-    const isWriteRequest = method === 'POST' || method === 'PUT' || method === 'PATCH';
-    let requestHttpAgent: HttpAgent | undefined;
-    let requestHttpsAgent: HttpsAgent | undefined;
-    
-    if (isWriteRequest) {
-      // For write requests, use fresh agents without keep-alive to prevent stale connection issues
-      requestHttpAgent = new HttpAgent({
-        keepAlive: false,
-        maxSockets: 50,
-        timeout: 10000,
-      });
-      requestHttpsAgent = new HttpsAgent({
-        keepAlive: false,
-        maxSockets: 50,
-        timeout: 10000,
-      });
-    } else {
-      // For read requests (GET), use optimized agents with keep-alive for better performance
-      requestHttpAgent = isHttps ? undefined : this.optimizedHttpAgent;
-      requestHttpsAgent = isHttps ? this.optimizedHttpsAgent : undefined;
-    }
+    // Use fresh agents without keep-alive for ALL requests to prevent stale connection issues
+    // This ensures each request gets a clean connection, preventing 15-30 second delays
+    // Performance impact is minimal as connections are still fast (< 1ms network latency)
+    const requestHttpAgent = new HttpAgent({
+      keepAlive: false,
+      maxSockets: 50,
+      timeout: 5000, // 5 second socket timeout
+    });
+    const requestHttpsAgent = new HttpsAgent({
+      keepAlive: false,
+      maxSockets: 50,
+      timeout: 5000, // 5 second socket timeout
+    });
     
     const config: AxiosRequestConfig = {
       headers: {
         'Content-Type': 'application/json',
-        'Connection': isWriteRequest ? 'close' : 'keep-alive', // Close connection for write requests
+        'Connection': 'close', // Always close connections to prevent reuse issues
         ...headers,
       },
       timeout,
       maxRedirects: followRedirects ? 5 : 0,
       validateStatus: (status) => status >= 200 && status < 600, // Accept all HTTP status codes (including errors)
-      // Use fresh agents for write requests, optimized agents for read requests
-      httpAgent: requestHttpAgent,
-      httpsAgent: requestHttpsAgent,
+      // Use fresh agents without keep-alive for all requests
+      httpAgent: isHttps ? undefined : requestHttpAgent,
+      httpsAgent: isHttps ? requestHttpsAgent : undefined,
         // Pass metadata to interceptors
         metadata: {
           requestId,
@@ -521,15 +511,8 @@ export class GatewayService implements OnModuleInit {
       axiosDefaultsHttpsAgent: !!this.httpService.axiosRef.defaults.httpsAgent,
     };
     console.log(`[${new Date().toISOString()}] [TIMING] GatewayService: Agent check (${Date.now() - agentCheckTime}ms) for ${url}`, agentInfo);
-    // Determine agent type for logging
-    let agentType: string;
-    if (isWriteRequest) {
-      agentType = 'fresh agent (no keep-alive)';
-    } else if (config.httpAgent || config.httpsAgent) {
-      agentType = 'optimized keep-alive (4s idle timeout)';
-    } else {
-      agentType = 'default';
-    }
+    // Log agent type - always using fresh agents now
+    const agentType = 'fresh agent (no keep-alive)';
     this.logger.debug(`[${requestId}] Using ${agentType} for ${method} ${url}`, agentInfo);
     
     // Log timeout configuration for debugging bulk operations
