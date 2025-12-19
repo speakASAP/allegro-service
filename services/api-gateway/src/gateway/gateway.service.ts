@@ -521,7 +521,15 @@ export class GatewayService implements OnModuleInit {
       axiosDefaultsHttpsAgent: !!this.httpService.axiosRef.defaults.httpsAgent,
     };
     console.log(`[${new Date().toISOString()}] [TIMING] GatewayService: Agent check (${Date.now() - agentCheckTime}ms) for ${url}`, agentInfo);
-    const agentType = config.httpAgent || config.httpsAgent ? 'optimized keep-alive (4s idle timeout)' : 'default';
+    // Determine agent type for logging
+    let agentType: string;
+    if (isWriteRequest) {
+      agentType = 'fresh agent (no keep-alive)';
+    } else if (config.httpAgent || config.httpsAgent) {
+      agentType = 'optimized keep-alive (4s idle timeout)';
+    } else {
+      agentType = 'default';
+    }
     this.logger.debug(`[${requestId}] Using ${agentType} for ${method} ${url}`, agentInfo);
     
     // Log timeout configuration for debugging bulk operations
