@@ -422,6 +422,10 @@ export class GatewayService implements OnModuleInit {
     // Generate request ID for tracking (must be before config to use in metadata)
     const requestId = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
+      // For POST requests, don't reuse connections to avoid potential hanging issues
+      // GET requests can reuse connections for better performance
+      const useKeepAlive = method.toUpperCase() !== 'POST';
+      
       const config: AxiosRequestConfig = {
         headers: {
           'Content-Type': 'application/json',
@@ -430,10 +434,10 @@ export class GatewayService implements OnModuleInit {
         timeout,
         maxRedirects: followRedirects ? 5 : 0,
         validateStatus: (status) => status >= 200 && status < 600, // Accept all HTTP status codes (including errors)
-        // Explicitly use keep-alive agents to reuse connections
-        // This eliminates the 17-second delay on first connection
-        httpAgent: this.httpAgent,
-        httpsAgent: this.httpsAgent,
+        // For POST requests, don't use keep-alive agent to avoid connection reuse issues
+        // For GET requests, use keep-alive for better performance
+        httpAgent: useKeepAlive ? this.httpAgent : undefined,
+        httpsAgent: useKeepAlive ? this.httpsAgent : undefined,
         // Pass metadata to interceptors
         metadata: {
           requestId,
