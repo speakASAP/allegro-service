@@ -5451,10 +5451,13 @@ export class OffersService {
             });
           }
 
-          // Handle productSet separately - need to strip read-only fields from products
+          // Handle productSet separately - need to strip read-only and account-specific fields
           if (rawData.productSet && Array.isArray(rawData.productSet)) {
             offerPayload.productSet = rawData.productSet.map((item: any) => {
               const cleanItem: any = { ...item };
+              // Remove account-specific IDs
+              delete cleanItem.responsiblePerson; // Account-specific ID
+              delete cleanItem.responsibleProducer; // Account-specific ID
               if (cleanItem.product) {
                 // Remove read-only publication status from product
                 const { publication, isAiCoCreated, ...cleanProduct } = cleanItem.product;
