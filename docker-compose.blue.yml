@@ -1,7 +1,7 @@
 services:
   gateway-proxy:
     image: nginx:alpine
-    container_name: allegro-gateway-proxy-blue
+    container_name: allegro-service-gateway-proxy-blue
     # Port mapping for health checks only - gateway-proxy is accessed via Docker network (http://gateway-proxy)
     # Host port 3409 (available in 34xx range, mapped to container port 80
     ports:
@@ -29,12 +29,12 @@ services:
     build:
       context: .
       dockerfile: services/api-gateway/Dockerfile
-    container_name: allegro-api-gateway-blue
+    container_name: allegro-service-api-gateway-blue
     ports:
       - "${API_GATEWAY_PORT:-3411}:3411"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - SERVICE_NAME=${SERVICE_NAME:-allegro}
+      - SERVICE_NAME=${SERVICE_NAME:-allegro-service}
       - API_GATEWAY_PORT=${API_GATEWAY_PORT:-3411}
       - ALLEGRO_SERVICE_URL=${ALLEGRO_SERVICE_URL:-http://allegro:3403}
       - IMPORT_SERVICE_URL=${IMPORT_SERVICE_URL:-http://imports:3406}
@@ -75,7 +75,7 @@ services:
     build:
       context: .
       dockerfile: services/allegro-service/Dockerfile
-    container_name: allegro-blue
+    container_name: allegro-service-blue
     ports:
       - "${ALLEGRO_SERVICE_PORT:-3403}:3403"
     volumes:
@@ -83,7 +83,7 @@ services:
 
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - SERVICE_NAME=${SERVICE_NAME:-allegro}
+      - SERVICE_NAME=${SERVICE_NAME:-allegro-service}
       - ALLEGRO_SERVICE_PORT=${ALLEGRO_SERVICE_PORT:-3403}
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
       - JWT_SECRET=${JWT_SECRET}
@@ -100,6 +100,10 @@ services:
       - ALLEGRO_API_SANDBOX_URL=${ALLEGRO_API_SANDBOX_URL}
       - ALLEGRO_USE_SANDBOX=${ALLEGRO_USE_SANDBOX:-false}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - CATALOG_SERVICE_URL=${CATALOG_SERVICE_URL:-http://catalog-microservice:3200}
+      - WAREHOUSE_SERVICE_URL=${WAREHOUSE_SERVICE_URL:-http://warehouse-microservice:3201}
+      - ORDER_SERVICE_URL=${ORDER_SERVICE_URL:-http://order-microservice:3203}
+      - RABBITMQ_URL=${RABBITMQ_URL:-amqp://guest:guest@statex_rabbitmq:5672}
       - DB_HOST=${DB_HOST}
       - DB_PORT=${DB_PORT:-5432}
       - DB_USER=${DB_USER}
@@ -120,12 +124,12 @@ services:
     build:
       context: .
       dockerfile: services/imports/Dockerfile
-    container_name: allegro-imports-blue
+    container_name: allegro-service-imports-blue
     ports:
       - "${IMPORT_SERVICE_PORT:-3406}:3406"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - SERVICE_NAME=${SERVICE_NAME:-allegro}
+      - SERVICE_NAME=${SERVICE_NAME:-allegro-service}
       - IMPORT_SERVICE_PORT=${IMPORT_SERVICE_PORT:-3406}
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
       - JWT_SECRET=${JWT_SECRET}
@@ -158,12 +162,12 @@ services:
     build:
       context: .
       dockerfile: services/settings/Dockerfile
-    container_name: allegro-settings-blue
+    container_name: allegro-service-settings-blue
     ports:
       - "${ALLEGRO_SETTINGS_SERVICE_PORT:-3408}:3408"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - SERVICE_NAME=${SERVICE_NAME:-allegro}
+      - SERVICE_NAME=${SERVICE_NAME:-allegro-service}
       - ALLEGRO_SETTINGS_SERVICE_PORT=${ALLEGRO_SETTINGS_SERVICE_PORT:-3408}
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
       - JWT_SECRET=${JWT_SECRET}
@@ -195,7 +199,7 @@ services:
       dockerfile: services/frontend/Dockerfile
       args:
         - FRONTEND_API_URL=${FRONTEND_API_URL}
-    container_name: allegro-frontend-blue
+    container_name: allegro-service-frontend-blue
     ports:
       - "${ALLEGRO_FRONTEND_SERVICE_PORT:-3410}:3410"
     environment:

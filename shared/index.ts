@@ -23,4 +23,10 @@ export * from './health/health.service';
 export * from './metrics/metrics.module';
 export * from './metrics/metrics.service';
 export * from './utils/supplier-placeholder.service';
+export * from './clients/clients.module';
+export * from './clients/catalog-client.service';
+export * from './clients/warehouse-client.service';
+export * from './clients/order-client.service';
+export * from './rabbitmq/rabbitmq.module';
+export * from './rabbitmq/stock-events.subscriber';
 

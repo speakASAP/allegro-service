@@ -3,7 +3,7 @@
  */
 
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
-import { PrismaService, LoggerService } from '@allegro/shared';
+import { PrismaService, LoggerService, CatalogClientService, WarehouseClientService } from '@allegro/shared';
 import { ConfigService } from '@nestjs/config';
 import { AllegroApiService } from '../allegro-api.service';
 import { AllegroAuthService } from '../allegro-auth.service';
@@ -20,6 +20,8 @@ export class OffersService {
     private readonly allegroApi: AllegroApiService,
     private readonly configService: ConfigService,
     private readonly allegroAuth: AllegroAuthService,
+    private readonly catalogClient: CatalogClientService,
+    private readonly warehouseClient: WarehouseClientService,
   ) {
     this.encryptionKey = this.configService.get<string>('ENCRYPTION_KEY');
     if (!this.encryptionKey) {
@@ -178,6 +180,7 @@ export class OffersService {
    * Get offer by ID
    * Called when user clicks "View Details" button on offers page
    * Optimized: Loads from database only (fast, no Allegro API calls)
+   * Fetches product from catalog-microservice if productId exists
    */
   async getOffer(id: string): Promise<any> {
     // Fast path: Load from database only (no Allegro API calls)
@@ -186,7 +189,6 @@ export class OffersService {
     const offer = await this.prisma.allegroOffer.findUnique({
       where: { id },
       include: {
-        product: true,
         allegroProduct: {
           // Don't include parameters by default - they can be large and slow
           // Parameters will be loaded separately if needed
@@ -199,6 +201,28 @@ export class OffersService {
       throw new Error(`Offer with ID ${id} not found`);
     }
 
+    // Fetch product from catalog-microservice if productId exists
+    if (offer.productId) {
+      try {
+        offer.product = await this.catalogClient.getProductById(offer.productId);
+        // Fetch stock from warehouse-microservice
+        const totalAvailable = await this.warehouseClient.getTotalAvailable(offer.productId);
+        offer.stockQuantity = totalAvailable;
+        this.logger.log('[getOffer] Fetched product from catalog-microservice', {
+          offerId: id,
+          productId: offer.productId,
+          stockQuantity: totalAvailable,
+        });
+      } catch (error: any) {
+        this.logger.warn(`[getOffer] Failed to fetch product from catalog: ${error.message}`, {
+          offerId: id,
+          productId: offer.productId,
+        });
+        offer.product = null;
+        // Keep existing stockQuantity if available
+      }
+    }
+
     // Return immediately (no logging overhead in production)
     // Logging only in development to avoid performance impact
     if (process.env.NODE_ENV === 'development') {
@@ -207,6 +231,7 @@ export class OffersService {
         allegroOfferId: offer.allegroOfferId,
         hasRawData: !!offer.rawData,
         hasProduct: !!offer.product,
+        hasProductId: !!offer.productId,
       });
     }
 

@@ -3,7 +3,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { PrismaService, LoggerService } from '@allegro/shared';
+import { PrismaService, LoggerService, WarehouseClientService } from '@allegro/shared';
 import { AllegroApiService } from '../allegro-api.service';
 
 @Injectable()
@@ -12,6 +12,7 @@ export class InventoryService {
     private readonly prisma: PrismaService,
     private readonly logger: LoggerService,
     private readonly allegroApi: AllegroApiService,
+    private readonly warehouseClient: WarehouseClientService,
   ) {}
 
   /**
@@ -70,14 +71,26 @@ export class InventoryService {
       },
     });
 
-    // Update product stock if linked
+    // Update stock in warehouse-microservice if product is linked
     if (offer.productId) {
-      await this.prisma.product.update({
-        where: { id: offer.productId },
-        data: {
-          stockQuantity: quantity,
-        },
-      });
+      try {
+        // Get warehouse ID (default to first warehouse or configure)
+        // For now, we'll need to determine the warehouse ID - this should come from configuration
+        // TODO: Get warehouse ID from configuration or offer settings
+        const warehouseId = process.env.DEFAULT_WAREHOUSE_ID;
+        if (warehouseId) {
+          await this.warehouseClient.setStock(
+            offer.productId,
+            warehouseId,
+            quantity,
+            `Stock updated from Allegro offer ${offer.allegroOfferId}`
+          );
+          this.logger.log(`Updated stock in warehouse-microservice for product ${offer.productId}`, 'InventoryService');
+        }
+      } catch (error: any) {
+        this.logger.error(`Failed to update stock in warehouse-microservice: ${error.message}`, error.stack, 'InventoryService');
+        // Don't throw - allow offer update to succeed even if warehouse update fails
+      }
     }
 
     return updated;

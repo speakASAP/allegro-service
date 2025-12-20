@@ -4,7 +4,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService, LoggerService } from '@allegro/shared';
+import { PrismaService, LoggerService, OrderClientService } from '@allegro/shared';
 import { AllegroApiService } from '../allegro-api.service';
 
 @Injectable()
@@ -14,6 +14,7 @@ export class OrdersService {
     private readonly logger: LoggerService,
     private readonly allegroApi: AllegroApiService,
     private readonly configService: ConfigService,
+    private readonly orderClient: OrderClientService,
   ) {}
 
   /**
@@ -156,7 +157,7 @@ export class OrdersService {
               where: { allegroOfferId: allegroOrder.lineItems?.[0]?.offer?.id || '' },
             });
 
-            await this.prisma.allegroOrder.upsert({
+            const savedOrder = await this.prisma.allegroOrder.upsert({
               where: { allegroOrderId: allegroOrder.id },
               update: {
                 quantity: allegroOrder.lineItems?.[0]?.quantity || 1,
@@ -186,6 +187,49 @@ export class OrdersService {
                 orderDate: new Date(allegroOrder.createdAt || Date.now()),
               },
             });
+
+            // Forward order to order-microservice
+            if (savedOrder && offer) {
+              try {
+                const orderData = {
+                  externalOrderId: allegroOrder.id,
+                  channel: 'allegro',
+                  channelAccountId: offer.accountId || undefined,
+                  customer: {
+                    email: allegroOrder.buyer?.email,
+                    login: allegroOrder.buyer?.login,
+                  },
+                  items: allegroOrder.lineItems?.map((item: any) => ({
+                    productId: offer?.productId || null,
+                    sku: offer?.sku || null,
+                    title: item.offer?.name || offer?.title || 'Product',
+                    quantity: item.quantity || 1,
+                    unitPrice: parseFloat(item.price?.amount || '0'),
+                    totalPrice: parseFloat(item.price?.amount || '0') * (item.quantity || 1),
+                  })) || [],
+                  subtotal: parseFloat(allegroOrder.totalPrice?.amount || '0'),
+                  shippingCost: 0,
+                  taxAmount: 0,
+                  total: parseFloat(allegroOrder.totalPrice?.amount || '0'),
+                  currency: allegroOrder.totalPrice?.currency || 'PLN',
+                  paymentStatus: allegroOrder.payment?.status,
+                  orderedAt: new Date(allegroOrder.createdAt || Date.now()),
+                };
+
+                await this.orderClient.createOrder(orderData);
+                this.logger.log('Order forwarded to order-microservice', {
+                  allegroOrderId: allegroOrder.id,
+                  localOrderId: savedOrder.id,
+                });
+              } catch (error: any) {
+                // Log error but don't fail the sync
+                this.logger.error('Failed to forward order to order-microservice', {
+                  allegroOrderId: allegroOrder.id,
+                  error: error.message,
+                });
+              }
+            }
+
             totalSynced++;
           } catch (error: any) {
             this.logger.error('Failed to sync order', {
