@@ -198,9 +198,7 @@ const OffersPage: React.FC = () => {
   // Clone to account states
   const [showCloneModal, setShowCloneModal] = useState(false);
   const [cloning, setCloning] = useState(false);
-  const [accounts, setAccounts] = useState<AllegroAccount[]>([]);
-  const [loadingAccounts, setLoadingAccounts] = useState(false);
-  const [targetAccountId, setTargetAccountId] = useState<string>('');
+  const [activeAccount, setActiveAccount] = useState<AllegroAccount | null>(null);
   const [cloneResults, setCloneResults] = useState<{
     total: number;
     successful: number;
@@ -1011,31 +1009,29 @@ const OffersPage: React.FC = () => {
     }
   };
 
-  // Load accounts for clone modal
-  const loadAccounts = async () => {
-    setLoadingAccounts(true);
+  // Load active account for clone modal
+  const loadActiveAccount = async () => {
     try {
       const response = await api.get('/settings/allegro-accounts');
       if (response.data.success && Array.isArray(response.data.data)) {
-        setAccounts(response.data.data);
+        const active = response.data.data.find((acc: AllegroAccount) => acc.isActive);
+        setActiveAccount(active || null);
       }
     } catch (err) {
-      console.error('Failed to load accounts', err);
-    } finally {
-      setLoadingAccounts(false);
+      console.error('Failed to load active account', err);
     }
   };
 
   // Open clone modal
   const handleOpenCloneModal = () => {
-    loadAccounts();
+    loadActiveAccount();
     setShowCloneModal(true);
   };
 
-  // Clone offers to another account
+  // Clone offers to active account
   const handleCloneToAccount = async () => {
-    if (!targetAccountId) {
-      setError('Please select a target account');
+    if (!activeAccount) {
+      setError('Please select an active account in the header');
       return;
     }
 
@@ -1080,10 +1076,10 @@ const OffersPage: React.FC = () => {
         }
       }
 
-      // Clone offers to target account
+      // Clone offers to active account
       const response = await api.post('/allegro/offers/clone-to-account', {
         offerIds: allOfferIds,
-        targetAccountId,
+        targetAccountId: activeAccount.id,
       }, {
         timeout: 600000, // 10 minutes for cloning (can take long for many offers)
       });
@@ -2117,60 +2113,34 @@ const OffersPage: React.FC = () => {
       {/* Clone to Account Modal */}
       <Modal
         isOpen={showCloneModal}
-        onClose={() => {
-          setShowCloneModal(false);
-          setTargetAccountId('');
-        }}
-        title="Clone Offers to Another Account"
+        onClose={() => setShowCloneModal(false)}
+        title="Clone Offers to Active Account"
       >
         <div className="space-y-4">
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <div className="text-sm text-blue-800">
-              <strong>What this does:</strong> Creates <strong>new offers</strong> on the selected Allegro account using the data from your current offers ({total} offers).
-              This is useful for selling the same products on multiple Allegro accounts.
+              <strong>What this does:</strong> Creates <strong>new offers</strong> on the active Allegro account <strong>({activeAccount?.name || 'None selected'})</strong> using the data from your current offers ({total} offers).
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Target Account *
-            </label>
-            {loadingAccounts ? (
-              <div className="text-gray-500 text-sm">Loading accounts...</div>
-            ) : (
-              <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                value={targetAccountId}
-                onChange={(e) => setTargetAccountId(e.target.value)}
-              >
-                <option value="">-- Select Target Account --</option>
-                {accounts.map((acc) => (
-                  <option key={acc.id} value={acc.id}>{acc.name}</option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <div className="text-sm text-yellow-800">
-              <strong>Note:</strong> Make sure the target account is authorized with Allegro OAuth.
-              Go to Settings to authorize if needed.
+          {!activeAccount && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="text-sm text-red-800">
+                <strong>Error:</strong> No active account selected. Please select an account in the header dropdown first.
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-4 border-t">
             <Button
               variant="secondary"
-              onClick={() => {
-                setShowCloneModal(false);
-                setTargetAccountId('');
-              }}
+              onClick={() => setShowCloneModal(false)}
             >
               Cancel
             </Button>
             <Button
               onClick={handleCloneToAccount}
-              disabled={cloning || !targetAccountId}
+              disabled={cloning || !activeAccount}
             >
               {cloning ? 'Cloning...' : `Clone ${total} Offers`}
             </Button>
