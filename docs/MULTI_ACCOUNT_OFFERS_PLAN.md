@@ -80,7 +80,7 @@ model AllegroAccount {
 - [ ] 3.1 Update `importOffersFromAllegro` to set `accountId` from active account
 - [ ] 3.2 Update `importFromSalesCenter` to set `accountId` from active account
 - [ ] 3.3 Update `getOffers` to accept optional `accountId` filter
-- [ ] 3.4 Update `publishOffersToAllegro` to verify offers belong to active account
+- [x] 3.4 Update `publishOffersToAllegro` to verify offers belong to active account ✅ (2024-12-20)
 
 ### Phase 4: Frontend Changes
 

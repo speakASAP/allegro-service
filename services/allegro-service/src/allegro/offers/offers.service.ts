@@ -3710,24 +3710,52 @@ export class OffersService {
     let successful = 0;
     let failed = 0;
 
+    // Get active account ID for ownership verification
+    console.log('[publishOffersToAllegro] About to get active account');
+    const activeAccount = await this.prisma.allegroAccount.findFirst({
+      where: {
+        userId,
+        isActive: true,
+      },
+    });
+
+    if (!activeAccount) {
+      throw new HttpException(
+        {
+          success: false,
+          error: {
+            code: 'NO_ACTIVE_ACCOUNT',
+            message: 'No active Allegro account found. Please select an active account in Settings.',
+          },
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const activeAccountId = activeAccount.id;
+    const activeAccountName = activeAccount.name;
+    console.log('[publishOffersToAllegro] Active account found', { activeAccountId, activeAccountName });
+
     // Get OAuth token once for all operations
     console.log('[publishOffersToAllegro] About to get OAuth token');
     let oauthToken: string;
     const tokenStartTime = Date.now();
     try {
-      console.log(`[${finalRequestId}] [publishOffersToAllegro] STEP 1: Fetching OAuth token`, { 
+      console.log(`[${finalRequestId}] [publishOffersToAllegro] STEP 1: Fetching OAuth token`, {
         userId,
+        activeAccountId,
+        activeAccountName,
         timestamp: new Date().toISOString(),
         step: '1/5',
         description: 'Getting OAuth access token for Allegro API',
       });
-      
+
       // Add detailed logging before token fetch
       console.log(`[${finalRequestId}] [publishOffersToAllegro] STEP 1.1: Calling getUserOAuthToken`, {
         userId,
         timestamp: new Date().toISOString(),
       });
-      
+
       console.log('[publishOffersToAllegro] About to call getUserOAuthToken');
       oauthToken = await this.getUserOAuthToken(userId);
       console.log('[publishOffersToAllegro] getUserOAuthToken completed', { tokenLength: oauthToken?.length || 0 });
@@ -3873,13 +3901,47 @@ export class OffersService {
           timestamp: new Date().toISOString(),
         });
         
-        console.log('[publishOffersToAllegro] About to check if offer.allegroOfferId exists', { 
-          offerId, 
+        console.log('[publishOffersToAllegro] About to check if offer.allegroOfferId exists', {
+          offerId,
           hasAllegroOfferId: !!offer.allegroOfferId,
           allegroOfferId: offer.allegroOfferId,
           isLocalOffer: offer.allegroOfferId?.startsWith('local-') || false,
+          offerAccountId: offer.accountId || null,
+          activeAccountId,
         });
         if (offer.allegroOfferId && !offer.allegroOfferId.startsWith('local-')) {
+          console.log('[publishOffersToAllegro] Offer exists on Allegro - checking account ownership', { offerId, allegroOfferId: offer.allegroOfferId, offerAccountId: offer.accountId, activeAccountId });
+
+          // Multi-account support: Check if offer belongs to the active account
+          // If offer has accountId set and it doesn't match active account, reject the update
+          if (offer.accountId && offer.accountId !== activeAccountId) {
+            // Get the offer's account name for better error message
+            const offerAccount = await this.prisma.allegroAccount.findUnique({
+              where: { id: offer.accountId },
+              select: { name: true },
+            });
+            const offerAccountName = offerAccount?.name || 'unknown';
+
+            console.log(`[${offerRequestId}] [publishOffersToAllegro] ACCOUNT MISMATCH: Cannot update offer from different account`, {
+              offerId,
+              allegroOfferId: offer.allegroOfferId,
+              offerAccountId: offer.accountId,
+              offerAccountName,
+              activeAccountId,
+              activeAccountName,
+            });
+
+            // Fail this offer with clear message
+            results.push({
+              offerId,
+              status: 'failed',
+              allegroOfferId: offer.allegroOfferId,
+              error: `Access denied. This offer belongs to account "${offerAccountName}" but you are using account "${activeAccountName}". To publish these offers to a different account, use "Clone to Account" feature instead.`,
+            });
+            failed++;
+            continue; // Skip to next offer
+          }
+
           console.log('[publishOffersToAllegro] Offer exists on Allegro - will UPDATE', { offerId, allegroOfferId: offer.allegroOfferId });
           // Offer exists on Allegro - update it
           try {
