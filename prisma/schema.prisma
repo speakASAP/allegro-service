@@ -82,8 +82,8 @@ model Product {
   updatedAt DateTime @updatedAt @db.Timestamp(6)
 
   // Relations
-  allegroOffers    AllegroOffer[]
-  allegroOrders    AllegroOrder[]
+  // NOTE: Relations removed - Product model is deprecated
+  // allegroOffers, allegroOrders, supplierProducts, importJobs now reference catalog-microservice
   supplierProducts SupplierProduct[]
   importJobs       ImportJob[]
 
