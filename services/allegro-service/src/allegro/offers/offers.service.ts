@@ -5451,22 +5451,77 @@ export class OffersService {
             });
           }
 
-          // Handle productSet separately - need to strip read-only fields
-          // NOTE: responsibleProducer is REQUIRED by Allegro for GPSR compliance
-          // The target account must have the same producer configured for clone to work
+          // Handle productSet separately - need to strip read-only fields and handle responsibleProducer
           if (rawData.productSet && Array.isArray(rawData.productSet)) {
-            offerPayload.productSet = rawData.productSet.map((item: any) => {
+            // Get source account token for fetching producer details
+            const sourceAccountId = sourceOffer.accountId;
+            let sourceOAuthToken: string | null = null;
+            if (sourceAccountId) {
+              try {
+                sourceOAuthToken = await this.getUserOAuthToken(userId, sourceAccountId);
+              } catch (e) {
+                this.logger.warn(`[${finalRequestId}] Could not get source account token, will try to use producer as-is`);
+              }
+            }
+
+            // Get target account's existing producers
+            let targetProducers: any[] = [];
+            try {
+              const producersResponse = await this.allegroApi.getResponsibleProducersWithOAuthToken(oauthToken);
+              targetProducers = producersResponse?.responsibleProducers || [];
+              this.logger.log(`[${finalRequestId}] Target account has ${targetProducers.length} producers`);
+            } catch (e) {
+              this.logger.warn(`[${finalRequestId}] Could not fetch target account producers`);
+            }
+
+            offerPayload.productSet = [];
+            for (const item of rawData.productSet) {
               const cleanItem: any = { ...item };
               // Remove responsiblePerson (account-specific, optional)
               delete cleanItem.responsiblePerson;
-              // KEEP responsibleProducer - required by Allegro, must exist on target account
+
+              // Handle responsibleProducer - try to copy if not exists on target
+              if (cleanItem.responsibleProducer?.id) {
+                const producerId = cleanItem.responsibleProducer.id;
+                const existsOnTarget = targetProducers.some((p: any) => p.id === producerId);
+
+                if (!existsOnTarget && sourceOAuthToken) {
+                  // Try to get producer details and create on target account
+                  try {
+                    this.logger.log(`[${finalRequestId}] Producer ${producerId} not on target, attempting to copy`);
+                    const producerDetails = await this.allegroApi.getResponsibleProducerByIdWithOAuthToken(
+                      sourceOAuthToken,
+                      producerId,
+                    );
+
+                    if (producerDetails) {
+                      // Create producer on target account (remove ID to create new)
+                      const { id, ...producerData } = producerDetails;
+                      const newProducer = await this.allegroApi.createResponsibleProducerWithOAuthToken(
+                        oauthToken,
+                        producerData,
+                      );
+                      this.logger.log(`[${finalRequestId}] Created producer on target account`, {
+                        oldId: producerId,
+                        newId: newProducer.id,
+                      });
+                      // Update the cleanItem to use the new producer ID
+                      cleanItem.responsibleProducer = { id: newProducer.id };
+                    }
+                  } catch (copyError: any) {
+                    this.logger.warn(`[${finalRequestId}] Could not copy producer: ${copyError.message}`);
+                    // Keep original producer ID - will fail if not exists
+                  }
+                }
+              }
+
               if (cleanItem.product) {
                 // Remove read-only publication status from product
                 const { publication, isAiCoCreated, ...cleanProduct } = cleanItem.product;
                 cleanItem.product = cleanProduct;
               }
-              return cleanItem;
-            });
+              offerPayload.productSet.push(cleanItem);
+            }
           }
         } else {
           // Build minimal payload from stored fields

@@ -1075,6 +1075,96 @@ export class AllegroApiService {
     }
   }
 
+  /**
+   * Get responsible producers for the authenticated user
+   * Wrapper for: GET /sale/responsible-producers
+   */
+  async getResponsibleProducers(): Promise<any> {
+    return this.request('GET', '/sale/responsible-producers');
+  }
+
+  /**
+   * Get responsible producers using OAuth token
+   * Wrapper for: GET /sale/responsible-producers
+   */
+  async getResponsibleProducersWithOAuthToken(accessToken: string): Promise<any> {
+    const url = `${this.apiUrl}/sale/responsible-producers`;
+    const config = {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/vnd.allegro.public.v1+json',
+      },
+      timeout: 30000,
+    };
+
+    try {
+      const response = await firstValueFrom(this.httpService.get(url, config));
+      return response.data;
+    } catch (error: any) {
+      this.logger.error('Failed to get responsible producers', {
+        error: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Create a responsible producer using OAuth token
+   * Wrapper for: POST /sale/responsible-producers
+   */
+  async createResponsibleProducerWithOAuthToken(accessToken: string, producerData: any): Promise<any> {
+    const url = `${this.apiUrl}/sale/responsible-producers`;
+    const config = {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/vnd.allegro.public.v1+json',
+        'Accept': 'application/vnd.allegro.public.v1+json',
+      },
+      timeout: 30000,
+    };
+
+    try {
+      this.logger.log('Creating responsible producer', { producerData });
+      const response = await firstValueFrom(this.httpService.post(url, producerData, config));
+      this.logger.log('Responsible producer created', { id: response.data?.id });
+      return response.data;
+    } catch (error: any) {
+      this.logger.error('Failed to create responsible producer', {
+        error: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get responsible producer by ID using OAuth token
+   * Wrapper for: GET /sale/responsible-producers/{id}
+   */
+  async getResponsibleProducerByIdWithOAuthToken(accessToken: string, producerId: string): Promise<any> {
+    const url = `${this.apiUrl}/sale/responsible-producers/${producerId}`;
+    const config = {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/vnd.allegro.public.v1+json',
+      },
+      timeout: 30000,
+    };
+
+    try {
+      const response = await firstValueFrom(this.httpService.get(url, config));
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        return null; // Producer not found
+      }
+      throw error;
+    }
+  }
+
   private throwConfigError(key: string): never {
     throw new Error(`Missing required environment variable: ${key}. Please set it in your .env file.`);
   }
