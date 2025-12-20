@@ -1,6 +1,6 @@
-# Allegro Integration System
+# Allegro Service
 
-Fully automated NestJS microservices system for managing sales on Allegro.cz marketplace.
+Sales channel service for Allegro.cz and Allegro.pl marketplaces - multi-account offer management and synchronization.
 
 ## Overview
 
@@ -90,8 +90,9 @@ Create a `.env` file in the root directory with the following variables:
 ### Application Configuration
 
 - `DOMAIN` - Service domain used by nginx-microservice for auto-registry (required for correct domain detection, default: allegro.statex.cz)
+- `SERVICE_NAME` - Service name used for deployment (default: allegro-service)
 - `NODE_ENV` - Environment (production/development)
-- `SERVICE_NAME` - Service name (allegro)
+- `SERVICE_NAME` - Service name (allegro-service)
 
 ### External Shared Microservices
 

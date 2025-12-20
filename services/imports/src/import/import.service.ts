@@ -4,7 +4,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService, LoggerService } from '@allegro/shared';
+import { PrismaService, LoggerService, CatalogClientService, WarehouseClientService } from '@allegro/shared';
 import { CsvParserService } from './csv/csv-parser.service';
 import { BizboxParserService } from './csv/bizbox-parser.service';
 import { BizboxToAllegroService } from './transformer/bizbox-to-allegro.service';
@@ -20,6 +20,8 @@ export class ImportService {
     private readonly bizboxParser: BizboxParserService,
     private readonly transformer: BizboxToAllegroService,
     private readonly fieldMapper: FieldMapperService,
+    private readonly catalogClient: CatalogClientService,
+    private readonly warehouseClient: WarehouseClientService,
   ) {}
 
   /**
@@ -63,28 +65,54 @@ export class ImportService {
             // Transform to Allegro format
             const allegroData = this.transformer.transform(record);
 
-            // Save product to database
-            const product = await this.prisma.product.upsert({
-              where: { code: record.code },
-              update: {
-                name: record['name:cs'] || record.name,
-                description: record['description:cs'] || record.description,
-                ean: record.ean,
-                manufacturerCode: record.manufacturerCode,
-                purchasePrice: record.purchasePrice ? parseFloat(record.purchasePrice) : null,
-                stockQuantity: this.calculateStock(record),
-                updatedAt: new Date(),
-              },
-              create: {
-                code: record.code,
-                name: record['name:cs'] || record.name,
-                description: record['description:cs'] || record.description,
-                ean: record.ean,
-                manufacturerCode: record.manufacturerCode,
-                purchasePrice: record.purchasePrice ? parseFloat(record.purchasePrice) : null,
-                stockQuantity: this.calculateStock(record),
-              },
-            });
+            // Create or update product in catalog-microservice
+            const productName = record['name:cs'] || record.name;
+            const productDescription = record['description:cs'] || record.description;
+            const stockQuantity = this.calculateStock(record);
+            
+            let product;
+            try {
+              // Try to find existing product by SKU (code)
+              const existingProducts = await this.catalogClient.searchProducts({ sku: record.code });
+              if (existingProducts.items && existingProducts.items.length > 0) {
+                product = existingProducts.items[0];
+                // Update product
+                product = await this.catalogClient.updateProduct(product.id, {
+                  title: productName,
+                  description: productDescription,
+                  ean: record.ean || undefined,
+                  manufacturerCode: record.manufacturerCode || undefined,
+                });
+              } else {
+                // Create new product
+                product = await this.catalogClient.createProduct({
+                  sku: record.code,
+                  title: productName,
+                  description: productDescription,
+                  ean: record.ean || undefined,
+                  manufacturerCode: record.manufacturerCode || undefined,
+                });
+              }
+            } catch (error: any) {
+              this.logger.error(`Failed to create/update product in catalog-microservice: ${error.message}`, error.stack, 'ImportService');
+              throw error;
+            }
+
+            // Update stock in warehouse-microservice
+            if (product && product.id) {
+              try {
+                const warehouseId = this.configService.get<string>('DEFAULT_WAREHOUSE_ID') || '1';
+                await this.warehouseClient.setStock(
+                  product.id,
+                  warehouseId,
+                  stockQuantity,
+                  `Stock imported from CSV: ${fileName}`
+                );
+              } catch (error: any) {
+                this.logger.error(`Failed to update stock in warehouse-microservice: ${error.message}`, error.stack, 'ImportService');
+                // Continue - product was created successfully
+              }
+            }
 
             successfulRows++;
           } catch (error: any) {

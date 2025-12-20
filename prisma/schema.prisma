@@ -14,7 +14,9 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Products from our system/BizBox
+// DEPRECATED: Products are now managed by catalog-microservice
+// This model is kept for backward compatibility during migration
+// TODO: Remove after full migration to catalog-microservice
 model Product {
   id               String  @id @default(uuid()) @db.Uuid
   code             String  @unique @db.VarChar(255) // BizBox product code
@@ -184,7 +186,8 @@ model AllegroOffer {
   updatedAt DateTime @updatedAt @db.Timestamp(6)
 
   // Relations
-  product  Product?       @relation(fields: [productId], references: [id], onDelete: SetNull)
+  // NOTE: productId is now a reference to catalog-microservice product ID (no foreign key)
+  // product  Product?       @relation(fields: [productId], references: [id], onDelete: SetNull) // DEPRECATED: Use catalog-microservice
   orders   AllegroOrder[]
   syncJobs SyncJob[]
 
@@ -242,7 +245,8 @@ model AllegroOrder {
 
   // Relations
   offer   AllegroOffer @relation(fields: [allegroOfferId], references: [id])
-  product Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  // NOTE: productId is now a reference to catalog-microservice product ID (no foreign key)
+  // product Product?     @relation(fields: [productId], references: [id], onDelete: SetNull) // DEPRECATED: Use catalog-microservice
 
   @@index([allegroOrderId])
   @@index([allegroOfferId])

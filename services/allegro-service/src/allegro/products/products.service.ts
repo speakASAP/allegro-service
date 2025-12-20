@@ -1,5 +1,5 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
-import { PrismaService, LoggerService } from '@allegro/shared';
+import { PrismaService, LoggerService, CatalogClientService } from '@allegro/shared';
 
 interface ProductQuery {
   page?: number;
@@ -33,6 +33,7 @@ export class ProductsService {
   constructor(
     private readonly prisma: PrismaService,
     loggerService: LoggerService,
+    private readonly catalogClient: CatalogClientService,
   ) {
     this.logger = loggerService;
     this.logger.setContext('ProductsService');
@@ -112,25 +113,13 @@ export class ProductsService {
   async getProducts(query: ProductQuery & { includeRaw?: string }) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 20;
-    const skip = (page - 1) * limit;
     const search = query.search?.trim();
     const includeRaw = query.includeRaw === 'true';
-
-    const where: any = {};
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { brand: { contains: search, mode: 'insensitive' } },
-        { manufacturerCode: { contains: search, mode: 'insensitive' } },
-        { ean: { contains: search, mode: 'insensitive' } },
-        { allegroProductId: { contains: search, mode: 'insensitive' } },
-      ];
-    }
 
     const startTime = Date.now();
     const requestId = `get-products-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
-    this.logger.log(`[${requestId}] [getProducts] Fetching products`, {
+    this.logger.log(`[${requestId}] [getProducts] Fetching products from catalog-microservice`, {
       page,
       limit,
       search,
@@ -139,99 +128,153 @@ export class ProductsService {
       timestamp: new Date().toISOString(),
     });
 
-    const prisma = this.prisma as any; // fallback to allow newer Prisma models
-
-    const [items, total] = await Promise.all([
-      prisma.allegroProduct.findMany({
-        where,
-        skip,
-        take: limit,
-        select: {
-          id: true,
-          allegroProductId: true,
-          name: true,
-          brand: true,
-          manufacturerCode: true,
-          ean: true,
-          publicationStatus: true,
-          isAiCoCreated: true,
-          marketedBeforeGPSR: true,
-          rawData: includeRaw,
-          createdAt: true,
-          updatedAt: true,
-          parameters: {
-            select: {
-              id: true,
-              parameterId: true,
-              name: true,
-              values: true,
-              valuesIds: true,
-              rangeValue: true,
-              createdAt: true,
-              updatedAt: true,
-            },
-          },
-        },
-        orderBy: { updatedAt: 'desc' },
-      }),
-      prisma.allegroProduct.count({ where }),
-    ]);
-
-    const duration = Date.now() - startTime;
-    this.logger.log(`[${requestId}] [getProducts] Products fetched successfully`, {
-      page,
-      limit,
-      total,
-      itemsCount: items.length,
-      totalPages: Math.ceil(total / limit),
-      duration: `${duration}ms`,
-      hasSearch: !!search,
-      timestamp: new Date().toISOString(),
-    });
-
-    return {
-      items,
-      pagination: {
+    try {
+      // Fetch products from catalog-microservice
+      const catalogResult = await this.catalogClient.searchProducts({
         page,
         limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
+        search,
+      });
+
+      // Enrich with AllegroProduct data (Allegro-specific raw data)
+      const enrichedItems = await Promise.all(
+        catalogResult.items.map(async (catalogProduct: any) => {
+          try {
+            // Try to find AllegroProduct by EAN or SKU
+            const prisma = this.prisma as any;
+            const allegroProduct = await prisma.allegroProduct.findFirst({
+              where: {
+                OR: [
+                  catalogProduct.ean ? { ean: catalogProduct.ean } : undefined,
+                  { allegroProductId: catalogProduct.sku },
+                ].filter(Boolean),
+              },
+              include: {
+                parameters: includeRaw ? {
+                  select: {
+                    id: true,
+                    parameterId: true,
+                    name: true,
+                    values: true,
+                    valuesIds: true,
+                    rangeValue: true,
+                    createdAt: true,
+                    updatedAt: true,
+                  },
+                } : false,
+              },
+            });
+
+            return {
+              ...catalogProduct,
+              // Add Allegro-specific data
+              allegroProduct: allegroProduct ? {
+                id: allegroProduct.id,
+                allegroProductId: allegroProduct.allegroProductId,
+                publicationStatus: allegroProduct.publicationStatus,
+                isAiCoCreated: allegroProduct.isAiCoCreated,
+                marketedBeforeGPSR: allegroProduct.marketedBeforeGPSR,
+                rawData: includeRaw ? allegroProduct.rawData : undefined,
+                parameters: allegroProduct.parameters || [],
+              } : null,
+            };
+          } catch (error: any) {
+            this.logger.warn(`[${requestId}] Failed to enrich product ${catalogProduct.id} with Allegro data: ${error.message}`);
+            return {
+              ...catalogProduct,
+              allegroProduct: null,
+            };
+          }
+        })
+      );
+
+      const duration = Date.now() - startTime;
+      this.logger.log(`[${requestId}] [getProducts] Products fetched successfully`, {
+        page,
+        limit,
+        total: catalogResult.total,
+        itemsCount: enrichedItems.length,
+        totalPages: Math.ceil(catalogResult.total / limit),
+        duration: `${duration}ms`,
+        hasSearch: !!search,
+        timestamp: new Date().toISOString(),
+      });
+
+      return {
+        items: enrichedItems,
+        pagination: {
+          page: catalogResult.page,
+          limit: catalogResult.limit,
+          total: catalogResult.total,
+          totalPages: Math.ceil(catalogResult.total / limit),
+        },
+      };
+    } catch (error: any) {
+      this.logger.error(`[${requestId}] [getProducts] Failed to fetch products: ${error.message}`, error.stack);
+      throw new HttpException(`Failed to fetch products: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
 
   async getProduct(id: string) {
     const startTime = Date.now();
     const requestId = `get-product-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
-    this.logger.log(`[${requestId}] [getProduct] Fetching product`, { id });
+    this.logger.log(`[${requestId}] [getProduct] Fetching product from catalog-microservice`, { id });
 
-    const prisma = this.prisma as any;
+    try {
+      // Fetch product from catalog-microservice
+      const catalogProduct = await this.catalogClient.getProductById(id);
 
-    const product = await prisma.allegroProduct.findUnique({
-      where: { id },
-      include: { parameters: true },
-    });
+      if (!catalogProduct) {
+        this.logger.warn(`[${requestId}] [getProduct] Product not found in catalog`, {
+          id,
+        });
+        throw new HttpException('Product not found', HttpStatus.NOT_FOUND);
+      }
 
-    const duration = Date.now() - startTime;
+      // Enrich with AllegroProduct data (Allegro-specific raw data)
+      const prisma = this.prisma as any;
+      const allegroProduct = await prisma.allegroProduct.findFirst({
+        where: {
+          OR: [
+            catalogProduct.ean ? { ean: catalogProduct.ean } : undefined,
+            { allegroProductId: catalogProduct.sku },
+          ].filter(Boolean),
+        },
+        include: { parameters: true },
+      });
 
-    if (!product) {
-      this.logger.warn(`[${requestId}] [getProduct] Product not found`, {
+      const duration = Date.now() - startTime;
+
+      this.logger.log(`[${requestId}] [getProduct] Product fetched successfully`, {
         id,
+        sku: catalogProduct.sku,
+        title: catalogProduct.title,
+        hasAllegroData: !!allegroProduct,
+        parametersCount: allegroProduct?.parameters?.length || 0,
         duration: `${duration}ms`,
       });
-      throw new HttpException('Product not found', HttpStatus.NOT_FOUND);
+
+      return {
+        ...catalogProduct,
+        // Add Allegro-specific data
+        allegroProduct: allegroProduct ? {
+          id: allegroProduct.id,
+          allegroProductId: allegroProduct.allegroProductId,
+          publicationStatus: allegroProduct.publicationStatus,
+          isAiCoCreated: allegroProduct.isAiCoCreated,
+          marketedBeforeGPSR: allegroProduct.marketedBeforeGPSR,
+          rawData: allegroProduct.rawData,
+          parameters: allegroProduct.parameters || [],
+        } : null,
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.error(`[${requestId}] [getProduct] Failed to fetch product: ${error.message}`, error.stack);
+      throw new HttpException(`Failed to fetch product: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR);
     }
-
-    this.logger.log(`[${requestId}] [getProduct] Product fetched successfully`, {
-      id,
-      allegroProductId: product.allegroProductId,
-      name: product.name,
-      parametersCount: product.parameters?.length || 0,
-      duration: `${duration}ms`,
-    });
-
-    return product;
   }
 
   async createProduct(payload: ProductPayload) {
@@ -264,59 +307,115 @@ export class ProductsService {
       payload.rawData?.id || 
       `local-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
-    this.logger.log(`[${requestId}] [createProduct] Creating product in database`, {
+    // Generate SKU from allegroProductId if EAN is not available
+    const sku = summary.ean || `ALLEGRO-${allegroProductId}`;
+
+    this.logger.log(`[${requestId}] [createProduct] Creating product in catalog-microservice`, {
       allegroProductId,
+      sku,
       name: summary.name,
       brand: summary.brand,
       ean: summary.ean,
       isGeneratedId: allegroProductId.startsWith('local-'),
     });
 
-    const dbStartTime = Date.now();
-    const created = await prisma.allegroProduct.create({
-      data: {
-        allegroProductId: String(allegroProductId),
-        name: summary.name,
-        brand: summary.brand,
-        manufacturerCode: summary.manufacturerCode,
-        ean: summary.ean,
-        publicationStatus: summary.publicationStatus,
-        isAiCoCreated: summary.isAiCoCreated,
-        marketedBeforeGPSR: summary.marketedBeforeGPSR,
-        rawData: summary.rawData,
-      } as any,
-      include: { parameters: true },
-    });
-    const dbDuration = Date.now() - dbStartTime;
+    try {
+      // First, create or update product in catalog-microservice
+      let catalogProduct;
+      try {
+        // Try to find existing product by SKU
+        let existing = await this.catalogClient.getProductBySku(sku);
+        
+        // If not found by SKU and EAN exists, try searching by EAN
+        if (!existing && summary.ean) {
+          const searchResults = await this.catalogClient.searchProducts({ search: summary.ean });
+          existing = searchResults.items.find((p: any) => p.ean === summary.ean);
+        }
 
-    this.logger.log(`[${requestId}] [createProduct] Product created in database`, {
-      id: created.id,
-      allegroProductId: created.allegroProductId,
-      dbDuration: `${dbDuration}ms`,
-    });
+        if (existing) {
+          // Update existing product
+          catalogProduct = await this.catalogClient.updateProduct(existing.id, {
+            title: summary.name || existing.title,
+            brand: summary.brand || existing.brand,
+            manufacturer: summary.manufacturerCode || existing.manufacturer,
+            ean: summary.ean || existing.ean,
+          });
+          this.logger.log(`[${requestId}] [createProduct] Updated existing product in catalog`, {
+            catalogProductId: catalogProduct.id,
+          });
+        } else {
+          // Create new product
+          catalogProduct = await this.catalogClient.createProduct({
+            sku,
+            title: summary.name || 'Product',
+            brand: summary.brand,
+            manufacturer: summary.manufacturerCode,
+            ean: summary.ean,
+          });
+          this.logger.log(`[${requestId}] [createProduct] Created new product in catalog`, {
+            catalogProductId: catalogProduct.id,
+          });
+        }
+      } catch (error: any) {
+        this.logger.error(`[${requestId}] [createProduct] Failed to create/update product in catalog-microservice: ${error.message}`, error.stack);
+        throw new HttpException(`Failed to create product in catalog: ${error.message}`, HttpStatus.BAD_REQUEST);
+      }
 
-    if (payload.parameters?.length) {
-      this.logger.log(`[${requestId}] [createProduct] Replacing parameters from payload`, {
-        productId: created.id,
-        parametersCount: payload.parameters.length,
+      // Then, create AllegroProduct for Allegro-specific raw data
+      const dbStartTime = Date.now();
+      const created = await prisma.allegroProduct.create({
+        data: {
+          allegroProductId: String(allegroProductId),
+          name: summary.name,
+          brand: summary.brand,
+          manufacturerCode: summary.manufacturerCode,
+          ean: summary.ean,
+          publicationStatus: summary.publicationStatus,
+          isAiCoCreated: summary.isAiCoCreated,
+          marketedBeforeGPSR: summary.marketedBeforeGPSR,
+          rawData: summary.rawData,
+        } as any,
+        include: { parameters: true },
       });
-      await this.replaceParameters(created.id, payload.parameters);
-    } else if (Array.isArray(payload.rawData?.product?.parameters)) {
-      this.logger.log(`[${requestId}] [createProduct] Replacing parameters from rawData`, {
-        productId: created.id,
-        parametersCount: payload.rawData.product.parameters.length,
+      const dbDuration = Date.now() - dbStartTime;
+
+      this.logger.log(`[${requestId}] [createProduct] AllegroProduct created in database`, {
+        id: created.id,
+        allegroProductId: created.allegroProductId,
+        catalogProductId: catalogProduct.id,
+        dbDuration: `${dbDuration}ms`,
       });
-      await this.replaceParameters(created.id, payload.rawData.product.parameters);
+
+      if (payload.parameters?.length) {
+        this.logger.log(`[${requestId}] [createProduct] Replacing parameters from payload`, {
+          productId: created.id,
+          parametersCount: payload.parameters.length,
+        });
+        await this.replaceParameters(created.id, payload.parameters);
+      } else if (Array.isArray(payload.rawData?.product?.parameters)) {
+        this.logger.log(`[${requestId}] [createProduct] Replacing parameters from rawData`, {
+          productId: created.id,
+          parametersCount: payload.rawData.product.parameters.length,
+        });
+        await this.replaceParameters(created.id, payload.rawData.product.parameters);
+      }
+
+      const totalDuration = Date.now() - startTime;
+      this.logger.log(`[${requestId}] [createProduct] Product creation completed`, {
+        catalogProductId: catalogProduct.id,
+        allegroProductId: created.allegroProductId,
+        totalDuration: `${totalDuration}ms`,
+      });
+
+      // Return enriched product
+      return this.getProduct(catalogProduct.id);
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.error(`[${requestId}] [createProduct] Failed to create product: ${error.message}`, error.stack);
+      throw new HttpException(`Failed to create product: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR);
     }
-
-    const totalDuration = Date.now() - startTime;
-    this.logger.log(`[${requestId}] [createProduct] Product creation completed`, {
-      id: created.id,
-      allegroProductId: created.allegroProductId,
-      totalDuration: `${totalDuration}ms`,
-    });
-
-    return this.getProduct(created.id);
   }
 
   async updateProduct(id: string, payload: ProductPayload) {
@@ -331,60 +430,114 @@ export class ProductsService {
       timestamp: new Date().toISOString(),
     });
 
-    const prisma = this.prisma as any;
-    const existing = await prisma.allegroProduct.findUnique({ where: { id } });
-    
-    if (!existing) {
-      this.logger.warn(`[${requestId}] [updateProduct] Product not found`, { id });
-      throw new HttpException('Product not found', HttpStatus.NOT_FOUND);
-    }
+    try {
+      // First, get existing product from catalog-microservice
+      let catalogProduct;
+      try {
+        catalogProduct = await this.catalogClient.getProductById(id);
+      } catch (error: any) {
+        this.logger.warn(`[${requestId}] [updateProduct] Product not found in catalog, trying to find by AllegroProduct`, { id });
+        // If not found in catalog, try to find by AllegroProduct
+        const prisma = this.prisma as any;
+        const allegroProduct = await prisma.allegroProduct.findUnique({ where: { id } });
+        if (!allegroProduct) {
+          throw new HttpException('Product not found', HttpStatus.NOT_FOUND);
+        }
+        // Try to find catalog product by EAN or SKU
+        const sku = allegroProduct.ean || `ALLEGRO-${allegroProduct.allegroProductId}`;
+        catalogProduct = await this.catalogClient.getProductBySku(sku);
+        if (!catalogProduct) {
+          throw new HttpException('Product not found in catalog', HttpStatus.NOT_FOUND);
+        }
+        id = catalogProduct.id; // Use catalog product ID
+      }
 
-    this.logger.log(`[${requestId}] [updateProduct] Product found, extracting summary`, {
-      id,
-      existingAllegroProductId: existing.allegroProductId,
-      existingName: existing.name,
-    });
-
-    const rawData = payload.rawData ?? existing.rawData;
-    const summary = this.extractSummaryFromRaw(rawData, payload, existing);
-
-    const dbStartTime = Date.now();
-    await prisma.allegroProduct.update({
-      where: { id },
-      data: {
-        allegroProductId: summary.allegroProductId ?? existing.allegroProductId,
-        name: summary.name ?? existing.name,
-        brand: summary.brand ?? existing.brand,
-        manufacturerCode: summary.manufacturerCode ?? existing.manufacturerCode,
-        ean: summary.ean ?? existing.ean,
-        publicationStatus: summary.publicationStatus ?? existing.publicationStatus,
-        isAiCoCreated: summary.isAiCoCreated ?? existing.isAiCoCreated,
-        marketedBeforeGPSR: summary.marketedBeforeGPSR ?? existing.marketedBeforeGPSR,
-        rawData: summary.rawData ?? existing.rawData,
-      } as any,
-    });
-    const dbDuration = Date.now() - dbStartTime;
-
-    this.logger.log(`[${requestId}] [updateProduct] Product updated in database`, {
-      id,
-      dbDuration: `${dbDuration}ms`,
-    });
-
-    if (payload.parameters) {
-      this.logger.log(`[${requestId}] [updateProduct] Replacing parameters`, {
-        productId: id,
-        parametersCount: payload.parameters.length,
+      const prisma = this.prisma as any;
+      const existingAllegroProduct = await prisma.allegroProduct.findFirst({
+        where: {
+          OR: [
+            catalogProduct.ean ? { ean: catalogProduct.ean } : undefined,
+            { allegroProductId: catalogProduct.sku },
+          ].filter(Boolean),
+        },
       });
-      await this.replaceParameters(id, payload.parameters);
+
+      if (!existingAllegroProduct) {
+        this.logger.warn(`[${requestId}] [updateProduct] AllegroProduct not found`, { id });
+      }
+
+      this.logger.log(`[${requestId}] [updateProduct] Product found, extracting summary`, {
+        catalogProductId: catalogProduct.id,
+        allegroProductId: existingAllegroProduct?.allegroProductId,
+        existingName: catalogProduct.title,
+      });
+
+      const rawData = payload.rawData ?? existingAllegroProduct?.rawData;
+      const summary = this.extractSummaryFromRaw(rawData, payload, existingAllegroProduct || undefined);
+
+      // Update product in catalog-microservice
+      try {
+        catalogProduct = await this.catalogClient.updateProduct(id, {
+          title: summary.name ?? catalogProduct.title,
+          brand: summary.brand ?? catalogProduct.brand,
+          manufacturer: summary.manufacturerCode ?? catalogProduct.manufacturer,
+          ean: summary.ean ?? catalogProduct.ean,
+        });
+        this.logger.log(`[${requestId}] [updateProduct] Product updated in catalog-microservice`, {
+          catalogProductId: catalogProduct.id,
+        });
+      } catch (error: any) {
+        this.logger.error(`[${requestId}] [updateProduct] Failed to update product in catalog: ${error.message}`, error.stack);
+        throw new HttpException(`Failed to update product in catalog: ${error.message}`, HttpStatus.BAD_REQUEST);
+      }
+
+      // Update AllegroProduct if it exists
+      if (existingAllegroProduct) {
+        const dbStartTime = Date.now();
+        await prisma.allegroProduct.update({
+          where: { id: existingAllegroProduct.id },
+          data: {
+            allegroProductId: summary.allegroProductId ?? existingAllegroProduct.allegroProductId,
+            name: summary.name ?? existingAllegroProduct.name,
+            brand: summary.brand ?? existingAllegroProduct.brand,
+            manufacturerCode: summary.manufacturerCode ?? existingAllegroProduct.manufacturerCode,
+            ean: summary.ean ?? existingAllegroProduct.ean,
+            publicationStatus: summary.publicationStatus ?? existingAllegroProduct.publicationStatus,
+            isAiCoCreated: summary.isAiCoCreated ?? existingAllegroProduct.isAiCoCreated,
+            marketedBeforeGPSR: summary.marketedBeforeGPSR ?? existingAllegroProduct.marketedBeforeGPSR,
+            rawData: summary.rawData ?? existingAllegroProduct.rawData,
+          } as any,
+        });
+        const dbDuration = Date.now() - dbStartTime;
+
+        this.logger.log(`[${requestId}] [updateProduct] AllegroProduct updated in database`, {
+          allegroProductId: existingAllegroProduct.allegroProductId,
+          dbDuration: `${dbDuration}ms`,
+        });
+
+        if (payload.parameters) {
+          this.logger.log(`[${requestId}] [updateProduct] Replacing parameters`, {
+            productId: existingAllegroProduct.id,
+            parametersCount: payload.parameters.length,
+          });
+          await this.replaceParameters(existingAllegroProduct.id, payload.parameters);
+        }
+      }
+
+      const totalDuration = Date.now() - startTime;
+      this.logger.log(`[${requestId}] [updateProduct] Product update completed`, {
+        catalogProductId: catalogProduct.id,
+        totalDuration: `${totalDuration}ms`,
+      });
+
+      return this.getProduct(id);
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.error(`[${requestId}] [updateProduct] Failed to update product: ${error.message}`, error.stack);
+      throw new HttpException(`Failed to update product: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR);
     }
-
-    const totalDuration = Date.now() - startTime;
-    this.logger.log(`[${requestId}] [updateProduct] Product update completed`, {
-      id,
-      totalDuration: `${totalDuration}ms`,
-    });
-
-    return this.getProduct(id);
   }
 
   async deleteProduct(id: string) {
@@ -393,34 +546,74 @@ export class ProductsService {
     
     this.logger.log(`[${requestId}] [deleteProduct] Deleting product`, { id });
 
-    const prisma = this.prisma as any;
-    
-    // Check if product exists first
-    const existing = await prisma.allegroProduct.findUnique({
-      where: { id },
-      select: { id: true, allegroProductId: true, name: true },
-    });
+    try {
+      // Get product from catalog-microservice to find related AllegroProduct
+      let catalogProduct;
+      try {
+        catalogProduct = await this.catalogClient.getProductById(id);
+      } catch (error: any) {
+        // If not found in catalog, try to find by AllegroProduct
+        const prisma = this.prisma as any;
+        const allegroProduct = await prisma.allegroProduct.findUnique({
+          where: { id },
+          select: { id: true, allegroProductId: true, name: true, ean: true },
+        });
 
-    if (!existing) {
-      this.logger.warn(`[${requestId}] [deleteProduct] Product not found`, { id });
-      throw new HttpException('Product not found', HttpStatus.NOT_FOUND);
+        if (!allegroProduct) {
+          this.logger.warn(`[${requestId}] [deleteProduct] Product not found`, { id });
+          throw new HttpException('Product not found', HttpStatus.NOT_FOUND);
+        }
+
+        // Delete AllegroProduct only (catalog product might not exist)
+        await prisma.allegroProduct.delete({ where: { id } });
+        
+        const duration = Date.now() - startTime;
+        this.logger.log(`[${requestId}] [deleteProduct] AllegroProduct deleted successfully`, {
+          id,
+          allegroProductId: allegroProduct.allegroProductId,
+          duration: `${duration}ms`,
+        });
+
+        return { success: true };
+      }
+
+      // Find and delete related AllegroProduct
+      const prisma = this.prisma as any;
+      const allegroProduct = await prisma.allegroProduct.findFirst({
+        where: {
+          OR: [
+            catalogProduct.ean ? { ean: catalogProduct.ean } : undefined,
+            { allegroProductId: catalogProduct.sku },
+          ].filter(Boolean),
+        },
+        select: { id: true, allegroProductId: true },
+      });
+
+      if (allegroProduct) {
+        await prisma.allegroProduct.delete({ where: { id: allegroProduct.id } });
+        this.logger.log(`[${requestId}] [deleteProduct] AllegroProduct deleted`, {
+          allegroProductId: allegroProduct.allegroProductId,
+        });
+      }
+
+      // Note: We don't delete from catalog-microservice here
+      // The catalog product should be deactivated/deleted separately if needed
+      // This service only manages Allegro-specific data
+      
+      const duration = Date.now() - startTime;
+      this.logger.log(`[${requestId}] [deleteProduct] Product deleted successfully`, {
+        catalogProductId: catalogProduct.id,
+        duration: `${duration}ms`,
+      });
+
+      return { success: true };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.error(`[${requestId}] [deleteProduct] Failed to delete product: ${error.message}`, error.stack);
+      throw new HttpException(`Failed to delete product: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR);
     }
-
-    this.logger.log(`[${requestId}] [deleteProduct] Product found, deleting`, {
-      id,
-      allegroProductId: existing.allegroProductId,
-      name: existing.name,
-    });
-
-    await prisma.allegroProduct.delete({ where: { id } });
-    
-    const duration = Date.now() - startTime;
-    this.logger.log(`[${requestId}] [deleteProduct] Product deleted successfully`, {
-      id,
-      duration: `${duration}ms`,
-    });
-
-    return { success: true };
   }
 
   private async replaceParameters(productId: string, parameters: any[]) {
