@@ -113,6 +113,7 @@ interface AllegroProduct {
 interface AllegroAccount {
   id: string;
   name: string;
+  isActive?: boolean;
 }
 
 interface Offer {
