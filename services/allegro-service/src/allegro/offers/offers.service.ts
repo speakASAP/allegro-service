@@ -5415,23 +5415,37 @@ export class OffersService {
 
         if (sourceOffer.rawData) {
           // Extract only allowed properties from rawData (whitelist approach)
-          // Allegro rejects unknown/read-only properties
+          // Allegro /sale/product-offers endpoint rejects read-only and unknown properties
           const rawData = sourceOffer.rawData as any;
           offerPayload = {};
 
-          // Allowed properties for /sale/product-offers endpoint
+          // Strictly allowed properties for creating new offers
+          // EXCLUDED: id, warnings, createdAt, updatedAt, validation, publication, additionalMarketplaces, taxSettings
           const allowedProps = [
             'name', 'category', 'parameters', 'description', 'images',
             'sellingMode', 'stock', 'delivery', 'payments', 'location',
-            'external', 'sizeTable', 'productSet', 'language', 'compatibilityList',
+            'external', 'sizeTable', 'language', 'compatibilityList',
             'afterSalesServices', 'discounts', 'fundraisingCampaign', 'additionalServices',
-            'b2b', 'messageToSellerSettings', 'contact', 'attachments', 'tax',
+            'b2b', 'messageToSellerSettings', 'contact', 'attachments',
           ];
 
           for (const prop of allowedProps) {
-            if (rawData[prop] !== undefined) {
+            if (rawData[prop] !== undefined && rawData[prop] !== null) {
               offerPayload[prop] = rawData[prop];
             }
+          }
+
+          // Handle productSet separately - need to strip read-only fields from products
+          if (rawData.productSet && Array.isArray(rawData.productSet)) {
+            offerPayload.productSet = rawData.productSet.map((item: any) => {
+              const cleanItem: any = { ...item };
+              if (cleanItem.product) {
+                // Remove read-only publication status from product
+                const { publication, isAiCoCreated, ...cleanProduct } = cleanItem.product;
+                cleanItem.product = cleanProduct;
+              }
+              return cleanItem;
+            });
           }
         } else {
           // Build minimal payload from stored fields
@@ -5483,6 +5497,7 @@ export class OffersService {
           sourceOfferId,
           targetAccount: targetAccount.name,
           title: offerPayload.name || sourceOffer.title,
+          payloadKeys: Object.keys(offerPayload),
         });
 
         const allegroResponse = await this.allegroApi.createOfferWithOAuthToken(
