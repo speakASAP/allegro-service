@@ -1,5 +1,6 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import * as amqp from 'amqplib';
+import { Connection, Channel } from 'amqplib';
 import { LoggerService, PrismaService } from '../index';
 
 /**
@@ -8,8 +9,8 @@ import { LoggerService, PrismaService } from '../index';
  */
 @Injectable()
 export class StockEventsSubscriber implements OnModuleInit, OnModuleDestroy {
-  private connection: amqp.Connection | null = null;
-  private channel: amqp.Channel | null = null;
+  private connection: Connection | null = null;
+  private channel: Channel | null = null;
   private readonly exchangeName = 'stock.events';
   private readonly queueName = 'stock.allegro-service';
 
@@ -24,8 +25,16 @@ export class StockEventsSubscriber implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy() {
-    if (this.channel) await this.channel.close();
-    if (this.connection) await this.connection.close();
+    try {
+      if (this.channel) {
+        await this.channel.close();
+      }
+      if (this.connection) {
+        await this.connection.close();
+      }
+    } catch (error: any) {
+      this.logger.warn(`Error closing RabbitMQ connection: ${error.message}`, 'StockEventsSubscriber');
+    }
   }
 
   private async connect() {
