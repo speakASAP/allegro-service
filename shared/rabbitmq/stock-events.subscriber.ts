@@ -1,6 +1,5 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import * as amqp from 'amqplib';
-import { Connection, Channel } from 'amqplib';
 import { LoggerService, PrismaService } from '../index';
 
 /**
@@ -9,8 +8,8 @@ import { LoggerService, PrismaService } from '../index';
  */
 @Injectable()
 export class StockEventsSubscriber implements OnModuleInit, OnModuleDestroy {
-  private connection: Connection | null = null;
-  private channel: Channel | null = null;
+  private connection: amqp.Connection | null = null;
+  private channel: amqp.Channel | null = null;
   private readonly exchangeName = 'stock.events';
   private readonly queueName = 'stock.allegro-service';
 
