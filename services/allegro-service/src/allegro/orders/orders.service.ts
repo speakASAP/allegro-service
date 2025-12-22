@@ -114,12 +114,7 @@ export class OrdersService {
     const order = await this.prisma.allegroOrder.findUnique({
       where: { id },
       include: {
-        offer: {
-          include: {
-            product: true,
-          },
-        },
-        product: true,
+        offer: true,
       },
     });
 
@@ -201,7 +196,7 @@ export class OrdersService {
                   },
                   items: allegroOrder.lineItems?.map((item: any) => ({
                     productId: offer?.productId || null,
-                    sku: offer?.sku || null,
+                    sku: null, // SKU not available on AllegroOffer - would need catalog client
                     title: item.offer?.name || offer?.title || 'Product',
                     quantity: item.quantity || 1,
                     unitPrice: parseFloat(item.price?.amount || '0'),
