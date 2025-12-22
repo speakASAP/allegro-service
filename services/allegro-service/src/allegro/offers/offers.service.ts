@@ -2101,9 +2101,6 @@ export class OffersService {
     this.logger.log('Exporting offers to CSV');
 
     const offers = await this.prisma.allegroOffer.findMany({
-      include: {
-        product: true,
-      },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -2133,8 +2130,8 @@ export class OffersService {
       offer.status || '',
       offer.publicationStatus || '',
       offer.categoryId || '',
-      offer.product?.code || '',
-      offer.product?.name || '',
+      offer.productId || '',
+      '', // Product name - not available from Prisma, would need catalog client
       offer.createdAt.toISOString(),
       offer.lastSyncedAt ? offer.lastSyncedAt.toISOString() : '',
     ]);
@@ -3860,7 +3857,6 @@ export class OffersService {
         const offer = await this.prisma.allegroOffer.findUnique({
           where: { id: offerId },
           include: {
-            product: true,
             allegroProduct: {
               include: {
                 parameters: true,
@@ -5422,7 +5418,6 @@ export class OffersService {
         const sourceOffer = await this.prisma.allegroOffer.findUnique({
           where: { id: sourceOfferId },
           include: {
-            product: true,
             allegroProduct: true,
           },
         });
