@@ -30,6 +30,8 @@ interface MigrationStats {
   updated: number;
   skipped: number;
   errors: number;
+  stockSynced: number;
+  stockSkipped: number;
   errorDetails: Array<{ productId: string; sku: string; error: string }>;
 }
 
@@ -48,19 +50,43 @@ interface NormalizedRecord {
   catalogPayload: any;
 }
 
+interface CatalogMappingRecord {
+  source: 'Product' | 'AllegroProduct';
+  legacyId: string;
+  sku: string;
+  ean?: string | null;
+  catalogProductId: string;
+  stockQuantity: number;
+}
+
 class ProductMigrationService {
   private prisma: PrismaClient;
   private catalogClient: AxiosInstance;
   private loggingClient: AxiosInstance;
+  private warehouseClient: AxiosInstance;
   private stats: MigrationStats;
   private dryRun: boolean;
   private exportOnly: boolean;
   private exportPath: string;
+  private skipStock: boolean;
+  private defaultWarehouseId: string | null = null;
+  private mappingPath: string;
+  private mappings: CatalogMappingRecord[] = [];
+  private offerStockByProductId: Map<string, { stock: number; updatedAt?: Date }> = new Map();
+  private offerStockByAllegroProductId: Map<string, { stock: number; updatedAt?: Date }> = new Map();
 
-  constructor(dryRun: boolean = false, exportOnly: boolean = false, exportPath?: string) {
+  constructor(
+    dryRun: boolean = false,
+    exportOnly: boolean = false,
+    exportPath?: string,
+    skipStock: boolean = false,
+    mappingPath?: string,
+  ) {
     this.dryRun = dryRun;
     this.exportOnly = exportOnly;
     this.exportPath = exportPath || path.resolve(process.cwd(), 'tmp/migration/allegro-products-normalized.json');
+    this.skipStock = skipStock;
+    this.mappingPath = mappingPath || path.resolve(process.cwd(), 'tmp/migration/allegro-catalog-mapping.json');
 
     this.prisma = new PrismaClient({
       datasources: {
@@ -88,6 +114,15 @@ class ProductMigrationService {
       },
     });
 
+    const warehouseUrl = process.env.WAREHOUSE_SERVICE_URL || 'http://warehouse-microservice:3201';
+    this.warehouseClient = axios.create({
+      baseURL: warehouseUrl,
+      timeout: 30000,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
     this.stats = {
       totalProducts: 0,
       totalAllegroProducts: 0,
@@ -95,6 +130,8 @@ class ProductMigrationService {
       updated: 0,
       skipped: 0,
       errors: 0,
+      stockSynced: 0,
+      stockSkipped: 0,
       errorDetails: [],
     };
   }
@@ -266,6 +303,111 @@ class ProductMigrationService {
   }
 
   /**
+   * Resolve default warehouse ID for stock synchronization
+   */
+  private async resolveDefaultWarehouseId(): Promise<void> {
+    if (this.skipStock) {
+      return;
+    }
+
+    if (process.env.DEFAULT_WAREHOUSE_ID) {
+      this.defaultWarehouseId = process.env.DEFAULT_WAREHOUSE_ID;
+      return;
+    }
+
+    try {
+      const response = await this.warehouseClient.get('/api/warehouses');
+      const warehouses = response.data?.data || [];
+      if (warehouses.length > 0) {
+        this.defaultWarehouseId = warehouses[0].id;
+        return;
+      }
+      await this.log('warn', 'No active warehouses found; stock sync will be skipped');
+    } catch (error: any) {
+      await this.log('warn', 'Failed to resolve default warehouse; stock sync skipped', {
+        error: error?.message || String(error),
+      });
+    }
+    this.defaultWarehouseId = null;
+  }
+
+  private getProductStock(product: any): number {
+    const offerStock = this.offerStockByProductId.get(product.id)?.stock;
+    const stock = offerStock ?? product.stockQuantity ?? 0;
+    return Number.isFinite(stock) ? Number(stock) : 0;
+  }
+
+  private getAllegroProductStock(allegroProduct: any): number {
+    const offerStock = this.offerStockByAllegroProductId.get(allegroProduct.id)?.stock;
+    const stock = offerStock ?? 0;
+    return Number.isFinite(stock) ? Number(stock) : 0;
+  }
+
+  /**
+   * Sync stock to warehouse-microservice
+   */
+  private async syncWarehouseStock(catalogProductId: string, quantity: number, sku: string, source: string): Promise<void> {
+    if (this.dryRun || this.skipStock) {
+      this.stats.stockSkipped++;
+      return;
+    }
+
+    if (!this.defaultWarehouseId) {
+      this.stats.stockSkipped++;
+      await this.log('warn', 'Default warehouse not resolved; skipping stock sync', {
+        sku,
+        catalogProductId,
+      });
+      return;
+    }
+
+    try {
+      await this.warehouseClient.post('/api/stock/set', {
+        productId: catalogProductId,
+        warehouseId: this.defaultWarehouseId,
+        quantity: Number.isFinite(quantity) ? quantity : 0,
+        reason: `Initial migration from ${source}`,
+      });
+      this.stats.stockSynced++;
+      await this.log('info', 'Stock synced to warehouse-microservice', {
+        sku,
+        catalogProductId,
+        warehouseId: this.defaultWarehouseId,
+        quantity,
+      });
+    } catch (error: any) {
+      this.stats.stockSkipped++;
+      await this.log('warn', 'Failed to sync stock', {
+        sku,
+        catalogProductId,
+        warehouseId: this.defaultWarehouseId,
+        error: error?.message || String(error),
+      });
+    }
+  }
+
+  private recordMapping(record: CatalogMappingRecord): void {
+    this.mappings.push(record);
+  }
+
+  private saveMappings(): void {
+    if (this.dryRun) {
+      console.log(`\nℹ️  Dry-run: mapping not written (target: ${this.mappingPath})`);
+      return;
+    }
+
+    fs.mkdirSync(path.dirname(this.mappingPath), { recursive: true });
+    const payload = {
+      generatedAt: new Date().toISOString(),
+      defaultWarehouseId: this.defaultWarehouseId,
+      total: this.mappings.length,
+      items: this.mappings,
+    };
+    fs.writeFileSync(this.mappingPath, JSON.stringify(payload, null, 2), 'utf-8');
+    console.log(`\n✅ Mapping saved to ${this.mappingPath}`);
+  }
+
+  /**
    * Migrate a single product from Product table
    */
   private async migrateProduct(product: any): Promise<void> {
@@ -279,7 +421,19 @@ class ProductMigrationService {
       const catalogData = this.mapProductToCatalog(product);
 
       // Create or update
-      await this.createOrUpdateProduct(catalogData, existing);
+      const catalogProduct = await this.createOrUpdateProduct(catalogData, existing);
+
+      const quantity = this.getProductStock(product);
+      await this.syncWarehouseStock(catalogProduct.id, quantity, sku, 'allegro Product');
+
+      this.recordMapping({
+        source: 'Product',
+        legacyId: product.id,
+        sku,
+        ean: product.ean,
+        catalogProductId: catalogProduct.id,
+        stockQuantity: quantity,
+      });
 
       if (existing) {
         this.stats.updated++;
@@ -315,7 +469,19 @@ class ProductMigrationService {
       const catalogData = this.mapAllegroProductToCatalog(allegroProduct);
 
       // Create or update
-      await this.createOrUpdateProduct(catalogData, existing);
+      const catalogProduct = await this.createOrUpdateProduct(catalogData, existing);
+
+      const quantity = this.getAllegroProductStock(allegroProduct);
+      await this.syncWarehouseStock(catalogProduct.id, quantity, sku, 'allegro AllegroProduct');
+
+      this.recordMapping({
+        source: 'AllegroProduct',
+        legacyId: allegroProduct.id,
+        sku,
+        ean: allegroProduct.ean,
+        catalogProductId: catalogProduct.id,
+        stockQuantity: quantity,
+      });
 
       if (existing) {
         this.stats.updated++;
@@ -378,16 +544,6 @@ class ProductMigrationService {
     for (let i = 0; i < allegroProducts.length; i++) {
       const allegroProduct = allegroProducts[i];
       console.log(`[${i + 1}/${allegroProducts.length}] Processing AllegroProduct: ${allegroProduct.allegroProductId}`);
-      
-      // Skip if already migrated (check by EAN or SKU)
-      const sku = allegroProduct.ean || `ALLEGRO-${allegroProduct.allegroProductId}`;
-      const existing = await this.findProductInCatalog(sku, allegroProduct.ean);
-      
-      if (existing) {
-        this.stats.skipped++;
-        console.log(`⏭️  Skipped (already exists): ${sku}`);
-        continue;
-      }
 
       await this.migrateAllegroProduct(allegroProduct);
       
@@ -411,6 +567,8 @@ class ProductMigrationService {
     console.log(`🔄 Updated: ${this.stats.updated}`);
     console.log(`⏭️  Skipped: ${this.stats.skipped}`);
     console.log(`❌ Errors: ${this.stats.errors}`);
+    console.log(`📦 Stock synced: ${this.stats.stockSynced}`);
+    console.log(`📦 Stock skipped: ${this.stats.stockSkipped}`);
     console.log('='.repeat(60));
 
     if (this.stats.errorDetails.length > 0) {
@@ -449,6 +607,22 @@ class ProductMigrationService {
         console.warn(`   Error: ${error.message}\n`);
       }
 
+      // Load offer stock snapshots to prefer freshest stock values
+      const offers = await this.prisma.allegroOffer.findMany({
+        select: {
+          productId: true,
+          allegroProductId: true,
+          stockQuantity: true,
+          updatedAt: true,
+        },
+      });
+      const { byProductId, byAllegroProductId } = this.buildOfferStockMaps(offers);
+      this.offerStockByProductId = byProductId;
+      this.offerStockByAllegroProductId = byAllegroProductId;
+
+      // Resolve default warehouse for stock sync
+      await this.resolveDefaultWarehouseId();
+
       // Migrate Product table
       await this.migrateProductsTable();
 
@@ -457,6 +631,9 @@ class ProductMigrationService {
 
       // Print statistics
       this.printStats();
+
+      // Persist mapping for downstream linking
+      this.saveMappings();
 
       console.log('\n✅ Migration completed!');
     } catch (error: any) {
@@ -626,15 +803,25 @@ if (require.main === module) {
   const args = process.argv.slice(2);
   const dryRun = args.includes('--dry-run') || args.includes('-d');
   const exportOnly = args.includes('--export-only') || args.includes('--export');
+  const skipStock = args.includes('--skip-stock');
 
   let exportPath: string | undefined;
   const outputArgIndex = args.findIndex((arg) => arg === '--output' || arg === '-o');
   const inlineOutputArg = args.find((arg) => arg.startsWith('--output='));
+  let mappingPath: string | undefined;
+  const mappingArgIndex = args.findIndex((arg) => arg === '--mapping-output' || arg === '-m');
+  const inlineMappingArg = args.find((arg) => arg.startsWith('--mapping-output='));
 
   if (inlineOutputArg) {
     exportPath = inlineOutputArg.split('=')[1];
   } else if (outputArgIndex !== -1 && args[outputArgIndex + 1]) {
     exportPath = args[outputArgIndex + 1];
+  }
+
+  if (inlineMappingArg) {
+    mappingPath = inlineMappingArg.split('=')[1];
+  } else if (mappingArgIndex !== -1 && args[mappingArgIndex + 1]) {
+    mappingPath = args[mappingArgIndex + 1];
   }
 
   if (dryRun) {
@@ -645,7 +832,11 @@ if (require.main === module) {
     console.log(`📤 Export-only mode enabled. Output file: ${exportPath || 'tmp/migration/allegro-products-normalized.json'}\n`);
   }
 
-  const migration = new ProductMigrationService(dryRun, exportOnly, exportPath);
+  if (skipStock) {
+    console.log('ℹ️  Stock sync disabled via --skip-stock');
+  }
+
+  const migration = new ProductMigrationService(dryRun, exportOnly, exportPath, skipStock, mappingPath);
   migration.run()
     .then(() => {
       if (dryRun) {
