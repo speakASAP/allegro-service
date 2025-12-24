@@ -1722,6 +1722,38 @@ export class OffersService {
             
             const offerData = this.sanitizeOfferDataForPrisma(this.extractOfferData(fullOfferData));
             
+            // Sync stock to warehouse-microservice if catalog product exists and stock is available
+            if (catalogProductId && offerData.stockQuantity > 0) {
+              try {
+                const warehouseId = await this.warehouseClient.getDefaultWarehouseId();
+                if (warehouseId) {
+                  await this.warehouseClient.setStock(
+                    catalogProductId,
+                    warehouseId,
+                    offerData.stockQuantity,
+                    `Stock imported from Allegro offer ${allegroOffer.id}`
+                  );
+                  this.logger.log('[importApprovedOffers] Stock synced to warehouse-microservice', {
+                    catalogProductId,
+                    warehouseId,
+                    stockQuantity: offerData.stockQuantity,
+                  });
+                } else {
+                  this.logger.warn('[importApprovedOffers] No default warehouse ID found, skipping stock sync', {
+                    catalogProductId,
+                    stockQuantity: offerData.stockQuantity,
+                  });
+                }
+              } catch (error: any) {
+                this.logger.warn('[importApprovedOffers] Failed to sync stock to warehouse-microservice', {
+                  error: error.message,
+                  catalogProductId,
+                  stockQuantity: offerData.stockQuantity,
+                });
+                // Continue without stock sync - stock is still stored in offer
+              }
+            }
+            
             // Extract and ensure responsible producer exists
             let responsibleProducerId: string | null = null;
             const productSet = Array.isArray(fullOfferData?.productSet) && fullOfferData.productSet.length > 0
@@ -2084,7 +2116,94 @@ export class OffersService {
             });
 
             const allegroProductId = await this.upsertAllegroProductFromOffer(fullOfferData, oauthToken);
+            
+            // Create or link catalog product if AllegroProduct was created
+            let catalogProductId: string | null = null;
+            if (allegroProductId) {
+              try {
+                const allegroProduct = await this.prisma.allegroProduct.findUnique({
+                  where: { id: allegroProductId },
+                });
+                
+                if (allegroProduct && (allegroProduct.ean || allegroProduct.allegroProductId)) {
+                  const sku = allegroProduct.ean || `ALLEGRO-${allegroProduct.allegroProductId}`;
+                  
+                  // Try to find existing catalog product
+                  let catalogProduct;
+                  try {
+                    catalogProduct = await this.catalogClient.getProductBySku(sku);
+                  } catch {
+                    // Not found by SKU, try by EAN if available
+                    if (allegroProduct.ean) {
+                      const searchResults = await this.catalogClient.searchProducts({ search: allegroProduct.ean });
+                      catalogProduct = searchResults.items?.find((p: any) => p.ean === allegroProduct.ean);
+                    }
+                  }
+                  
+                  if (catalogProduct) {
+                    catalogProductId = catalogProduct.id;
+                    this.logger.log('[importAllOffers] Found existing catalog product', {
+                      catalogProductId,
+                      sku,
+                    });
+                  } else {
+                    // Create new catalog product
+                    catalogProduct = await this.catalogClient.createProduct({
+                      sku,
+                      title: allegroProduct.name || 'Product',
+                      brand: allegroProduct.brand || undefined,
+                      manufacturer: allegroProduct.manufacturerCode || undefined,
+                      ean: allegroProduct.ean || undefined,
+                    });
+                    catalogProductId = catalogProduct.id;
+                    this.logger.log('[importAllOffers] Created new catalog product', {
+                      catalogProductId,
+                      sku,
+                    });
+                  }
+                }
+              } catch (error: any) {
+                this.logger.warn('[importAllOffers] Failed to create/link catalog product', {
+                  error: error.message,
+                  allegroProductId,
+                });
+                // Continue without catalog product link
+              }
+            }
+            
             const offerData = this.sanitizeOfferDataForPrisma(this.extractOfferData(fullOfferData));
+            
+            // Sync stock to warehouse-microservice if catalog product exists and stock is available
+            if (catalogProductId && offerData.stockQuantity > 0) {
+              try {
+                const warehouseId = await this.warehouseClient.getDefaultWarehouseId();
+                if (warehouseId) {
+                  await this.warehouseClient.setStock(
+                    catalogProductId,
+                    warehouseId,
+                    offerData.stockQuantity,
+                    `Stock imported from Allegro offer ${allegroOffer.id}`
+                  );
+                  this.logger.log('[importAllOffers] Stock synced to warehouse-microservice', {
+                    catalogProductId,
+                    warehouseId,
+                    stockQuantity: offerData.stockQuantity,
+                  });
+                } else {
+                  this.logger.warn('[importAllOffers] No default warehouse ID found, skipping stock sync', {
+                    catalogProductId,
+                    stockQuantity: offerData.stockQuantity,
+                  });
+                }
+              } catch (error: any) {
+                this.logger.warn('[importAllOffers] Failed to sync stock to warehouse-microservice', {
+                  error: error.message,
+                  catalogProductId,
+                  stockQuantity: offerData.stockQuantity,
+                });
+                // Continue without stock sync - stock is still stored in offer
+              }
+            }
             
             // Log before saving
             this.logger.log('[importAllOffers] Saving offer to database', {
@@ -2109,6 +2228,7 @@ export class OffersService {
               paymentOptions: offerData.paymentOptions || null,
               rawData: offerData.rawData || null,
               ...(allegroProductId ? { allegroProductId } : {}),
+              ...(catalogProductId ? { catalogProductId } : {}),
               // Multi-account support: track which account owns this offer
               ...(activeAccountId ? { accountId: activeAccountId } : {}),
               syncStatus: 'SYNCED',

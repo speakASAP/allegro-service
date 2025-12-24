@@ -137,5 +137,45 @@ export class WarehouseClientService {
       throw new HttpException(`Failed to decrement stock: ${errorMessage}`, HttpStatus.BAD_REQUEST);
     }
   }
+
+  /**
+   * Get list of warehouses
+   */
+  async getWarehouses(): Promise<any[]> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(`${this.baseUrl}/api/warehouses`)
+      );
+      return response.data.data || [];
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.warn(`Failed to get warehouses: ${errorMessage}`, 'WarehouseClient');
+      return [];
+    }
+  }
+
+  /**
+   * Get default warehouse ID (from env or first active warehouse)
+   */
+  async getDefaultWarehouseId(): Promise<string | null> {
+    // First try environment variable
+    if (process.env.DEFAULT_WAREHOUSE_ID) {
+      return process.env.DEFAULT_WAREHOUSE_ID;
+    }
+
+    // Fallback to first active warehouse
+    try {
+      const warehouses = await this.getWarehouses();
+      if (warehouses.length > 0) {
+        // Return first active warehouse (sorted by priority)
+        return warehouses[0].id;
+      }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.warn(`Failed to get default warehouse: ${errorMessage}`, 'WarehouseClient');
+    }
+
+    return null;
+  }
 }
 
