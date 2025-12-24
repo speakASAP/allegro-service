@@ -1085,14 +1085,16 @@ const OffersPage: React.FC = () => {
       }
 
       // Calculate dynamic timeout based on number of offers
+      // Maximum 24 offers - optimized for this use case
       // Use average of 10 seconds per offer (accounts for producer creation overhead)
       // Producer creation adds 2-5 seconds per offer when producers need to be copied
-      // Minimum 60 seconds, maximum 30 minutes
+      // For 24 offers: 24 × 10s + 60s buffer = 5 minutes
+      const maxOffers = 24;
       const estimatedTimePerOffer = 10000; // 10 seconds per offer (accounts for producer creation)
       const bufferTime = 60000; // 60 seconds buffer for account lookups and API delays
       const calculatedTimeout = Math.min(
         Math.max(allOfferIds.length * estimatedTimePerOffer + bufferTime, 120000), // Min 2 minutes
-        1800000 // 30 minutes max
+        maxOffers * estimatedTimePerOffer + bufferTime // Max based on 24 offers = 5 minutes
       );
 
       // Clone offers to active account
