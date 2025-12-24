@@ -6,6 +6,8 @@ This script migrates all products from allegro-service database to catalog-micro
 
 1. **Migrates Product table** - All products from the deprecated `Product` table
 2. **Migrates AllegroProduct table** - All products from the `AllegroProduct` table (if not already migrated)
+3. **Syncs stock to warehouse-microservice** - Uses default warehouse (env or first active) to set quantities during migration
+4. **Writes mapping file** - Saves SKU/EAN → `catalogProductId` mappings to `tmp/migration/allegro-catalog-mapping.json` for downstream linking/backfill
 
 ## Features
 
@@ -33,6 +35,7 @@ npm run verify:migration
 ```
 
 This will check:
+
 - ✅ Database connection
 - ✅ Catalog-microservice availability
 - ✅ Environment variables
@@ -53,6 +56,7 @@ ts-node scripts/migrate-products-to-catalog.ts --dry-run
 ```
 
 This will show you:
+
 - What products would be migrated
 - What would be created vs updated
 - Any errors that would occur
@@ -70,6 +74,16 @@ Or:
 
 ```bash
 ts-node scripts/migrate-products-to-catalog.ts
+```
+
+Optional flags:
+
+```bash
+# Skip stock synchronization (catalog only)
+ts-node scripts/migrate-products-to-catalog.ts --skip-stock
+
+# Custom mapping output path
+ts-node scripts/migrate-products-to-catalog.ts --mapping-output tmp/migration/custom-mapping.json
 ```
 
 ### Alternative: Direct execution
@@ -123,11 +137,13 @@ The script provides:
    - Products updated
    - Products skipped (already exist)
    - Errors encountered
+   - Stock sync summary
 3. **Error details** - List of all errors with product IDs and error messages
+4. **Mapping file** - `tmp/migration/allegro-catalog-mapping.json` with SKU/EAN → `catalogProductId` and stock used
 
 ## Example Output
 
-```
+```text
 🚀 Starting product migration to catalog-microservice...
 
 Catalog Service URL: http://catalog-microservice:3200
@@ -198,17 +214,21 @@ Total AllegroProducts: 50
 ### Recommended Workflow
 
 1. **Verify prerequisites**:
+
    ```bash
    npm run verify:migration
    ```
 
 2. **Run dry-run**:
+
    ```bash
    npm run migrate:products:dry-run
    ```
+
    Review the output to ensure everything looks correct.
 
 3. **Run actual migration**:
+
    ```bash
    npm run migrate:products
    ```
@@ -235,4 +255,3 @@ If issues occur:
 1. Products in catalog-microservice can be deleted manually
 2. Original products remain in allegro-service database
 3. Re-run the migration script to re-migrate
-

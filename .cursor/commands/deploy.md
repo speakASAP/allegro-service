@@ -12,10 +12,10 @@ Start commands: cat .env && ssh statex "cd nginx-microservice ls -la scripts"
 ssh statex "cd /home/statex/allegro-service && git pull origin master"
 
 # 2. Deploy service
-ssh statex "cd /home/statex/nginx-microservice && ./scripts/blue-green/deploy-smart allegro"
+ssh statex "cd /home/statex/nginx-microservice && ./scripts/blue-green/deploy-smart allegro-service"
 
 # 3. Register domain (if not exists)
-ssh statex "cd /home/statex/nginx-microservice && ./scripts/add-domain.sh allegro.statex.cz allegro 3411 admin@statex.cz"
+ssh statex "cd /home/statex/nginx-microservice && ./scripts/add-domain.sh allegro.statex.cz allegro-service 3410 admin@statex.cz"
 
 # 4. Configure nginx for frontend service
 
@@ -26,13 +26,13 @@ ssh statex "cd /home/statex/nginx-microservice && mkdir -p certificates/allegro.
 ssh statex "docker exec nginx-microservice nginx -t && docker exec nginx-microservice nginx -s reload"
 
 # 7. Verify deployment
-ssh statex "curl -s https://allegro.statex.cz/health && docker run --rm --network nginx-network alpine/curl:latest curl -s http://allegro:3367/health"
+ssh statex "curl -s https://allegro.statex.cz/health && docker run --rm --network nginx-network alpine/curl:latest curl -s http://allegro-service-frontend-green:3410/health"
 ```
 
 ## Success Criteria
 
 - Service accessible: `https://allegro.statex.cz/health` returns success
-- Internal access: `http://allegro:3367/health` returns success
+- Internal access: `http://allegro-service-frontend-green:3410/health` returns success
 - No errors in logs: `docker compose logs allegro-service | grep -i error`
 
 ## Notes
@@ -40,5 +40,5 @@ ssh statex "curl -s https://allegro.statex.cz/health && docker run --rm --networ
 - API Gateway Port: 3411 (configured via `API_GATEWAY_PORT` in .env)
 - Frontend Port: 3410 (configured via `ALLEGRO_FRONTEND_SERVICE_PORT` in .env)
 - External URL: `https://allegro.statex.cz`
-- Service registry: `/home/statex/nginx-microservice/service-registry/allegro.json`
+- Service registry: `/home/statex/nginx-microservice/service-registry/allegro-service.json`
 - Environment: `.env` file in project root
