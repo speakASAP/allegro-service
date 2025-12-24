@@ -2230,7 +2230,7 @@ export class OffersService {
       offer.status || '',
       offer.publicationStatus || '',
       offer.categoryId || '',
-      offer.catalogProductId || '',
+      (offer as any).catalogProductId || '',
       '', // Product name - not available from Prisma, would need catalog client
       offer.createdAt.toISOString(),
       offer.lastSyncedAt ? offer.lastSyncedAt.toISOString() : '',
@@ -5938,11 +5938,11 @@ export class OffersService {
             syncStatus: 'SYNCED',
             syncSource: 'CLONED',
             lastSyncedAt: new Date(),
-            catalogProductId: sourceOffer.catalogProductId,
+            catalogProductId: (sourceOffer as any).catalogProductId || null,
             allegroProductId: sourceOffer.allegroProductId,
             accountId: targetAccountId,
             clonedFromId: sourceOfferId,
-          },
+          } as any,
         });
 
         const offerDuration = Date.now() - offerStartTime;
