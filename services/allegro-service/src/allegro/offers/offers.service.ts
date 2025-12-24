@@ -5338,7 +5338,15 @@ export class OffersService {
       newAllegroOfferId?: string;
       status: 'success' | 'failed';
       error?: string;
+      durationMs?: number;
     }>;
+    timing: {
+      totalDurationMs: number;
+      averagePerOfferMs: number;
+      minPerOfferMs: number;
+      maxPerOfferMs: number;
+      offersPerSecond: number;
+    };
   }> {
     const startTime = Date.now();
     const finalRequestId = requestId || `clone-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -5396,9 +5404,13 @@ export class OffersService {
       newAllegroOfferId?: string;
       status: 'success' | 'failed';
       error?: string;
+      durationMs?: number;
     }> = [];
     let successful = 0;
     let failed = 0;
+
+    // Track timing per offer for statistics
+    const offerDurations: number[] = [];
 
     // Cache for producer ID mapping: sourceProducerId -> targetProducerId
     const producerIdMap: Map<string, string> = new Map();
@@ -5423,10 +5435,13 @@ export class OffersService {
         });
 
         if (!sourceOffer) {
+          const offerDuration = Date.now() - offerStartTime;
+          offerDurations.push(offerDuration);
           results.push({
             sourceOfferId,
             status: 'failed',
             error: 'Source offer not found',
+            durationMs: offerDuration,
           });
           failed++;
           continue;
@@ -5671,35 +5686,51 @@ export class OffersService {
           },
         });
 
+        const offerDuration = Date.now() - offerStartTime;
+        offerDurations.push(offerDuration);
+
         results.push({
           sourceOfferId,
           newOfferId: newOffer.id,
           newAllegroOfferId,
           status: 'success',
+          durationMs: offerDuration,
         });
         successful++;
+
+        // Calculate running average for logging
+        const processedCount = i + 1;
+        const runningAverage = offerDurations.reduce((sum, d) => sum + d, 0) / processedCount;
+        const remainingOffers = offerIds.length - processedCount;
+        const estimatedTimeRemaining = Math.round((runningAverage * remainingOffers) / 1000); // in seconds
 
         this.logger.log(`[${finalRequestId}] [cloneOffersToAccount] Offer cloned successfully`, {
           sourceOfferId,
           newOfferId: newOffer.id,
           newAllegroOfferId,
-          duration: `${Date.now() - offerStartTime}ms`,
+          duration: `${offerDuration}ms`,
+          progress: `${processedCount}/${offerIds.length}`,
+          runningAverageMs: Math.round(runningAverage),
+          estimatedTimeRemainingSeconds: estimatedTimeRemaining,
         });
       } catch (error: any) {
         const errorMessage = this.extractErrorMessage(error);
+        const offerDuration = Date.now() - offerStartTime;
+        offerDurations.push(offerDuration);
 
         this.logger.error(`[${finalRequestId}] [cloneOffersToAccount] Failed to clone offer`, {
           sourceOfferId,
           error: errorMessage,
           errorCode: error.code,
           errorStatus: error.response?.status,
-          duration: `${Date.now() - offerStartTime}ms`,
+          duration: `${offerDuration}ms`,
         });
 
         results.push({
           sourceOfferId,
           status: 'failed',
           error: errorMessage,
+          durationMs: offerDuration,
         });
         failed++;
       }
@@ -5712,6 +5743,22 @@ export class OffersService {
 
     const totalDuration = Date.now() - startTime;
 
+    // Calculate timing statistics
+    const averagePerOffer = offerDurations.length > 0
+      ? offerDurations.reduce((sum, d) => sum + d, 0) / offerDurations.length
+      : 0;
+    const minPerOffer = offerDurations.length > 0 ? Math.min(...offerDurations) : 0;
+    const maxPerOffer = offerDurations.length > 0 ? Math.max(...offerDurations) : 0;
+    const offersPerSecond = totalDuration > 0 ? (successful / (totalDuration / 1000)) : 0;
+
+    const timing = {
+      totalDurationMs: totalDuration,
+      averagePerOfferMs: Math.round(averagePerOffer),
+      minPerOfferMs: minPerOffer,
+      maxPerOfferMs: maxPerOffer,
+      offersPerSecond: Math.round(offersPerSecond * 100) / 100, // Round to 2 decimal places
+    };
+
     this.logger.log(`[${finalRequestId}] [cloneOffersToAccount] ========== CLONE OPERATION COMPLETE ==========`, {
       userId,
       targetAccountId,
@@ -5720,6 +5767,7 @@ export class OffersService {
       successful,
       failed,
       duration: `${totalDuration}ms`,
+      timing,
     });
 
     return {
@@ -5727,6 +5775,7 @@ export class OffersService {
       successful,
       failed,
       results,
+      timing,
     };
   }
 
