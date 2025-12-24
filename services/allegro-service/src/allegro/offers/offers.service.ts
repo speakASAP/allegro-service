@@ -5491,32 +5491,13 @@ export class OffersService {
 
           // Handle productSet separately - need to strip read-only fields and handle responsibleProducer
           if (rawData.productSet && Array.isArray(rawData.productSet)) {
-            // Get source account token for fetching producer details
-            // If offer has no accountId, try to find another account to use
-            let sourceAccountId = sourceOffer.accountId;
-            let sourceOAuthToken: string | null = null;
-
-            if (!sourceAccountId) {
-              // Find any account other than the target to use as source
-              const otherAccount = await this.prisma.allegroAccount.findFirst({
-                where: {
-                  userId: userId,
-                  id: { not: targetAccountId },
-                },
-              });
-              if (otherAccount) {
-                sourceAccountId = otherAccount.id;
-                this.logger.log(`[${finalRequestId}] Using fallback source account: ${otherAccount.name}`);
-              }
-            }
-
-            if (sourceAccountId) {
-              try {
-                sourceOAuthToken = await this.getUserOAuthToken(userId, sourceAccountId);
-              } catch (e) {
-                this.logger.warn(`[${finalRequestId}] Could not get source account token, will try to use producer as-is`);
-              }
-            }
+            // Get all user accounts to try fetching producer from (excluding target)
+            const userAccounts = await this.prisma.allegroAccount.findMany({
+              where: {
+                userId: userId,
+                id: { not: targetAccountId },
+              },
+            });
 
             // Get target account's existing producers
             let targetProducers: any[] = [];
@@ -5535,7 +5516,7 @@ export class OffersService {
               // Remove responsiblePerson (account-specific, optional)
               delete cleanItem.responsiblePerson;
 
-              // Handle responsibleProducer - try to copy if not exists on target
+              // Handle responsibleProducer - ALWAYS try to create in target account if not exists
               if (cleanItem.responsibleProducer?.id) {
                 const producerId = cleanItem.responsibleProducer.id;
                 console.log(`[${finalRequestId}] Processing producer ${producerId}`);
@@ -5547,18 +5528,59 @@ export class OffersService {
                 } else {
                   const existsOnTarget = targetProducers.some((p: any) => p.id === producerId);
 
-                  console.log(`[${finalRequestId}] Producer ${producerId} existsOnTarget=${existsOnTarget}, hasSourceToken=${!!sourceOAuthToken}`);
+                  if (existsOnTarget) {
+                    // Producer already exists on target with same ID
+                    producerIdMap.set(producerId, producerId);
+                    console.log(`[${finalRequestId}] Producer ${producerId} already exists on target account`);
+                  } else {
+                    // Producer doesn't exist on target - try to get it from any source account and create it
+                    let producerDetails: any = null;
+                    let sourceAccountName = 'unknown';
 
-                  if (!existsOnTarget && sourceOAuthToken) {
-                    // Try to get producer details and create on target account
-                    try {
-                      console.log(`[${finalRequestId}] Producer ${producerId} not on target, attempting to copy`);
-                      const producerDetails = await this.allegroApi.getResponsibleProducerByIdWithOAuthToken(
-                        sourceOAuthToken,
-                        producerId,
-                      );
+                    // Try to get producer from source account first (if offer has accountId)
+                    if (sourceOffer.accountId) {
+                      try {
+                        const sourceToken = await this.getUserOAuthToken(userId, sourceOffer.accountId);
+                        producerDetails = await this.allegroApi.getResponsibleProducerByIdWithOAuthToken(
+                          sourceToken,
+                          producerId,
+                        );
+                        if (producerDetails) {
+                          const sourceAccount = await this.prisma.allegroAccount.findUnique({
+                            where: { id: sourceOffer.accountId },
+                          });
+                          sourceAccountName = sourceAccount?.name || sourceOffer.accountId;
+                        }
+                      } catch (e: any) {
+                        this.logger.warn(`[${finalRequestId}] Could not get producer from source account ${sourceOffer.accountId}: ${e.message}`);
+                      }
+                    }
 
-                      if (producerDetails) {
+                    // If not found, try all other user accounts
+                    if (!producerDetails && userAccounts.length > 0) {
+                      for (const account of userAccounts) {
+                        try {
+                          const accountToken = await this.getUserOAuthToken(userId, account.id);
+                          producerDetails = await this.allegroApi.getResponsibleProducerByIdWithOAuthToken(
+                            accountToken,
+                            producerId,
+                          );
+                          if (producerDetails) {
+                            sourceAccountName = account.name;
+                            this.logger.log(`[${finalRequestId}] Found producer ${producerId} in account ${account.name}`);
+                            break;
+                          }
+                        } catch (e: any) {
+                          // Continue to next account
+                          continue;
+                        }
+                      }
+                    }
+
+                    // If we found producer details, create it on target account
+                    if (producerDetails) {
+                      try {
+                        console.log(`[${finalRequestId}] Creating producer ${producerId} on target account (from ${sourceAccountName})`);
                         // Create producer on target account (remove ID to create new)
                         const { id, ...producerData } = producerDetails;
                         const newProducer = await this.allegroApi.createResponsibleProducerWithOAuthToken(
@@ -5568,27 +5590,21 @@ export class OffersService {
                         this.logger.log(`[${finalRequestId}] Created producer on target account`, {
                           oldId: producerId,
                           newId: newProducer.id,
+                          sourceAccount: sourceAccountName,
                         });
                         // Cache the mapping and update the cleanItem
                         producerIdMap.set(producerId, newProducer.id);
                         cleanItem.responsibleProducer = { id: newProducer.id };
-                      } else {
-                        // Producer not found in source account, remove it
-                        this.logger.warn(`[${finalRequestId}] Producer ${producerId} not found in source account, removing from productSet item`);
+                      } catch (createError: any) {
+                        this.logger.error(`[${finalRequestId}] Failed to create producer ${producerId} on target account: ${createError.message}`);
+                        // Remove producer field if we can't create it
                         delete cleanItem.responsibleProducer;
                       }
-                    } catch (copyError: any) {
-                      this.logger.warn(`[${finalRequestId}] Could not copy producer ${producerId}: ${copyError.message}. Removing from productSet item.`);
-                      // Remove producer field if we can't copy it - don't keep original ID that doesn't exist on target
+                    } else {
+                      // Producer not found in any account - remove it
+                      this.logger.warn(`[${finalRequestId}] Producer ${producerId} not found in any user account, removing from productSet item`);
                       delete cleanItem.responsibleProducer;
                     }
-                  } else if (!existsOnTarget && !sourceOAuthToken) {
-                    // Producer doesn't exist on target and we don't have source token to copy it
-                    this.logger.warn(`[${finalRequestId}] Producer ${producerId} not on target and no source token available. Removing from productSet item.`);
-                    delete cleanItem.responsibleProducer;
-                  } else if (existsOnTarget) {
-                    // Producer already exists on target with same ID
-                    producerIdMap.set(producerId, producerId);
                   }
                 }
               }
