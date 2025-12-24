@@ -54,6 +54,10 @@ async function cleanDatabase() {
     const supplierProductsDeleted = await prisma.supplierProduct.deleteMany();
     console.log(`  ✅ Deleted ${supplierProductsDeleted.count} supplier products\n`);
 
+    console.log('Deleting ResponsibleProducers...');
+    const producersDeleted = await prisma.responsibleProducer.deleteMany();
+    console.log(`  ✅ Deleted ${producersDeleted.count} responsible producers\n`);
+
     console.log('Deleting WebhookEvents...');
     const webhooksDeleted = await prisma.webhookEvent.deleteMany();
     console.log(`  ✅ Deleted ${webhooksDeleted.count} webhook events\n`);
