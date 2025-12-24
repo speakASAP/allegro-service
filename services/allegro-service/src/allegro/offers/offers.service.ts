@@ -210,13 +210,13 @@ export class OffersService {
         offer.stockQuantity = totalAvailable;
         this.logger.log('[getOffer] Fetched product from catalog-microservice', {
           offerId: id,
-          productId: offer.productId,
+          catalogProductId: offer.catalogProductId,
           stockQuantity: totalAvailable,
         });
       } catch (error: any) {
         this.logger.warn(`[getOffer] Failed to fetch product from catalog: ${error.message}`, {
           offerId: id,
-          productId: offer.productId,
+          catalogProductId: offer.catalogProductId,
         });
         offer.product = null;
         // Keep existing stockQuantity if available
@@ -231,7 +231,7 @@ export class OffersService {
         allegroOfferId: offer.allegroOfferId,
         hasRawData: !!offer.rawData,
         hasProduct: !!offer.product,
-        hasProductId: !!offer.productId,
+        hasCatalogProductId: !!offer.catalogProductId,
       });
     }
 

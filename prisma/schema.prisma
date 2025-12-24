@@ -14,84 +14,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// DEPRECATED: Products are now managed by catalog-microservice
-// This model is kept for backward compatibility during migration
-// TODO: Remove after full migration to catalog-microservice
-model Product {
-  id               String  @id @default(uuid()) @db.Uuid
-  code             String  @unique @db.VarChar(255) // BizBox product code
-  externalId       String? @db.VarChar(255) // External supplier ID
-  name             String  @db.VarChar(500)
-  nameUrl          String? @db.VarChar(500) // URL-friendly name
-  description      String? @db.Text
-  shortDescription String? @db.Text
-  brand            String? @db.VarChar(255)
-  manufacturer     String? @db.VarChar(255)
-  supplier         String? @db.VarChar(255)
-  ean              String? @db.VarChar(50)
-  manufacturerCode String? @db.VarChar(255)
-
-  // Pricing
-  purchasePrice           Decimal? @db.Decimal(10, 2)
-  purchasePriceTaxRate    Decimal? @db.Decimal(5, 2)
-  purchasePriceGrossPrice Decimal? @db.Decimal(10, 2)
-  purchasePriceCurrency   String?  @db.VarChar(10)
-  sellingPrice            Decimal? @db.Decimal(10, 2)
-  sellingPriceCurrency    String?  @default("CZK") @db.VarChar(10)
-
-  // Physical attributes
-  weight    Decimal? @db.Decimal(10, 3)
-  netWeight Decimal? @db.Decimal(10, 3)
-  volume    Decimal? @db.Decimal(10, 3)
-  height    Decimal? @db.Decimal(10, 2)
-  width     Decimal? @db.Decimal(10, 2)
-  depth     Decimal? @db.Decimal(10, 2)
-  length    Decimal? @db.Decimal(10, 2)
-  material  String?  @db.VarChar(255)
-  origin    String?  @db.VarChar(100)
-
-  // Stock management
-  stockQuantity                Int     @default(0)
-  minimumRequiredStockQuantity Int?    @default(0)
-  trackInventory               Boolean @default(true)
-  availability                 String? @db.VarChar(50)
-
-  // Images
-  mainImageUrl  String? @db.VarChar(1000)
-  imageUrls     Json? // Array of image URLs
-  galleryImages Json? // Array of gallery image URLs
-
-  // SEO
-  seoTitle       String? @db.VarChar(255)
-  seoDescription String? @db.Text
-  seoKeywords    String? @db.VarChar(500)
-
-  // Status
-  active     Boolean   @default(true)
-  archived   Boolean   @default(false)
-  validFrom  DateTime?
-  validUntil DateTime?
-
-  // Metadata
-  tags       Json? // Array of tags
-  attributes Json? // Custom attributes
-  categories Json? // Category IDs
-
-  // Timestamps
-  createdAt DateTime @default(now()) @db.Timestamp(6)
-  updatedAt DateTime @updatedAt @db.Timestamp(6)
-
-  // Relations
-  // NOTE: Relations removed - Product model is deprecated
-  // allegroOffers, allegroOrders, supplierProducts, importJobs now reference catalog-microservice
-  supplierProducts SupplierProduct[]
-  importJobs       ImportJob[]
-
-  @@index([code])
-  @@index([active])
-  @@index([ean])
-  @@map("products")
-}
+// Product model removed - all products are now managed by catalog-microservice
+// Use catalogProductId (UUID) to reference products from catalog-microservice
 
 // Allegro products (raw productSet data)
 model AllegroProduct {
@@ -135,13 +59,13 @@ model AllegroProductParameter {
   @@map("allegro_product_parameters")
 }
 
-// Allegro offers mapped to products
+// Allegro offers mapped to catalog-microservice products
 model AllegroOffer {
-  id               String  @id @default(uuid()) @db.Uuid
-  productId        String? @db.Uuid
-  allegroProductId String? @db.Uuid
-  allegroOfferId   String  @unique @db.VarChar(100) // Allegro's offer ID
-  allegroListingId String? @db.VarChar(100) // Allegro's listing ID
+  id                String  @id @default(uuid()) @db.Uuid
+  catalogProductId  String? @db.Uuid // Product ID from catalog-microservice (no FK constraint)
+  allegroProductId  String? @db.Uuid
+  allegroOfferId    String  @unique @db.VarChar(100) // Allegro's offer ID
+  allegroListingId  String? @db.VarChar(100) // Allegro's listing ID
 
   // Offer details
   title         String  @db.VarChar(500)
@@ -186,8 +110,7 @@ model AllegroOffer {
   updatedAt DateTime @updatedAt @db.Timestamp(6)
 
   // Relations
-  // NOTE: productId is now a reference to catalog-microservice product ID (no foreign key)
-  // product  Product?       @relation(fields: [productId], references: [id], onDelete: SetNull) // DEPRECATED: Use catalog-microservice
+  // NOTE: catalogProductId references catalog-microservice product ID (no foreign key constraint)
   orders   AllegroOrder[]
   syncJobs SyncJob[]
 
@@ -195,7 +118,7 @@ model AllegroOffer {
   account        AllegroAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
 
   @@index([allegroOfferId])
-  @@index([productId])
+  @@index([catalogProductId])
   @@index([allegroProductId])
   @@index([status])
   @@index([syncStatus])
@@ -208,10 +131,10 @@ model AllegroOffer {
 
 // Orders from Allegro
 model AllegroOrder {
-  id             String  @id @default(uuid()) @db.Uuid
-  allegroOrderId String  @unique @db.VarChar(100) // Allegro's order ID
-  allegroOfferId String  @db.Uuid
-  productId      String? @db.Uuid
+  id              String  @id @default(uuid()) @db.Uuid
+  allegroOrderId  String  @unique @db.VarChar(100) // Allegro's order ID
+  allegroOfferId  String  @db.Uuid
+  catalogProductId String? @db.Uuid // Product ID from catalog-microservice (no FK constraint)
 
   // Order details
   buyerId    String? @db.VarChar(100)
@@ -245,11 +168,11 @@ model AllegroOrder {
 
   // Relations
   offer   AllegroOffer @relation(fields: [allegroOfferId], references: [id])
-  // NOTE: productId is now a reference to catalog-microservice product ID (no foreign key)
-  // product Product?     @relation(fields: [productId], references: [id], onDelete: SetNull) // DEPRECATED: Use catalog-microservice
+  // NOTE: catalogProductId references catalog-microservice product ID (no foreign key constraint)
 
   @@index([allegroOrderId])
   @@index([allegroOfferId])
+  @@index([catalogProductId])
   @@index([status])
   @@index([orderDate])
   @@map("allegro_orders")
@@ -317,16 +240,14 @@ model ImportJob {
   // Metadata
   source   String @default("BIZBOX") @db.VarChar(50) // BIZBOX, MANUAL, API
   metadata Json? // Additional import metadata
-
-  // Relations
-  productId String?  @db.Uuid
-  product   Product? @relation(fields: [productId], references: [id])
+  catalogProductId String? @db.Uuid // Product ID from catalog-microservice (no FK constraint)
 
   createdAt DateTime @default(now()) @db.Timestamp(6)
   updatedAt DateTime @updatedAt @db.Timestamp(6)
 
   @@index([status])
   @@index([source])
+  @@index([catalogProductId])
   @@index([createdAt])
   @@map("import_jobs")
 }
@@ -357,12 +278,13 @@ model WebhookEvent {
 }
 
 // Supplier products (placeholder for future integration)
+// References catalog-microservice products via catalogProductId
 model SupplierProduct {
-  id           String  @id @default(uuid()) @db.Uuid
-  productId    String  @db.Uuid
-  supplierId   String  @db.VarChar(100)
-  supplierCode String  @db.VarChar(255)
-  supplierName String? @db.VarChar(255)
+  id              String  @id @default(uuid()) @db.Uuid
+  catalogProductId String @db.Uuid // Product ID from catalog-microservice (no FK constraint)
+  supplierId      String  @db.VarChar(100)
+  supplierCode    String  @db.VarChar(255)
+  supplierName    String? @db.VarChar(255)
 
   // Supplier-specific data
   supplierPrice    Decimal? @db.Decimal(10, 2)
@@ -383,11 +305,8 @@ model SupplierProduct {
   createdAt DateTime @default(now()) @db.Timestamp(6)
   updatedAt DateTime @updatedAt @db.Timestamp(6)
 
-  // Relations
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
   @@unique([supplierId, supplierCode])
-  @@index([productId])
+  @@index([catalogProductId])
   @@index([supplierId])
   @@index([syncStatus])
   @@map("supplier_products")
