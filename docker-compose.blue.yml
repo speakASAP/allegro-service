@@ -100,7 +100,7 @@ services:
       - ALLEGRO_API_SANDBOX_URL=${ALLEGRO_API_SANDBOX_URL}
       - ALLEGRO_USE_SANDBOX=${ALLEGRO_USE_SANDBOX:-false}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-      - CATALOG_SERVICE_URL=${CATALOG_SERVICE_URL:-http://catalog-microservice:3200}
+      - CATALOG_SERVICE_URL=${CATALOG_SERVICE_URL:-http://catalog:3200}
       - WAREHOUSE_SERVICE_URL=${WAREHOUSE_SERVICE_URL:-http://warehouse-microservice:3201}
       - ORDER_SERVICE_URL=${ORDER_SERVICE_URL:-http://orders-microservice:3203}
       - RABBITMQ_URL=${RABBITMQ_URL:-amqp://guest:guest@statex_rabbitmq:5672}
