@@ -5572,11 +5572,20 @@ export class OffersService {
                         // Cache the mapping and update the cleanItem
                         producerIdMap.set(producerId, newProducer.id);
                         cleanItem.responsibleProducer = { id: newProducer.id };
+                      } else {
+                        // Producer not found in source account, remove it
+                        this.logger.warn(`[${finalRequestId}] Producer ${producerId} not found in source account, removing from productSet item`);
+                        delete cleanItem.responsibleProducer;
                       }
                     } catch (copyError: any) {
-                      this.logger.warn(`[${finalRequestId}] Could not copy producer: ${copyError.message}`);
-                      // Keep original producer ID - will fail if not exists
+                      this.logger.warn(`[${finalRequestId}] Could not copy producer ${producerId}: ${copyError.message}. Removing from productSet item.`);
+                      // Remove producer field if we can't copy it - don't keep original ID that doesn't exist on target
+                      delete cleanItem.responsibleProducer;
                     }
+                  } else if (!existsOnTarget && !sourceOAuthToken) {
+                    // Producer doesn't exist on target and we don't have source token to copy it
+                    this.logger.warn(`[${finalRequestId}] Producer ${producerId} not on target and no source token available. Removing from productSet item.`);
+                    delete cleanItem.responsibleProducer;
                   } else if (existsOnTarget) {
                     // Producer already exists on target with same ID
                     producerIdMap.set(producerId, producerId);
