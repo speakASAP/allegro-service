@@ -204,7 +204,14 @@ const OffersPage: React.FC = () => {
     total: number;
     successful: number;
     failed: number;
-    results: Array<{ sourceOfferId: string; newOfferId?: string; newAllegroOfferId?: string; status: 'success' | 'failed'; error?: string }>;
+    results: Array<{ sourceOfferId: string; newOfferId?: string; newAllegroOfferId?: string; status: 'success' | 'failed'; error?: string; durationMs?: number }>;
+    timing?: {
+      totalDurationMs: number;
+      averagePerOfferMs: number;
+      minPerOfferMs: number;
+      maxPerOfferMs: number;
+      offersPerSecond: number;
+    };
   } | null>(null);
   const [showCloneResultsModal, setShowCloneResultsModal] = useState(false);
 
@@ -1077,12 +1084,22 @@ const OffersPage: React.FC = () => {
         }
       }
 
+      // Calculate dynamic timeout based on number of offers
+      // Use average of 5 seconds per offer (conservative estimate) + 30 seconds buffer
+      // Minimum 60 seconds, maximum 30 minutes
+      const estimatedTimePerOffer = 5000; // 5 seconds per offer (conservative)
+      const bufferTime = 30000; // 30 seconds buffer
+      const calculatedTimeout = Math.min(
+        Math.max(allOfferIds.length * estimatedTimePerOffer + bufferTime, 60000),
+        1800000 // 30 minutes max
+      );
+
       // Clone offers to active account
       const response = await api.post('/allegro/offers/clone-to-account', {
         offerIds: allOfferIds,
         targetAccountId: activeAccount.id,
       }, {
-        timeout: 600000, // 10 minutes for cloning (can take long for many offers)
+        timeout: calculatedTimeout, // Dynamic timeout based on number of offers
       });
 
       if (response.data.success) {
@@ -2175,6 +2192,31 @@ const OffersPage: React.FC = () => {
                   </div>
                 )}
               </div>
+              {cloneResults.timing && (
+                <div className="mt-4 pt-4 border-t border-gray-300">
+                  <div className="text-sm font-semibold mb-2">Performance Statistics</div>
+                  <div className="space-y-1 text-sm">
+                    <div>
+                      <span className="font-medium">Total Duration:</span>{' '}
+                      {Math.round(cloneResults.timing.totalDurationMs / 1000)}s
+                      {' '}({Math.round(cloneResults.timing.totalDurationMs / 60000 * 10) / 10} min)
+                    </div>
+                    <div>
+                      <span className="font-medium">Average per Offer:</span>{' '}
+                      {Math.round(cloneResults.timing.averagePerOfferMs)}ms
+                      {' '}({Math.round(cloneResults.timing.averagePerOfferMs / 1000 * 10) / 10}s)
+                    </div>
+                    <div>
+                      <span className="font-medium">Speed:</span>{' '}
+                      {cloneResults.timing.offersPerSecond} offers/second
+                    </div>
+                    <div className="text-xs text-gray-600 mt-2">
+                      <span className="font-medium">Min:</span> {cloneResults.timing.minPerOfferMs}ms,{' '}
+                      <span className="font-medium">Max:</span> {cloneResults.timing.maxPerOfferMs}ms
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {cloneResults.failed > 0 && (
