@@ -634,15 +634,12 @@ export class ProductsService {
     let errors = 0;
 
     try {
-      // Get all AllegroProducts
-      const allegroProducts = await prisma.allegroProduct.findMany({
-        where: {
-          OR: [
-            { ean: { not: null } },
-            { allegroProductId: { not: null } },
-          ],
-        },
-      });
+      // Get all AllegroProducts that have either EAN or allegroProductId
+      // Filter in JavaScript since Prisma's not null syntax varies by version
+      const allProducts = await prisma.allegroProduct.findMany();
+      const allegroProducts = allProducts.filter(
+        (p) => p.ean !== null || p.allegroProductId !== null
+      );
 
       this.logger.log(`[${requestId}] [syncAllegroProductsToCatalog] Found ${allegroProducts.length} AllegroProducts to sync`);
 
