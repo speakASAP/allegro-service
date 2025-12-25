@@ -471,13 +471,13 @@ export class GatewayService implements OnModuleInit {
     // Use longer timeout for bulk operations and validation operations
     // publish-all can take 5+ minutes for many offers (30 seconds per offer * 29 offers = ~14 minutes worst case)
     // Set to 10 minutes (600000ms) to be safe
-    // Import all offers can take 10+ minutes (fetching all offers, processing each with API calls, DB operations)
-    // Set to 15 minutes (900000ms) to be safe for large imports
+    // Import all offers: ~4-7 seconds per offer (API calls, DB operations, catalog sync)
+    // For 27 offers: ~2-3 minutes + overhead = 5 minutes (300000ms) is sufficient
     // Validation operations call external APIs (Allegro) which can take 30-60 seconds
     // Set to 90 seconds (90000ms) to be safe for validation
     // Regular operations (like account activation, settings updates) should be fast - use default timeout (typically 30s)
     // Only increase timeout for operations that are known to be slow
-    const timeout = isImportAllOffers ? 900000 : (isPublishAll ? 600000 : (isBulkOperation ? 120000 : (isValidationOperation ? 90000 : defaultTimeout)));
+    const timeout = isImportAllOffers ? 300000 : (isPublishAll ? 600000 : (isBulkOperation ? 120000 : (isValidationOperation ? 90000 : defaultTimeout)));
     
     // Determine if URL is HTTPS or HTTP to use correct agent
     const isHttps = url.startsWith('https://');
