@@ -90,7 +90,11 @@ const ImportJobsPage: React.FC = () => {
   const loadJobs = async () => {
     setLoadingJobs(true);
     try {
-      const response = await api.get('/import/jobs');
+      // Use longer timeout for import jobs list (3 minutes = 180000ms) to match backend timeout
+      // This can be slow if there are many import jobs in the database
+      const response = await api.get('/import/jobs', {
+        timeout: 180000, // 3 minutes to match gateway and nginx timeout
+      });
       if (response.data.success) {
         setJobs(response.data.data.items || []);
         setError(null);
@@ -123,10 +127,10 @@ const ImportJobsPage: React.FC = () => {
     setRequiresOAuth(false);
 
     try {
-      // Use longer timeout for import operation (15 minutes = 900000ms) to match gateway timeout
-      // This operation can take a long time as it fetches all offers, processes each one with API calls, DB operations, catalog sync
+      // Use longer timeout for import operation (5 minutes = 300000ms) to match gateway timeout
+      // ~4-7 seconds per offer (API calls, DB operations, catalog sync), so 5 minutes is sufficient for typical use cases
       const response = await api.get('/allegro/offers/import', {
-        timeout: 900000, // 15 minutes to match gateway and nginx timeout
+        timeout: 300000, // 5 minutes to match gateway and nginx timeout
       });
       if (response.data.success) {
         const totalImported = response.data.data?.totalImported || 0;
