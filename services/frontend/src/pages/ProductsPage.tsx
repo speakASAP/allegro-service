@@ -63,7 +63,9 @@ const ProductsPage: React.FC = () => {
   const [pagination, setPagination] = useState<Pagination>(defaultPagination);
   const [loading, setLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -197,6 +199,37 @@ const ProductsPage: React.FC = () => {
     }
   };
 
+  const handleSyncProducts = async () => {
+    if (!window.confirm('Sync all AllegroProducts to catalog? This will create catalog products for products that don\'t exist yet.')) return;
+    
+    setSyncing(true);
+    setError(null);
+    setSuccess(null);
+    
+    try {
+      const res = await api.post('/allegro/products/sync', {}, {
+        timeout: 300000, // 5 minutes timeout for sync operation
+      });
+      const data = res.data?.data;
+      
+      if (data) {
+        const message = `Sync completed: ${data.created} created, ${data.updated} updated, ${data.errors} errors (${data.total} total)`;
+        setSuccess(message);
+        // Refresh products list after sync
+        await loadProducts(1);
+      } else {
+        setSuccess('Sync completed successfully');
+        await loadProducts(1);
+      }
+    } catch (err) {
+      console.error('Failed to sync products', err);
+      const axiosErr = err as AxiosError & { serviceErrorMessage?: string };
+      setError(axiosErr.serviceErrorMessage || axiosErr.message || 'Failed to sync products');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -267,6 +300,9 @@ const ProductsPage: React.FC = () => {
           <Button variant="secondary" onClick={() => loadProducts(pagination.page)} disabled={loading}>
             {loading ? 'Refreshing...' : 'Refresh'}
           </Button>
+          <Button variant="secondary" onClick={handleSyncProducts} disabled={syncing || loading}>
+            {syncing ? 'Syncing...' : 'Sync Products'}
+          </Button>
           <Button onClick={openCreate}>Add Product</Button>
         </div>
       </div>
@@ -285,6 +321,7 @@ const ProductsPage: React.FC = () => {
         </div>
 
         {error && <div className="text-red-600 text-sm mb-3">{error}</div>}
+        {success && <div className="text-green-600 text-sm mb-3">{success}</div>}
 
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
