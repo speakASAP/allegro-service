@@ -71,7 +71,7 @@ const api: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000, // 10 seconds timeout for local services (auth, settings, etc.)
+  timeout: 30000, // 30 seconds timeout to handle cold starts and connection establishment
 });
 
 // Helper to validate JWT token format
