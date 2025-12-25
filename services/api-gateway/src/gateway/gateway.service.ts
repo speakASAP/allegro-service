@@ -500,9 +500,8 @@ export class GatewayService implements OnModuleInit {
     const isHttps = url.startsWith('https://');
 
     // Determine if this is an internal Docker service or external service
-    // Auth service is NOT in isInternalService list, so it will use externalHttpAgent (no keep-alive)
-    // This prevents connection issues with auth service
-    const isInternalService = ['allegro', 'import', 'settings'].includes(serviceName);
+    // Auth service is now included in internal services to use keep-alive for better performance
+    const isInternalService = ['allegro', 'import', 'settings', 'auth'].includes(serviceName);
     const isExternalService = serviceName === 'auth' && isHttps;
 
     // Generate request ID for tracking (must be before config to use in metadata)
