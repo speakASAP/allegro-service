@@ -39,12 +39,16 @@ export class GatewayService implements OnModuleInit {
     
     // Create agents with aggressive keep-alive settings for internal Docker services
     // Optimized for connection pooling and reuse
+    // Note: timeout should be longer than Axios timeout to prevent premature connection drops
+    const defaultTimeout = parseInt(this.configService.get<string>('HTTP_TIMEOUT') || '30000');
+    const agentTimeout = Math.max(defaultTimeout + 10000, 60000); // At least 60s, or HTTP_TIMEOUT + 10s
+    
     this.httpAgent = existingHttpAgent || new HttpAgent({
       keepAlive: true,
       keepAliveMsecs: 1000,
       maxSockets: 100, // Increased for higher concurrency
       maxFreeSockets: 50, // Keep more idle connections ready for instant reuse
-      timeout: 30000, // Match Axios timeout
+      timeout: agentTimeout, // Longer than Axios timeout to prevent premature drops
       scheduling: 'fifo', // Reuse oldest connections first
     });
 
@@ -53,7 +57,7 @@ export class GatewayService implements OnModuleInit {
       keepAliveMsecs: 1000,
       maxSockets: 100, // Increased for higher concurrency
       maxFreeSockets: 50, // Keep more idle connections ready for instant reuse
-      timeout: 30000, // Match Axios timeout
+      timeout: agentTimeout, // Longer than Axios timeout to prevent premature drops
       scheduling: 'fifo', // Reuse oldest connections first
     });
 
@@ -473,6 +477,12 @@ export class GatewayService implements OnModuleInit {
     const isValidationOperation = path.includes('/validate/allegro') || path.includes('/validate/');
     // Auth operations are local services and should be fast (5 seconds is plenty)
     const isAuthOperation = path.includes('/auth/');
+    // GET /allegro/offers can be slow with many offers (database query, pagination, large result sets)
+    // Set to 90 seconds to handle large offer lists
+    // Match path with or without query parameters and trailing slash
+    const isOffersList = (path === '/allegro/offers' || path.startsWith('/allegro/offers?') || path.startsWith('/allegro/offers/')) && method.toUpperCase() === 'GET';
+    // Settings endpoints that query accounts or make external API calls can be slow
+    const isSettingsSlowOperation = path.includes('/settings/allegro-accounts') || path.includes('/settings/validate');
     const defaultTimeout = (() => {
       const gatewayTimeout = this.configService.get<string>('GATEWAY_TIMEOUT');
       const httpTimeout = this.configService.get<string>('HTTP_TIMEOUT');
@@ -494,7 +504,9 @@ export class GatewayService implements OnModuleInit {
     // Set to 90 seconds (90000ms) to be safe for validation
     // Regular operations (like account activation, settings updates) should be fast - use default timeout (typically 30s)
     // Only increase timeout for operations that are known to be slow
-    const timeout = isAuthOperation ? 30000 : (isImportAllOffers ? 300000 : (isPublishAll ? 600000 : (isBulkOperation ? 120000 : (isValidationOperation ? 90000 : defaultTimeout))));
+    // GET /allegro/offers list can be slow with many offers - use 90 seconds
+    // Settings operations that query accounts can be slow - use 90 seconds
+    const timeout = isAuthOperation ? 30000 : (isImportAllOffers ? 300000 : (isPublishAll ? 600000 : (isBulkOperation ? 120000 : (isValidationOperation ? 90000 : (isOffersList ? 90000 : (isSettingsSlowOperation ? 90000 : defaultTimeout))))));
     
     // Determine if URL is HTTPS or HTTP to use correct agent
     const isHttps = url.startsWith('https://');
