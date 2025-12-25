@@ -483,7 +483,10 @@ export class GatewayService implements OnModuleInit {
     const isHttps = url.startsWith('https://');
 
     // Determine if this is an internal Docker service or external service
-    const isInternalService = ['allegro', 'import', 'settings'].includes(serviceName);
+    // Auth service is internal when using Docker network URL (http://auth-microservice:3370)
+    // Auth service is external when using HTTPS URL (https://auth.statex.cz)
+    const isInternalService = ['allegro', 'import', 'settings'].includes(serviceName) || 
+                               (serviceName === 'auth' && !isHttps);
     const isExternalService = serviceName === 'auth' && isHttps;
 
     // Generate request ID for tracking (must be before config to use in metadata)

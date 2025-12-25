@@ -2799,8 +2799,35 @@ export class OffersService {
       
       for (const allegroOffer of offers) {
         try {
-          const allegroProductId = await this.upsertAllegroProductFromOffer(allegroOffer, oauthToken);
-          const offerData = this.sanitizeOfferDataForPrisma(this.extractOfferData(allegroOffer));
+          // Fetch full offer details to ensure we have ALL fields
+          // The list endpoint might return simplified data, so we fetch the complete offer
+          let fullOfferData = allegroOffer;
+          try {
+            const fullOffer = await this.allegroApi.getOfferWithOAuthToken(oauthToken, allegroOffer.id);
+            if (fullOffer) {
+              fullOfferData = fullOffer;
+              this.logger.log('[importFromSalesCenter] Fetched full offer details from Allegro API', {
+                offerId: allegroOffer.id,
+                fullOfferKeys: Object.keys(fullOffer),
+                fullOfferHasDescription: !!fullOffer.description,
+                fullOfferDescriptionType: fullOffer.description ? typeof fullOffer.description : 'null',
+                fullOfferDescriptionLength: fullOffer.description ? (typeof fullOffer.description === 'string' ? fullOffer.description.length : 'non-string') : 0,
+                fullOfferHasImages: !!fullOffer.images,
+                fullOfferImagesCount: Array.isArray(fullOffer.images) ? fullOffer.images.length : 0,
+                fullOfferHasPayments: !!fullOffer.payments,
+                fullOfferHasDelivery: !!fullOffer.delivery,
+              });
+            }
+          } catch (fetchError: any) {
+            // If fetching full details fails, use the list data
+            this.logger.warn('[importFromSalesCenter] Failed to fetch full offer details, using list data', {
+              offerId: allegroOffer.id,
+              error: fetchError.message,
+            });
+          }
+
+          const allegroProductId = await this.upsertAllegroProductFromOffer(fullOfferData, oauthToken);
+          const offerData = this.sanitizeOfferDataForPrisma(this.extractOfferData(fullOfferData));
           const offer = await this.prisma.allegroOffer.upsert({
             where: { allegroOfferId: allegroOffer.id },
             update: {
@@ -3168,6 +3195,11 @@ export class OffersService {
     // Allegro API might return description in different formats or locations
     let description = allegroOffer.description || null;
     
+    // If description is missing, check rawData (for offers that were previously imported)
+    if (!description && allegroOffer.rawData?.description) {
+      description = allegroOffer.rawData.description;
+    }
+    
     // If description is an object, try to extract text from it
     if (description && typeof description === 'object') {
       // Some Allegro API responses have description as an object with sections/items
@@ -3215,9 +3247,17 @@ export class OffersService {
 
     // Extract delivery options - check multiple possible locations
     let deliveryOptions = allegroOffer.delivery || allegroOffer.deliveryOptions || null;
+    // Also check rawData if direct field is missing
+    if (!deliveryOptions && allegroOffer.rawData) {
+      deliveryOptions = allegroOffer.rawData.delivery || allegroOffer.rawData.deliveryOptions || null;
+    }
     
     // Extract payment options - check multiple possible locations
     let paymentOptions = allegroOffer.payments || allegroOffer.paymentOptions || allegroOffer.sellingMode?.payments || null;
+    // Also check rawData if direct field is missing
+    if (!paymentOptions && allegroOffer.rawData) {
+      paymentOptions = allegroOffer.rawData.payments || allegroOffer.rawData.paymentOptions || allegroOffer.rawData.sellingMode?.payments || null;
+    }
 
     const extractedData = {
       allegroOfferId: allegroOffer.id,
@@ -3493,7 +3533,36 @@ export class OffersService {
     }
 
     // Required: Description - check both direct field and rawData
-    const description = offer.description || (offer.rawData as any)?.description || '';
+    let description = offer.description || (offer.rawData as any)?.description || '';
+    
+    // If description is an object, try to extract text from it (same logic as extractOfferData)
+    if (description && typeof description === 'object') {
+      if (description.sections && Array.isArray(description.sections)) {
+        const textParts: string[] = [];
+        description.sections.forEach((section: any) => {
+          if (section.items && Array.isArray(section.items)) {
+            section.items.forEach((item: any) => {
+              if (item.type === 'TEXT' && item.content) {
+                textParts.push(item.content);
+              }
+            });
+          }
+        });
+        description = textParts.length > 0 ? textParts.join('\n\n') : '';
+      } else if (description.text) {
+        description = description.text;
+      } else if (description.content) {
+        description = description.content;
+      } else {
+        description = '';
+      }
+    }
+    
+    // Convert to string if not already
+    if (description && typeof description !== 'string') {
+      description = String(description);
+    }
+    
     if (!description || (typeof description === 'string' && description.trim().length === 0)) {
       errors.push({ type: 'MISSING_DESCRIPTION', message: 'Description is required', severity: 'error' });
     }
