@@ -217,9 +217,45 @@ The system uses a new `allegro` database on the shared database-server with the 
 
 ## Deployment
 
+### Service Registry
+
+**⚠️ IMPORTANT**: Service registry files are **automatically created and managed** by the nginx-microservice deployment script. **DO NOT** create or modify `service-registry.json` files in individual service codebases.
+
+**How it works**:
+
+1. Service registry files are stored in `nginx-microservice/service-registry/` directory
+2. They are automatically created/recreated during deployment by the `deploy-smart.sh` script
+3. The deployment script auto-detects service configuration from:
+   - Docker compose files (`docker-compose.blue.yml`, `docker-compose.green.yml`)
+   - Environment variables (`.env` file)
+   - Running containers
+4. Nginx configurations are automatically generated from service registry files
+
+**To deploy**:
+
+```bash
+# On production server
+cd ~/nginx-microservice
+./scripts/remove-microservice.sh allegro-service # Remove it completelly if needed
+./scripts/blue-green/deploy-smart.sh allegro-service
+```
+
+The deployment script will:
+
+- Auto-create/update service registry file in `nginx-microservice/service-registry/allegro-service.json`
+- Generate nginx configuration with correct container names
+- Deploy the service using blue/green deployment pattern
+
+**View service registry**:
+
+```bash
+# On production server
+cat ~/nginx-microservice/service-registry/allegro-service.json
+```
+
 ### Docker Compose
 
-All services run in Docker containers connected to `nginx-network`. To deploy:
+All services run in Docker containers connected to `nginx-network`. For local development:
 
 ```bash
 # Build and start all services
@@ -244,7 +280,7 @@ All services expose `/health` endpoints for monitoring (ports configured in `all
 
 ### Blue/Green Deployment
 
-For zero-downtime updates, use blue/green deployment pattern with separate docker-compose files.
+For zero-downtime updates, use blue/green deployment pattern with separate docker-compose files. The deployment script handles this automatically.
 
 ### Monitoring
 
@@ -371,6 +407,7 @@ See [TESTING_EVENT_POLLING.md](./docs/TESTING_EVENT_POLLING.md) for comprehensiv
 - If you see timeout delays, **DON'T increase timeouts** - **check logs** to see what process hangs!
 
 **What to do when you see timeouts:**
+
 1. Check the logs immediately - look for what process is hanging
 2. Look for infinite loops, blocking operations, or unhandled promises
 3. Check database queries - are they taking too long?
@@ -442,6 +479,7 @@ To import offers from Allegro:
 - **Implementation Plan**: See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for detailed architecture and implementation details
 - **Prisma Schema**: See `prisma/schema.prisma` for database schema definition
 - **Local Development Setup**: See [docs/LOCAL_DEV_SETUP.md](./docs/LOCAL_DEV_SETUP.md) for local development guide
+- **Service Registry**: See [../docs/SERVICE_REGISTRY.md](../docs/SERVICE_REGISTRY.md) for information about service registry and deployment
 
 ### OAuth Authorization Documentation
 
