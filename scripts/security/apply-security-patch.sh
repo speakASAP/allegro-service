@@ -38,6 +38,7 @@ echo "✅ Application restarted"
 
 echo ""
 echo "⏳ Waiting for application to be healthy..."
+# ⚠️ NOTE: This sleep is for script timing only - not a code delay mechanism
 sleep 10
 
 # Check if container is healthy

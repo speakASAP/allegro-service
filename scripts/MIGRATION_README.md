@@ -204,7 +204,7 @@ Total AllegroProducts: 50
 
 ## Notes
 
-- The script processes products sequentially with a 100ms delay between requests to avoid overwhelming the API
+- ⚠️ NOTE: The script processes products sequentially with a 100ms delay between requests to avoid overwhelming the API. This delay is for rate limiting only - if delays are needed, check logs! Issues are NOT timing issues - we have max 30 items, Docker network is fast.
 - Products are matched by SKU first, then by EAN if SKU match fails
 - If a product already exists, it will be updated with new data
 - AllegroProduct entries are skipped if a matching product already exists in catalog-microservice

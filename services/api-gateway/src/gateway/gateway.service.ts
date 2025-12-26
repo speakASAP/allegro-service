@@ -349,6 +349,7 @@ export class GatewayService implements OnModuleInit {
     }
 
     // Log agent stats every 60 seconds for monitoring
+    // ⚠️ NOTE: This setInterval is for monitoring only - not a delay/sleep mechanism
     setInterval(() => {
       const stats = this.getAgentStats();
       this.logger.debug('[AGENT STATS] Connection pool status', stats);
@@ -389,6 +390,8 @@ export class GatewayService implements OnModuleInit {
         headers: {
           'Content-Type': 'application/json',
         },
+        // ⚠️ CRITICAL: If warmup times out, check logs - this is a code issue, not a timing issue!
+        // We're on the same Docker network, so connections should be instant.
         timeout: 10000, // 10 second timeout for warmup (faster than normal requests)
         maxRedirects: 0,
         validateStatus: (status) => status >= 200 && status < 500, // Accept any response
@@ -467,6 +470,13 @@ export class GatewayService implements OnModuleInit {
 
     const url = `${baseUrl}${path}`;
     
+    // ⚠️ CRITICAL TIMEOUT DOCUMENTATION ⚠️
+    // Issues within our services are NOT timeouts - increasing timeouts does NOT help!
+    // We have up to 30 items to request/get, so speed within Docker network on the same server is perfect.
+    // All delays are because of bad code, NOT timing issues.
+    // If you see timeout delays, DON'T increase timeouts - check logs to see what process hangs!
+    // Timeouts here are safety nets only - if they trigger, it means code is hanging, not that we need more time.
+
     // Special timeout for bulk operations that may take longer
     const isBulkOperation = path.includes('/publish-all') || path.includes('/import') || path.includes('/bulk') || path.includes('/clone');
     const isPublishAll = path.includes('/publish-all') || path.includes('/clone');
@@ -507,6 +517,7 @@ export class GatewayService implements OnModuleInit {
     // Only increase timeout for operations that are known to be slow
     // GET /allegro/offers list can be slow with many offers - use 90 seconds
     // Settings operations that query accounts can be slow - use 90 seconds
+    // ⚠️ REMEMBER: If timeouts trigger, check logs to find what's hanging - don't just increase the timeout!
     const timeout = isAuthOperation ? 30000 : (isImportAllOffers ? 300000 : (isPublishAll ? 600000 : (isBulkOperation ? 120000 : (isValidationOperation ? 90000 : (isOffersList ? 90000 : (isSettingsSlowOperation ? 90000 : defaultTimeout))))));
     
     // Determine if URL is HTTPS or HTTP to use correct agent

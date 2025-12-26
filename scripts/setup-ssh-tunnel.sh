@@ -310,6 +310,7 @@ case "${1:-start}" in
     else
       # Start all tunnels
       start_all_tunnels
+      # ⚠️ NOTE: This sleep is for script timing only - not a code delay mechanism
       sleep 2
       test_connections
     fi
@@ -326,10 +327,12 @@ case "${1:-start}" in
   restart)
     if [ -n "$2" ]; then
       stop_single_tunnel "$2"
+      # ⚠️ NOTE: This sleep is for script timing only - not a code delay mechanism
       sleep 1
       start_single_tunnel "$2"
     else
       stop_all_tunnels
+      # ⚠️ NOTE: These sleeps are for script timing only - not code delay mechanisms
       sleep 1
       start_all_tunnels
       sleep 2

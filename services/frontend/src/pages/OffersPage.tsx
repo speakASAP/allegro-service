@@ -275,6 +275,8 @@ const OffersPage: React.FC = () => {
       if (searchQuery && searchQuery.trim()) {
         params.search = searchQuery.trim();
       }
+      // ⚠️ CRITICAL: If this timeout triggers, check logs - this is a code issue, not a timing issue!
+      // We have max 30 items, Docker network is fast. Don't increase timeout - fix the hanging code!
       // Use longer timeout for offers list (can be slow with many offers, database queries, pagination)
       // Gateway timeout is 90s, so frontend should match or exceed it
       const response = await api.get('/allegro/offers', { 
@@ -335,6 +337,7 @@ const OffersPage: React.FC = () => {
       // User can see the offer immediately, and we'll update it if fetch succeeds
       setLoadingDetail(true);
       api.get<{ success: boolean; data: Offer }>(`/allegro/offers/${offer.id}`, {
+        // ⚠️ CRITICAL: If this timeout triggers, check logs - this is a code issue, not a timing issue!
         timeout: 30000, // 30 seconds - reasonable timeout for DB query
       })
         .then((response) => {
@@ -1085,6 +1088,8 @@ const OffersPage: React.FC = () => {
         }
       }
 
+      // ⚠️ CRITICAL: If this timeout triggers, check logs - this is a code issue, not a timing issue!
+      // We have max 30 items, Docker network is fast. Don't increase timeout - fix the hanging code!
       // Calculate dynamic timeout based on number of offers
       // Maximum 24 offers - optimized for this use case
       // Use average of 10 seconds per offer (accounts for producer creation overhead)
@@ -1170,6 +1175,8 @@ const OffersPage: React.FC = () => {
 
       const offerIds = allOfferIds;
 
+      // ⚠️ CRITICAL: If this timeout triggers, check logs - this is a code issue, not a timing issue!
+      // We have max 30 items, Docker network is fast. Don't increase timeout - fix the hanging code!
       // Use longer timeout for bulk publish operation (90 seconds)
       const response = await api.post('/allegro/offers/publish-all', {
         offerIds,
