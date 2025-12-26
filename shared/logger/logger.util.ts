@@ -182,6 +182,8 @@ export class Logger {
           reject(error);
         });
 
+        // ⚠️ CRITICAL: If this timeout triggers, check logs - this is a code issue, not a timing issue!
+        // We have max 30 items, Docker network is fast. Don't increase timeout - fix the hanging code!
         // CRITICAL: Set timeout on the request object - Node.js doesn't use timeout option automatically
         req.setTimeout(timeout, () => {
           req.destroy();

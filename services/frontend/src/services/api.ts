@@ -71,6 +71,11 @@ const api: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // ⚠️ CRITICAL TIMEOUT DOCUMENTATION ⚠️
+  // Issues within our services are NOT timeouts - increasing timeouts does NOT help!
+  // We have up to 30 items to request/get, so speed within Docker network on the same server is perfect.
+  // All delays are because of bad code, NOT timing issues.
+  // If you see timeout delays, DON'T increase timeouts - check logs to see what process hangs!
   timeout: 60000, // 60 seconds timeout to handle cold starts and connection establishment
 });
 
@@ -289,6 +294,7 @@ api.interceptors.response.use(
                 localStorage.removeItem('accessToken');
                 localStorage.removeItem('refreshToken');
                 localStorage.removeItem('user');
+                // ⚠️ NOTE: This setTimeout is to prevent redirect loops only - not a delay mechanism
                 // Use setTimeout to prevent redirect loops
                 setTimeout(() => {
                   window.location.href = '/login';
@@ -316,6 +322,7 @@ api.interceptors.response.use(
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
           localStorage.removeItem('user');
+          // ⚠️ NOTE: This setTimeout is to prevent redirect loops only - not a delay mechanism
           setTimeout(() => {
             window.location.href = '/login';
           }, 100);

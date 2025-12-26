@@ -48,6 +48,7 @@ const AllegroOAuthCallbackPage: React.FC = () => {
       setStatus('success');
       setMessage('Authorization successful! Redirecting to settings...');
 
+      // ⚠️ NOTE: This setTimeout is for UX delay only - not a code delay mechanism
       // Redirect to settings after 2 seconds with refresh parameter
       const timer = setTimeout(() => {
         navigate('/dashboard/settings?oauth_refresh=true');

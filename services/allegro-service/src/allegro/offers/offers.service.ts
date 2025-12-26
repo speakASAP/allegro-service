@@ -913,6 +913,9 @@ export class OffersService {
         if (!hasGoodRawData) {
           // Only fetch if rawData is missing or incomplete
           try {
+            // ⚠️ CRITICAL: If this timeout triggers, check logs to see what's hanging!
+            // This is a code issue, not a timing issue. We have max 30 items, Docker network is fast.
+            // Don't increase timeout - fix the hanging code instead!
             const fetchPromise = this.allegroApi.getOfferWithOAuthToken(oauthToken, offer.allegroOfferId);
             const timeoutPromise = new Promise((_, reject) => {
               setTimeout(() => reject(new Error('Timeout: Fetching current offer took too long')), 5000); // 5 second timeout (reduced)
@@ -1129,6 +1132,8 @@ export class OffersService {
                   waitTime: `${5000 * attempt}ms`,
                   timestamp: new Date().toISOString(),
                 });
+                // ⚠️ CRITICAL: This sleep is for retry backoff only - if retries are needed, check logs!
+                // Issues are NOT timing issues - check what's causing the failure in logs.
                 // Wait before retry (exponential backoff: 5s, 10s)
                 await new Promise(resolve => setTimeout(resolve, 5000 * attempt));
                 this.logger.log('[Async Sync] STEP 4.2: Wait completed, proceeding with retry', {
@@ -4325,6 +4330,9 @@ export class OffersService {
                   step: `2.${processedCount}.3.1`,
                 });
                 
+                // ⚠️ CRITICAL: If this timeout triggers, check logs to see what's hanging!
+                // This is a code issue, not a timing issue. We have max 30 items, Docker network is fast.
+                // Don't increase timeout - fix the hanging code instead!
                 // Use shorter timeout with race condition to fail fast
                 const fetchPromise = this.allegroApi.getOfferWithOAuthToken(oauthToken, offer.allegroOfferId);
                 const timeoutPromise = new Promise((_, reject) => {
@@ -6203,6 +6211,8 @@ export class OffersService {
 
       // Add small delay between API calls to avoid rate limiting
       if (i < offerIds.length - 1) {
+        // ⚠️ CRITICAL: This small delay is for rate limiting only - if delays are needed, check logs!
+        // Issues are NOT timing issues - we have max 30 items, Docker network is fast.
         await new Promise((resolve) => setTimeout(resolve, 200));
       }
     }

@@ -78,6 +78,7 @@ const ImportJobsPage: React.FC = () => {
     };
     
     loadJobsSafely();
+    // ⚠️ NOTE: This setInterval is for polling only - not a delay mechanism
     intervalId = window.setInterval(loadJobsSafely, 30000); // Refresh every 30 seconds
     
     return () => {

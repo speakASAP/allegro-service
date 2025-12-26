@@ -521,6 +521,10 @@ class ProductMigrationService {
       console.log(`[${i + 1}/${products.length}] Processing product: ${product.code || product.id}`);
       await this.migrateProduct(product);
       
+      // ⚠️ NOTE: This small delay is for rate limiting only - if delays are needed, check logs!
+      // Issues are NOT timing issues - we have max 30 items, Docker network is fast.
+      // ⚠️ NOTE: This small delay is for rate limiting only - if delays are needed, check logs!
+      // Issues are NOT timing issues - we have max 30 items, Docker network is fast.
       // Small delay to avoid overwhelming the API
       if (i < products.length - 1) {
         await new Promise(resolve => setTimeout(resolve, 100));

@@ -208,6 +208,8 @@ const ProductsPage: React.FC = () => {
     setSuccess(null);
     
     try {
+      // ⚠️ CRITICAL: If this timeout triggers, check logs - this is a code issue, not a timing issue!
+      // We have max 30 items, Docker network is fast. Don't increase timeout - fix the hanging code!
       const res = await api.post('/allegro/products/sync', {}, {
         timeout: 300000, // 5 minutes timeout for sync operation
       });

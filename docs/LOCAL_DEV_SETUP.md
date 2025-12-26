@@ -2,6 +2,23 @@
 
 This guide explains how to set up local development environment that uses production database and services via SSH.
 
+## ⚠️ CRITICAL: Timeout and Delay Issues
+
+**IMPORTANT**: Issues within our services are **NOT** timeouts - increasing timeouts does **NOT** help!
+
+- We have up to **30 items** to request or get, so speed within Docker network on the same server is **perfect**
+- All delays are because of **bad code**, **NOT** timing issues
+- If you see timeout delays, **DON'T increase timeouts** - **check logs** to see what process hangs!
+
+**What to do when you see timeouts:**
+1. Check the logs immediately - look for what process is hanging
+2. Look for infinite loops, blocking operations, or unhandled promises
+3. Check database queries - are they taking too long?
+4. Check external API calls - are they hanging?
+5. **DO NOT** increase timeout values - fix the underlying code issue instead!
+
+**Remember**: We're on the same Docker network with max 30 items. Network speed is not the problem - code is.
+
 ## Overview
 
 For local development, you'll:
