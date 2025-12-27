@@ -45,18 +45,18 @@ export class GatewayService implements OnModuleInit {
     
     this.httpAgent = existingHttpAgent || new HttpAgent({
       keepAlive: true,
-      keepAliveMsecs: 1000,
-      maxSockets: 100, // Increased for higher concurrency
-      maxFreeSockets: 50, // Keep more idle connections ready for instant reuse
+      keepAliveMsecs: 5000, // Increased from 1000ms to 5000ms to keep connections alive longer
+      maxSockets: Infinity, // Allow unlimited concurrent connections per host
+      maxFreeSockets: 256, // Keep many idle connections ready for instant reuse
       timeout: agentTimeout, // Longer than Axios timeout to prevent premature drops
       scheduling: 'fifo', // Reuse oldest connections first
     });
 
     this.httpsAgent = existingHttpsAgent || new HttpsAgent({
       keepAlive: true,
-      keepAliveMsecs: 1000,
-      maxSockets: 100, // Increased for higher concurrency
-      maxFreeSockets: 50, // Keep more idle connections ready for instant reuse
+      keepAliveMsecs: 5000, // Increased from 1000ms to 5000ms to keep connections alive longer
+      maxSockets: Infinity, // Allow unlimited concurrent connections per host
+      maxFreeSockets: 256, // Keep many idle connections ready for instant reuse
       timeout: agentTimeout, // Longer than Axios timeout to prevent premature drops
       scheduling: 'fifo', // Reuse oldest connections first
     });
