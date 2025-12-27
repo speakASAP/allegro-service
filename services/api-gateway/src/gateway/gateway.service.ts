@@ -43,11 +43,15 @@ export class GatewayService implements OnModuleInit {
     const defaultTimeout = parseInt(this.configService.get<string>('HTTP_TIMEOUT') || '30000');
     const agentTimeout = Math.max(defaultTimeout + 10000, 60000); // At least 60s, or HTTP_TIMEOUT + 10s
     
+    // HTTP Agent configuration with bounded limits to prevent resource exhaustion
+    // maxSockets: 200 - Bounded limit to prevent memory/CPU issues if service becomes unresponsive
+    // maxFreeSockets: 50 - Reasonable pool of idle connections without excessive memory usage
+    // If maxSockets is reached, new requests will queue (bounded by Axios timeout)
     this.httpAgent = existingHttpAgent || new HttpAgent({
       keepAlive: true,
       keepAliveMsecs: 5000, // Increased from 1000ms to 5000ms to keep connections alive longer
-      maxSockets: Infinity, // Allow unlimited concurrent connections per host
-      maxFreeSockets: 256, // Keep many idle connections ready for instant reuse
+      maxSockets: 200, // Bounded limit: prevents unbounded connection growth if service is unresponsive
+      maxFreeSockets: 50, // Reasonable pool of idle connections ready for reuse
       timeout: agentTimeout, // Longer than Axios timeout to prevent premature drops
       scheduling: 'fifo', // Reuse oldest connections first
     });
@@ -55,8 +59,8 @@ export class GatewayService implements OnModuleInit {
     this.httpsAgent = existingHttpsAgent || new HttpsAgent({
       keepAlive: true,
       keepAliveMsecs: 5000, // Increased from 1000ms to 5000ms to keep connections alive longer
-      maxSockets: Infinity, // Allow unlimited concurrent connections per host
-      maxFreeSockets: 256, // Keep many idle connections ready for instant reuse
+      maxSockets: 200, // Bounded limit: prevents unbounded connection growth if service is unresponsive
+      maxFreeSockets: 50, // Reasonable pool of idle connections ready for reuse
       timeout: agentTimeout, // Longer than Axios timeout to prevent premature drops
       scheduling: 'fifo', // Reuse oldest connections first
     });
