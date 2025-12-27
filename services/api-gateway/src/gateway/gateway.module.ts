@@ -21,29 +21,34 @@ import * as https from 'https';
         // maxFreeSockets: Keep more idle connections ready for instant reuse
         // keepAliveMsecs: How long to keep connections alive (1 second)
         // timeout: Socket timeout (60 seconds)
+        // Get timeout from config, but ensure agent timeout is reasonable
+        const httpTimeout = parseInt(configService.get<string>('HTTP_TIMEOUT') || '30000');
+        const agentTimeout = Math.max(httpTimeout + 5000, 30000); // At least 30s, or HTTP_TIMEOUT + 5s
+        
         const httpAgent = new http.Agent({
           keepAlive: true,
-          keepAliveMsecs: 1000,
-          maxSockets: 50,
-          maxFreeSockets: 20, // Increased from 10 to 20 - keep more connections ready
-          timeout: 60000,
+          keepAliveMsecs: 5000, // Increased from 1000ms to 5000ms to keep connections alive longer
+          maxSockets: Infinity, // Allow unlimited concurrent connections per host
+          maxFreeSockets: 256, // Keep many idle connections ready for instant reuse
+          timeout: agentTimeout, // Use calculated timeout instead of hardcoded 60000
           // Scheduling: 'fifo' ensures oldest connections are reused first
           scheduling: 'fifo',
         });
         
         const httpsAgent = new https.Agent({
           keepAlive: true,
-          keepAliveMsecs: 1000,
-          maxSockets: 50,
-          maxFreeSockets: 20, // Increased from 10 to 20 - keep more connections ready
-          timeout: 60000,
+          keepAliveMsecs: 5000, // Increased from 1000ms to 5000ms to keep connections alive longer
+          maxSockets: Infinity, // Allow unlimited concurrent connections per host
+          maxFreeSockets: 256, // Keep many idle connections ready for instant reuse
+          timeout: agentTimeout, // Use calculated timeout instead of hardcoded 60000
           scheduling: 'fifo',
         });
 
         const timeout = configService.get<string>('HTTP_TIMEOUT') || '30000';
+        const gatewayTimeout = configService.get<string>('GATEWAY_TIMEOUT') || timeout;
         
         return {
-          timeout: parseInt(timeout),
+          timeout: parseInt(gatewayTimeout), // Use GATEWAY_TIMEOUT if available, otherwise HTTP_TIMEOUT
           maxRedirects: 5,
           httpAgent,
           httpsAgent,
