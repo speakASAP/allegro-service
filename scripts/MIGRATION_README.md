@@ -101,7 +101,7 @@ ts-node scripts/migrate-products-to-catalog.ts
 ### Product table → Catalog-microservice
 
 | Product Table | Catalog-microservice | Notes |
-|---------------|----------------------|-------|
+| ------------- | -------------------- | ----- |
 | `code` | `sku` | Primary identifier |
 | `name` | `title` | Product name |
 | `description` | `description` | Full description |
@@ -119,7 +119,7 @@ ts-node scripts/migrate-products-to-catalog.ts
 ### AllegroProduct table → Catalog-microservice
 
 | AllegroProduct Table | Catalog-microservice | Notes |
-|----------------------|----------------------|-------|
+| -------------------- | -------------------- | ----- |
 | `ean` or `allegroProductId` | `sku` | Uses EAN if available, otherwise generates SKU |
 | `name` | `title` | Product name |
 | `brand` | `brand` | Brand name |
