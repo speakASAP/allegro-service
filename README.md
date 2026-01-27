@@ -30,7 +30,7 @@ The system consists of 5 microservices:
 All services use the same host and container ports for consistency:
 
 | Service | Host Port | Container Port | .env Variable | Description |
-|---------|-----------|----------------|---------------|-------------|
+| ------- | --------- | -------------- | ------------- | ----------- |
 | **API Gateway** | `${API_GATEWAY_PORT:-3411}` | `${API_GATEWAY_PORT:-3411}` | `API_GATEWAY_PORT` (allegro/.env) | Request routing and authentication |
 | **Allegro Service** | `${ALLEGRO_SERVICE_PORT:-3403}` | `${ALLEGRO_SERVICE_PORT:-3403}` | `ALLEGRO_SERVICE_PORT` (allegro/.env) | Allegro API integration |
 | **Import Service** | `${IMPORT_SERVICE_PORT:-3406}` | `${IMPORT_SERVICE_PORT:-3406}` | `IMPORT_SERVICE_PORT` (allegro/.env) | CSV import and transformation |

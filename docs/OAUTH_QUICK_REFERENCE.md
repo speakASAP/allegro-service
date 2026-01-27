@@ -55,7 +55,7 @@
 ### Common Errors and Solutions
 
 | Error | Cause | Solution |
-|-------|-------|----------|
+| ----- | ----- | -------- |
 | `invalid_state` | State mismatch between storage and callback | Ensure state is trimmed consistently |
 | `invalid_grant` | Authorization code expired or already used | Re-authorize (codes expire in ~10 minutes) |
 | `Column too long` | Encrypted token exceeds database column size | Increase column size in schema (see Fix #5) |
@@ -65,7 +65,7 @@
 ## Database Column Sizes
 
 | Column | Size | Notes |
-|--------|------|-------|
+| ------ | ---- | ----- |
 | `allegroAccessToken` | VARCHAR(5000) | Encrypted, hex-encoded |
 | `allegroRefreshToken` | VARCHAR(5000) | Encrypted, hex-encoded |
 | `allegroTokenScopes` | VARCHAR(1000) | Comma-separated scopes |

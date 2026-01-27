@@ -58,7 +58,7 @@ DATABASE_URL=
 The codebase uses the same code for both development and production environments. Only the `.env` file values differ. The following table shows the key variables that differ between environments:
 
 | Variable | DEV Value | PROD Value | Reason |
-|----------|-----------|------------|--------|
+| -------- | --------- | ---------- | ------ |
 | `NODE_ENV` | `development` | `production` | Environment identifier |
 | `AUTH_SERVICE_URL` | `https://auth.statex.cz` | `http://auth-microservice-green:3370` | DEV uses HTTPS, PROD uses Docker network |
 | `DB_HOST` | `localhost` | `db-server-postgres` | DEV uses SSH tunnel, PROD uses Docker network |
