@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard, LoggerService } from '@allegro/shared';
+import { JwtAuthGuard, RolesGuard, Roles, LoggerService } from '@allegro/shared';
 import { ProductsService } from './products.service';
 
 @Controller('allegro/products')
@@ -224,7 +224,8 @@ export class ProductsController {
   }
 
   @Delete('all')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('global:superadmin', 'app:allegro-service:admin')
   async deleteAllProducts(): Promise<{ success: boolean; data: any }> {
     const startTime = Date.now();
     const requestId = `delete-all-products-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;

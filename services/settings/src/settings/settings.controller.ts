@@ -15,7 +15,7 @@ import {
   Request,
 } from '@nestjs/common';
 import { SettingsService } from './settings.service';
-import { JwtAuthGuard } from '@allegro/shared';
+import { JwtAuthGuard, RolesGuard, Roles } from '@allegro/shared';
 import { LoggerService } from '@allegro/shared';
 import { UpdateSettingsDto, AddSupplierConfigDto, UpdateSupplierConfigDto, ValidateAllegroKeysDto, ValidateAllegroAccountKeysDto, CreateAllegroAccountDto, UpdateAllegroAccountDto } from './dto/update-settings.dto';
 
@@ -54,7 +54,8 @@ export class SettingsController {
   }
 
   @Put()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('global:superadmin', 'app:allegro-service:admin')
   async updateSettings(
     @Request() req: any,
     @Body() dto: UpdateSettingsDto,
@@ -67,7 +68,8 @@ export class SettingsController {
   }
 
   @Post('suppliers')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('global:superadmin', 'app:allegro-service:admin')
   async addSupplierConfig(
     @Request() req: any,
     @Body() dto: AddSupplierConfigDto,
@@ -78,7 +80,8 @@ export class SettingsController {
   }
 
   @Put('suppliers/:id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('global:superadmin', 'app:allegro-service:admin')
   async updateSupplierConfig(
     @Request() req: any,
     @Param('id') supplierId: string,
@@ -90,7 +93,8 @@ export class SettingsController {
   }
 
   @Delete('suppliers/:id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('global:superadmin', 'app:allegro-service:admin')
   async removeSupplierConfig(
     @Request() req: any,
     @Param('id') supplierId: string,
@@ -120,7 +124,8 @@ export class SettingsController {
   }
 
   @Post('allegro-accounts')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('global:superadmin', 'app:allegro-service:admin')
   async createAllegroAccount(
     @Request() req: any,
     @Body() dto: CreateAllegroAccountDto,
@@ -131,7 +136,8 @@ export class SettingsController {
   }
 
   @Put('allegro-accounts/:id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('global:superadmin', 'app:allegro-service:admin')
   async updateAllegroAccount(
     @Request() req: any,
     @Param('id') accountId: string,
@@ -143,7 +149,8 @@ export class SettingsController {
   }
 
   @Delete('allegro-accounts/:id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('global:superadmin', 'app:allegro-service:admin')
   async deleteAllegroAccount(
     @Request() req: any,
     @Param('id') accountId: string,
@@ -154,7 +161,8 @@ export class SettingsController {
   }
 
   @Post('allegro-accounts/:id/activate')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('global:superadmin', 'app:allegro-service:admin')
   async activateAllegroAccount(
     @Request() req: any,
     @Param('id') accountId: string,
@@ -175,7 +183,8 @@ export class SettingsController {
   }
 
   @Post('allegro-accounts/deactivate')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('global:superadmin', 'app:allegro-service:admin')
   async deactivateAllAllegroAccounts(
     @Request() req: any,
   ): Promise<{ success: boolean }> {
@@ -185,7 +194,8 @@ export class SettingsController {
   }
 
   @Post('allegro-accounts/:id/validate')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('global:superadmin', 'app:allegro-service:admin')
   async validateAllegroAccountKeys(
     @Request() req: any,
     @Param('id') accountId: string,

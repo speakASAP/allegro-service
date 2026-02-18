@@ -102,6 +102,7 @@ export class JwtAuthGuard implements CanActivate {
           phone: decoded.phone || decoded.user?.phone,
           isActive: decoded.isActive !== false && decoded.user?.isActive !== false, // Default to true if not specified
           isVerified: decoded.isVerified !== false && decoded.user?.isVerified !== false, // Default to true if not specified
+          roles: Array.isArray(decoded.roles) ? decoded.roles : [],
           createdAt: decoded.createdAt || decoded.user?.createdAt || decoded.iat ? new Date(decoded.iat * 1000).toISOString() : undefined,
           updatedAt: decoded.updatedAt || decoded.user?.updatedAt,
         };

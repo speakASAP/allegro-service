@@ -8,6 +8,7 @@ import { ConfigModule } from '@nestjs/config';
 import { HttpModule } from '@nestjs/axios';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { RolesGuard } from './roles.guard';
 import { LoggerModule } from '../logger/logger.module';
 import { ResilienceModule } from '../resilience/resilience.module';
 
@@ -21,8 +22,8 @@ import { ResilienceModule } from '../resilience/resilience.module';
     LoggerModule,
     ResilienceModule,
   ],
-  providers: [AuthService, JwtAuthGuard],
-  exports: [AuthService, JwtAuthGuard],
+  providers: [AuthService, JwtAuthGuard, RolesGuard],
+  exports: [AuthService, JwtAuthGuard, RolesGuard],
 })
 export class AuthModule {
   // ConfigService is available globally via ConfigModule in AppModule

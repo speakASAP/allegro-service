@@ -10,6 +10,8 @@ export * from './auth/auth.module';
 export * from './auth/auth.service';
 export * from './auth/auth.interface';
 export * from './auth/jwt-auth.guard';
+export * from './auth/roles.guard';
+export * from './auth/roles.decorator';
 export * from './notifications/notification.module';
 export * from './notifications/notification.service';
 export * from './notifications/notification.interface';
