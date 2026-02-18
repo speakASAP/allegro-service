@@ -19,7 +19,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { OffersService } from './offers.service';
-import { JwtAuthGuard, LoggerService, MetricsService } from '@allegro/shared';
+import { JwtAuthGuard, RolesGuard, Roles, LoggerService, MetricsService } from '@allegro/shared';
 import { CreateOfferDto } from '../dto/create-offer.dto';
 import { UpdateOfferDto } from '../dto/update-offer.dto';
 import { OfferQueryDto } from '../dto/offer-query.dto';
@@ -547,7 +547,8 @@ export class OffersController {
   }
 
   @Delete('all')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('global:superadmin', 'app:allegro-service:admin')
   async deleteAllOffers(): Promise<{ success: boolean; data: any }> {
     const startTime = Date.now();
     const requestId = `delete-all-offers-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
