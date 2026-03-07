@@ -1,6 +1,7 @@
 /**
  * Roles Guard - checks request.user.roles (set by JwtAuthGuard) against @Roles().
  * Use after JwtAuthGuard: @UseGuards(JwtAuthGuard, RolesGuard) @Roles('...')
+ * Uses Reflect.getMetadata to avoid injecting Reflector (fixes DI when AuthModule is from shared package).
  */
 
 import {
@@ -9,18 +10,19 @@ import {
   ExecutionContext,
   ForbiddenException,
 } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from './roles.decorator';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
-
   canActivate(context: ExecutionContext): boolean {
-    const rolesMetadata = this.reflector.getAllAndOverride<{
-      roles: string[];
-      requireAll?: boolean;
-    }>(ROLES_KEY, [context.getHandler(), context.getClass()]);
+    // Use Reflect.getMetadata instead of Reflector to avoid DI resolution in shared package context
+    const handlerMeta = Reflect.getMetadata(ROLES_KEY, context.getHandler()) as
+      | { roles: string[]; requireAll?: boolean }
+      | undefined;
+    const classMeta = Reflect.getMetadata(ROLES_KEY, context.getClass()) as
+      | { roles: string[]; requireAll?: boolean }
+      | undefined;
+    const rolesMetadata = handlerMeta ?? classMeta;
 
     if (!rolesMetadata?.roles?.length) {
       return true;
