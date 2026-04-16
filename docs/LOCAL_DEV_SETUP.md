@@ -60,11 +60,11 @@ The codebase uses the same code for both development and production environments
 | Variable | DEV Value | PROD Value | Reason |
 | -------- | --------- | ---------- | ------ |
 | `NODE_ENV` | `development` | `production` | Environment identifier |
-| `AUTH_SERVICE_URL` | `https://auth.statex.cz` | `http://auth-microservice-green:3370` | DEV uses HTTPS, PROD uses Docker network |
+| `AUTH_SERVICE_URL` | `https://auth.alfares.cz` | `http://auth-microservice-green:3370` | DEV uses HTTPS, PROD uses Docker network |
 | `DB_HOST` | `localhost` | `db-server-postgres` | DEV uses SSH tunnel, PROD uses Docker network |
-| `ALLEGRO_REDIRECT_URI` | `http://localhost:3410/auth/callback` | `https://allegro.statex.cz/auth/callback` | DEV uses localhost, PROD uses production domain |
+| `ALLEGRO_REDIRECT_URI` | `http://localhost:3410/auth/callback` | `https://allegro.alfares.cz/auth/callback` | DEV uses localhost, PROD uses production domain |
 | `LOGGING_SERVICE_URL` | `http://localhost:3367` | `http://logging-microservice:3367` | DEV uses SSH tunnel, PROD uses Docker network |
-| `FRONTEND_URL` | `http://localhost:3410` | `https://allegro.statex.cz` | DEV uses localhost, PROD uses production domain |
+| `FRONTEND_URL` | `http://localhost:3410` | `https://allegro.alfares.cz` | DEV uses localhost, PROD uses production domain |
 
 **Key Points:**
 
@@ -92,7 +92,7 @@ Then configure your `.env` file:
 # External Shared Microservices (via SSH tunnels)
 # Note: AUTH_SERVICE_PORT is required for gateway to use localhost in development
 AUTH_SERVICE_PORT=3371
-AUTH_SERVICE_URL=https://auth.statex.cz  # Fallback if tunnel not available
+AUTH_SERVICE_URL=https://auth.alfares.cz  # Fallback if tunnel not available
 NOTIFICATION_SERVICE_URL=http://localhost:3368
 LOGGING_SERVICE_URL=http://localhost:3367
 ```
@@ -103,9 +103,9 @@ Use production HTTPS URLs directly (requires services to be healthy on productio
 
 ```bash
 # External Shared Microservices
-AUTH_SERVICE_URL=https://auth.statex.cz
-NOTIFICATION_SERVICE_URL=https://notifications.statex.cz
-LOGGING_SERVICE_URL=https://logging.statex.cz
+AUTH_SERVICE_URL=https://auth.alfares.cz
+NOTIFICATION_SERVICE_URL=https://notifications.alfares.cz
+LOGGING_SERVICE_URL=https://logging.alfares.cz
 ```
 
 **Note**: If you see 502 errors, the services may be down on production. Use Option A (SSH tunnels) instead.
@@ -304,9 +304,9 @@ To use OAuth for accessing user-specific Allegro resources (like `/sale/offers`)
 1. **Verify HTTPS access:**
 
    ```bash
-   curl -I https://auth.statex.cz/health
-   curl -I https://logging.statex.cz/health
-   curl -I https://notifications.statex.cz/health
+   curl -I https://auth.alfares.cz/health
+   curl -I https://logging.alfares.cz/health
+   curl -I https://notifications.alfares.cz/health
    ```
 
 2. **Check network connectivity:**
@@ -404,6 +404,6 @@ If you see this error in your service logs, it means the logging service tunnel 
 - **All tunnels must be started before running services** to avoid connection errors
 - Make sure `.env` has `LOGGING_SERVICE_URL=http://localhost:3367`
 - If you see "Failed to send log to logging service" errors, check that the logging tunnel is running: `./scripts/setup-ssh-tunnel.sh status`
-- **Alternative**: You can use HTTPS URLs (`https://auth.statex.cz`, etc.) if services are healthy on production, but SSH tunnels are recommended for reliability
+- **Alternative**: You can use HTTPS URLs (`https://auth.alfares.cz`, etc.) if services are healthy on production, but SSH tunnels are recommended for reliability
 
 All services run locally but connect to production infrastructure via SSH tunnels.

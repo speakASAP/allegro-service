@@ -57,9 +57,9 @@ All services use the same host and container ports for consistency:
 - Docker & Docker Compose
 - Access to shared microservices:
   - Database server (db-server-postgres)
-  - Auth microservice (<https://auth.statex.cz>)
-  - Logging microservice (<https://logging.statex.cz>)
-  - Notifications microservice (<https://notifications.statex.cz>)
+  - Auth microservice (<https://auth.alfares.cz>)
+  - Logging microservice (<https://logging.alfares.cz>)
+  - Notifications microservice (<https://notifications.alfares.cz>)
 
 ### Installation
 
@@ -89,16 +89,16 @@ Create a `.env` file in the root directory with the following variables:
 
 ### Application Configuration
 
-- `DOMAIN` - Service domain used by nginx-microservice for auto-registry (required for correct domain detection, default: allegro.statex.cz)
+- `DOMAIN` - Service domain used by nginx-microservice for auto-registry (required for correct domain detection, default: allegro.alfares.cz)
 - `SERVICE_NAME` - Service name used for deployment (default: allegro-service)
 - `NODE_ENV` - Environment (production/development)
 - `SERVICE_NAME` - Service name (allegro-service)
 
 ### External Shared Microservices
 
-- `AUTH_SERVICE_URL` - Auth microservice URL (<https://auth.statex.cz> or Docker network URL)
-- `NOTIFICATION_SERVICE_URL` - Notifications microservice URL (<https://notifications.statex.cz> or Docker network URL)
-- `LOGGING_SERVICE_URL` - Logging microservice URL (<https://logging.statex.cz> or Docker network URL)
+- `AUTH_SERVICE_URL` - Auth microservice URL (<https://auth.alfares.cz> or Docker network URL)
+- `NOTIFICATION_SERVICE_URL` - Notifications microservice URL (<https://notifications.alfares.cz> or Docker network URL)
+- `LOGGING_SERVICE_URL` - Logging microservice URL (<https://logging.alfares.cz> or Docker network URL)
 - `CATALOG_SERVICE_URL` - Catalog microservice URL (default: `http://catalog:3200` for Docker, or `http://catalog-microservice:3200`)
 - `WAREHOUSE_SERVICE_URL` - Warehouse microservice URL (default: `http://warehouse-microservice:3201`)
 - `ORDER_SERVICE_URL` - Order microservice URL (default: `http://orders-microservice:3203`)
@@ -128,7 +128,7 @@ All ports are configured in `allegro/.env`. The values shown are defaults:
 
 - `ALLEGRO_CLIENT_ID` - Allegro API client ID
 - `ALLEGRO_CLIENT_SECRET` - Allegro API client secret
-- `ALLEGRO_REDIRECT_URI` - OAuth redirect URI for authentication (e.g., `http://localhost:3410/auth/callback` for dev, `https://allegro.statex.cz/auth/callback` for prod)
+- `ALLEGRO_REDIRECT_URI` - OAuth redirect URI for authentication (e.g., `http://localhost:3410/auth/callback` for dev, `https://allegro.alfares.cz/auth/callback` for prod)
 - `ALLEGRO_OAUTH_AUTHORIZE_URL` - Allegro OAuth authorization URL (default: `https://allegro.pl/auth/oauth/authorize`)
 - `ALLEGRO_OAUTH_TOKEN_URL` - Allegro OAuth token URL (default: `https://allegro.pl/auth/oauth/token`)
 - `ALLEGRO_API_URL` - Allegro API URL (<https://api.allegro.pl>)

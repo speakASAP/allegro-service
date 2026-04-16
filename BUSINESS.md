@@ -18,5 +18,5 @@ flipflop-service (stock/orders sync).
 
 ## SLA
 
-- Production: <https://allegro.statex.cz>
+- Production: <https://allegro.alfares.cz>
 - Events consumed: stock.updated (warehouse)
