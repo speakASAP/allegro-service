@@ -82,7 +82,7 @@ ALLEGRO_CLIENT_ID=your_client_id
 ALLEGRO_CLIENT_SECRET=your_client_secret
 
 # OAuth Configuration
-ALLEGRO_REDIRECT_URI=https://allegro.statex.cz/api/allegro/oauth/callback  # Production
+ALLEGRO_REDIRECT_URI=https://allegro.alfares.cz/api/allegro/oauth/callback  # Production
 # ALLEGRO_REDIRECT_URI=http://localhost:3411/api/allegro/oauth/callback   # Local Dev
 
 ALLEGRO_OAUTH_AUTHORIZE_URL=https://allegro.pl/auth/oauth/authorize
@@ -123,7 +123,7 @@ ENCRYPTION_KEY=your_32_character_encryption_key
 
 ```bash
 # Using script
-cd /Users/sergiystashok/Documents/GitHub/statex.cz/allegro
+cd /Users/sergiystashok/Documents/GitHub/alfares.cz/allegro
 npx ts-node scripts/clear-oauth-state.ts
 
 # Or manually via database
@@ -135,7 +135,7 @@ ssh statex "docker exec -i db-server-postgres psql -U dbadmin -d allegro -c \"UP
 ```bash
 # Via API (requires authentication)
 curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  https://allegro.statex.cz/api/allegro/oauth/status
+  https://allegro.alfares.cz/api/allegro/oauth/status
 
 # Via database
 ssh statex "docker exec -i db-server-postgres psql -U dbadmin -d allegro -c 'SELECT \"userId\", \"allegroAccessToken\" IS NOT NULL as authorized, \"allegroTokenExpiresAt\" FROM user_settings WHERE \"userId\" = '\''6'\'';'"

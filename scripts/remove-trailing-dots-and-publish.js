@@ -107,7 +107,7 @@ async function removeTrailingDots() {
 
     if (updated > 0) {
       console.log(`\n✅ Successfully updated ${updated} offer(s) in the database.`);
-      console.log('📤 Next step: Go to https://allegro.statex.cz/dashboard/offers and click "Publish All" to publish changes to Allegro.');
+      console.log('📤 Next step: Go to https://allegro.alfares.cz/dashboard/offers and click "Publish All" to publish changes to Allegro.');
     }
   } catch (error) {
     console.error('❌ Error:', error.message);

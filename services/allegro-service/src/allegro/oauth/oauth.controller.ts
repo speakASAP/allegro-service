@@ -730,7 +730,7 @@ export class OAuthController {
 
   /**
    * Get frontend URL for redirects
-   * Uses FRONTEND_URL from .env (e.g., https://allegro.statex.cz for prod, http://localhost:3410 for dev)
+   * Uses FRONTEND_URL from .env (e.g., https://allegro.alfares.cz for prod, http://localhost:3410 for dev)
    */
   private getFrontendUrl(): string {
     const frontendUrl = this.configService.get<string>('FRONTEND_URL');
