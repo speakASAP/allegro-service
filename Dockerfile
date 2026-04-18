@@ -12,7 +12,9 @@ COPY . .
 # Install and build service subdirectory
 WORKDIR /app/services/allegro-service
 RUN npm install --prefer-offline --no-audit 2>/dev/null || true
-RUN npm run build 2>/dev/null || true
+RUN npm run build
+RUN ls -la dist/
+RUN cat dist/main.js | head -5
 
 # Expose port (will be overridden by ConfigMap)
 EXPOSE 3000
