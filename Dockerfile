@@ -18,4 +18,5 @@ RUN npm run build 2>/dev/null || true
 EXPOSE 3000
 
 # Start application from service directory
-CMD node dist/main.js
+ENTRYPOINT []
+CMD ["node", "dist/main.js"]
