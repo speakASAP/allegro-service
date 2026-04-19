@@ -11,7 +11,8 @@ COPY . .
 
 # Install and build service subdirectory
 WORKDIR /app/services/allegro-service
-RUN npm install --prefer-offline --no-audit 2>/dev/null || true
+RUN npm install --prefer-offline --no-audit || npm ci || \
+    (echo "❌ npm install failed for allegro-service" >&2; exit 1)
 RUN npm run build
 RUN ls -la dist/
 RUN cat dist/main.js | head -5
