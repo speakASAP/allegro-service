@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM node:24-slim
 
 WORKDIR /app
 
@@ -20,5 +20,5 @@ RUN cat dist/main.js | head -5
 EXPOSE 3000
 
 # Start application from service directory
-ENTRYPOINT []
-CMD ["node", "dist/main.js"]
+ENTRYPOINT ["node"]
+CMD ["dist/main.js"]

@@ -1,5 +1,5 @@
 # Multi-stage build for Frontend Service
-FROM node:20-alpine AS builder
+FROM node:24-slim AS builder
 
 WORKDIR /app
 
