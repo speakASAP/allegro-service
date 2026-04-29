@@ -5,7 +5,7 @@
 
 set -e
 
-HEALTH_CHECK_SCRIPT="/home/statex/nginx-microservice/scripts/blue-green/health-check.sh"
+HEALTH_CHECK_SCRIPT="~/Documents/Github/nginx-microservice/scripts/blue-green/health-check.sh"
 BACKUP_SCRIPT="${HEALTH_CHECK_SCRIPT}.backup.$(date +%Y%m%d_%H%M%S)"
 
 if [ ! -f "$HEALTH_CHECK_SCRIPT" ]; then
@@ -30,7 +30,7 @@ if grep -q 'grep -E "\^${CONTAINER_BASE}(-\${ACTIVE_COLOR})?\$"' "$HEALTH_CHECK_
     echo "Backup saved to: $BACKUP_SCRIPT"
     echo ""
     echo "To verify the fix, run:"
-    echo "  cd /home/statex/nginx-microservice"
+    echo "  cd ~/Documents/Github/nginx-microservice"
     echo "  ./scripts/blue-green/health-check.sh allegro-service"
 else
     echo "❌ Fix may not have been applied correctly. Restoring backup..."

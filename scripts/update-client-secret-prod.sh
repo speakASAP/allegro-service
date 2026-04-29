@@ -10,5 +10,5 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     exit 1
 fi
 
-ssh statex "cd allegro && node scripts/update-client-secret-simple.js"
+ssh alfares "cd allegro && node scripts/update-client-secret-simple.js"
 
