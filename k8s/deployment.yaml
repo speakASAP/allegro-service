@@ -27,7 +27,6 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3403
-              name: http
           envFrom:
             - configMapRef:
                 name: allegro-config
