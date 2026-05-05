@@ -23,9 +23,7 @@
 catalog-microservice → allegro-service → Allegro API  
 warehouse-microservice → (stock.updated) → allegro-service
 
-**Ops**: `docker compose logs -f` · `./scripts/deploy.sh`
+**Ops**: `kubectl logs -n statex-apps -l app=allegro-service -f` · `kubectl rollout restart deployment/allegro-service -n statex-apps` · `./scripts/deploy.sh`
 
 ### Secrets
-All secrets in Vault (`secret/prod/allegro-service`) and local `.env`.
-
-See [docs/OPS.md](docs/OPS.md) for full log commands.
+All secrets in Vault (`secret/prod/allegro-service`) → ESO → K8s Secret `allegro-service-secret`.
