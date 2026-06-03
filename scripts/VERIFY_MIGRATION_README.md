@@ -9,7 +9,7 @@ This script verifies that all products have been migrated from allegro-service t
    - Products from `AllegroProduct` table
 
 2. **Fetches products from catalog-microservice**:
-   - Tries to connect directly to catalog database (if credentials available)
+   - Uses Kubernetes-backed service configuration only
    - Falls back to using catalog-microservice API
 
 3. **Compares products**:
@@ -28,7 +28,7 @@ This script verifies that all products have been migrated from allegro-service t
    - `DATABASE_URL` - PostgreSQL connection string for allegro-service database
    - `CATALOG_SERVICE_URL` - (Optional) URL of catalog-microservice API (default: `http://catalog-microservice:3200`)
 
-2. **For direct database access** (optional, falls back to API if not available):
+2. **For Kubernetes datastore validation:**
    - `CATALOG_DB_HOST` or `DB_HOST` - Catalog database host
    - `CATALOG_DB_PORT` or `DB_PORT` - Catalog database port (default: 5432)
    - `CATALOG_DB_USER` or `DB_USER` - Catalog database user
