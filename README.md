@@ -66,7 +66,7 @@ See [docs/OPS.md](docs/OPS.md) for log commands and known fixes.
 |------|-------|
 | [BUSINESS.md](BUSINESS.md) | Goals, SLA, consumers |
 | [SYSTEM.md](SYSTEM.md) | Stack, integrations, current state |
-| [docs/LOCAL_DEV_SETUP.md](docs/LOCAL_DEV_SETUP.md) | Local dev with SSH tunnels |
+| [docs/LOCAL_DEV_SETUP.md](docs/LOCAL_DEV_SETUP.md) | Local dev with Kubernetes service DNSs |
 | [docs/OPS.md](docs/OPS.md) | Log commands, nginx fix |
 | [docs/EVENT_POLLING.md](docs/EVENT_POLLING.md) | Allegro event polling |
 | [docs/OAUTH_QUICK_REFERENCE.md](docs/OAUTH_QUICK_REFERENCE.md) | OAuth troubleshooting |

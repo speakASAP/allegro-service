@@ -126,7 +126,7 @@ From AllegroProduct table (2):
 
 If you see:
 ```
-Can't reach database server at `localhost:5432`
+Can't reach database server at `db-server-postgres.statex-apps.svc.cluster.local:5432`
 ```
 
 **Solution**: Make sure `DATABASE_URL` is set correctly in your `.env` file or environment variables.
