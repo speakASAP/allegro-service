@@ -36,6 +36,16 @@ spec:
                 secretKeyRef:
                   name: database-credentials
                   key: DB_PASSWORD
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: allegro-secret
+                  key: ENCRYPTION_KEY
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: allegro-secret
+                  key: JWT_SECRET
           startupProbe:
             httpGet:
               path: /health

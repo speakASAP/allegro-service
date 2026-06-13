@@ -1,6 +1,8 @@
 # Multi-stage build for Allegro Service
 FROM node:24-slim AS builder
 
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Copy shared package and install dependencies first
@@ -15,7 +17,7 @@ RUN mkdir -p /app/shared/node_modules/.prisma/client
 # Create symlink so Prisma can find @prisma/client in shared/node_modules
 RUN ln -s /app/shared/node_modules ./node_modules
 # Use Prisma from shared/node_modules to avoid auto-install issues
-RUN /app/shared/node_modules/.bin/prisma generate --schema=./prisma/schema.prisma
+RUN DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" /app/shared/node_modules/.bin/prisma generate --schema=./prisma/schema.prisma
 # Remove symlink
 RUN rm ./node_modules
 # Fix: Copy index.js to default.js so @prisma/client can find the real client (not the stub)
