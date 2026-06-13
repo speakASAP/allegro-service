@@ -7,6 +7,10 @@ nodes:
     type: goal
     path: 01_vision/VISION.md
     title: Operational production service
+  - id: VG-REVENUE
+    type: goal
+    path: 08_roadmap/ROADMAP.md
+    title: Increase Allegro channel earnings
   - id: SYS-001
     type: system
     path: 04_systems/SYS-001-allegro-marketplace-integration.md
@@ -15,14 +19,98 @@ nodes:
     type: feature
     path: 10_features/FEAT-001-ips-governed-allegro-delivery.md
     title: IPS-Governed Allegro Delivery
+  - id: FEAT-002
+    type: feature
+    path: 10_features/FEAT-002-governed-publish-lifecycle.md
+    title: Governed Publish Lifecycle
+  - id: FEAT-003
+    type: feature
+    path: 10_features/FEAT-003-marketplace-policy-engine.md
+    title: Marketplace Policy Engine
+  - id: FEAT-004
+    type: feature
+    path: 10_features/FEAT-004-catalog-sell-on-allegro-action.md
+    title: Catalog Sell On Allegro Action
+  - id: FEAT-005
+    type: feature
+    path: 10_features/FEAT-005-ai-assisted-offer-optimization.md
+    title: AI-Assisted Offer Optimization
+  - id: FEAT-006
+    type: feature
+    path: 10_features/FEAT-006-stock-order-profit-loop.md
+    title: Stock Order Profit Loop
+  - id: FEAT-007
+    type: feature
+    path: 10_features/FEAT-007-growth-analytics-and-demand-loops.md
+    title: Growth Analytics And Demand Loops
+  - id: FEAT-008
+    type: feature
+    path: 10_features/FEAT-008-operations-trust-and-scale.md
+    title: Operations Trust And Scale
   - id: TASK-001
     type: task
     path: 11_tasks/TASK-001-apply-ips-baseline.md
     title: Apply IPS Baseline
+  - id: TASK-002
+    type: task
+    path: 11_tasks/TASK-002-design-governed-publish-lifecycle.md
+    title: Design Governed Publish Lifecycle
+  - id: TASK-003
+    type: task
+    path: 11_tasks/TASK-003-define-marketplace-policy-engine.md
+    title: Define Marketplace Policy Engine
+  - id: TASK-004
+    type: task
+    path: 11_tasks/TASK-004-design-catalog-sell-on-allegro-action.md
+    title: Design Catalog Sell On Allegro Action
+  - id: TASK-005
+    type: task
+    path: 11_tasks/TASK-005-define-ai-offer-optimization-contract.md
+    title: Define AI Offer Optimization Contract
+  - id: TASK-006
+    type: task
+    path: 11_tasks/TASK-006-plan-stock-order-profit-loop.md
+    title: Plan Stock Order Profit Loop
+  - id: TASK-007
+    type: task
+    path: 11_tasks/TASK-007-plan-growth-analytics-and-demand-loops.md
+    title: Plan Growth Analytics And Demand Loops
+  - id: TASK-008
+    type: task
+    path: 11_tasks/TASK-008-plan-operations-trust-and-scale.md
+    title: Plan Operations Trust And Scale
   - id: EP-TASK-001
     type: execution_plan
     path: 21_execution_plans/EP-TASK-001-apply-ips-baseline.md
     title: Apply IPS Baseline
+  - id: EP-TASK-002
+    type: execution_plan
+    path: 21_execution_plans/EP-TASK-002-design-governed-publish-lifecycle.md
+    title: Governed Publish Lifecycle
+  - id: EP-TASK-003
+    type: execution_plan
+    path: 21_execution_plans/EP-TASK-003-define-marketplace-policy-engine.md
+    title: Marketplace Policy Engine
+  - id: EP-TASK-004
+    type: execution_plan
+    path: 21_execution_plans/EP-TASK-004-design-catalog-sell-on-allegro-action.md
+    title: Catalog Sell On Allegro Action
+  - id: EP-TASK-005
+    type: execution_plan
+    path: 21_execution_plans/EP-TASK-005-define-ai-offer-optimization-contract.md
+    title: AI Offer Optimization Contract
+  - id: EP-TASK-006
+    type: execution_plan
+    path: 21_execution_plans/EP-TASK-006-plan-stock-order-profit-loop.md
+    title: Stock Order Profit Loop
+  - id: EP-TASK-007
+    type: execution_plan
+    path: 21_execution_plans/EP-TASK-007-plan-growth-analytics-and-demand-loops.md
+    title: Growth Analytics And Demand Loops
+  - id: EP-TASK-008
+    type: execution_plan
+    path: 21_execution_plans/EP-TASK-008-plan-operations-trust-and-scale.md
+    title: Operations Trust And Scale
   - id: PROMPT-TASK-001-ips-baseline
     type: coding_prompt
     path: 14_prompts/PROMPT-TASK-001-ips-baseline.md
@@ -44,11 +132,35 @@ edges:
     type: defines
     to: VG-004
   - from: VISION-ALLEGRO-SERVICE
+    type: defines
+    to: VG-REVENUE
+  - from: VISION-ALLEGRO-SERVICE
     type: traces_to
     to: SYS-001
   - from: SYS-001
     type: enables
     to: FEAT-001
+  - from: SYS-001
+    type: enables
+    to: FEAT-002
+  - from: SYS-001
+    type: enables
+    to: FEAT-003
+  - from: SYS-001
+    type: enables
+    to: FEAT-004
+  - from: SYS-001
+    type: enables
+    to: FEAT-005
+  - from: SYS-001
+    type: enables
+    to: FEAT-006
+  - from: SYS-001
+    type: enables
+    to: FEAT-007
+  - from: SYS-001
+    type: enables
+    to: FEAT-008
   - from: TASK-001
     type: impacts_goal
     to: VG-004
@@ -73,3 +185,87 @@ edges:
   - from: VAL-TASK-001-ips-baseline
     type: validates
     to: TASK-001
+  - from: TASK-002
+    type: impacts_goal
+    to: VG-REVENUE
+  - from: TASK-002
+    type: implements
+    to: FEAT-002
+  - from: EP-TASK-002
+    type: derives_from
+    to: TASK-002
+  - from: EP-TASK-002
+    type: constrained_by
+    to: ADR-001
+  - from: TASK-003
+    type: impacts_goal
+    to: VG-REVENUE
+  - from: TASK-003
+    type: implements
+    to: FEAT-003
+  - from: EP-TASK-003
+    type: derives_from
+    to: TASK-003
+  - from: EP-TASK-003
+    type: constrained_by
+    to: ADR-001
+  - from: TASK-004
+    type: impacts_goal
+    to: VG-REVENUE
+  - from: TASK-004
+    type: implements
+    to: FEAT-004
+  - from: EP-TASK-004
+    type: derives_from
+    to: TASK-004
+  - from: EP-TASK-004
+    type: constrained_by
+    to: ADR-001
+  - from: TASK-005
+    type: impacts_goal
+    to: VG-REVENUE
+  - from: TASK-005
+    type: implements
+    to: FEAT-005
+  - from: EP-TASK-005
+    type: derives_from
+    to: TASK-005
+  - from: EP-TASK-005
+    type: constrained_by
+    to: ADR-001
+  - from: TASK-006
+    type: impacts_goal
+    to: VG-REVENUE
+  - from: TASK-006
+    type: implements
+    to: FEAT-006
+  - from: EP-TASK-006
+    type: derives_from
+    to: TASK-006
+  - from: EP-TASK-006
+    type: constrained_by
+    to: ADR-001
+  - from: TASK-007
+    type: impacts_goal
+    to: VG-REVENUE
+  - from: TASK-007
+    type: implements
+    to: FEAT-007
+  - from: EP-TASK-007
+    type: derives_from
+    to: TASK-007
+  - from: EP-TASK-007
+    type: constrained_by
+    to: ADR-001
+  - from: TASK-008
+    type: impacts_goal
+    to: VG-REVENUE
+  - from: TASK-008
+    type: implements
+    to: FEAT-008
+  - from: EP-TASK-008
+    type: derives_from
+    to: TASK-008
+  - from: EP-TASK-008
+    type: constrained_by
+    to: ADR-001

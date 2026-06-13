@@ -1,9 +1,16 @@
 {
-  "created_at": "2026-06-13T18:19:00Z",
+  "created_at": "2026-06-13T19:38:25Z",
   "execution_plans": {
-    "execution_plan_count": 1,
+    "execution_plan_count": 8,
     "execution_plan_files": [
-      "21_execution_plans/EP-TASK-001-apply-ips-baseline.md"
+      "21_execution_plans/EP-TASK-001-apply-ips-baseline.md",
+      "21_execution_plans/EP-TASK-002-design-governed-publish-lifecycle.md",
+      "21_execution_plans/EP-TASK-003-define-marketplace-policy-engine.md",
+      "21_execution_plans/EP-TASK-004-design-catalog-sell-on-allegro-action.md",
+      "21_execution_plans/EP-TASK-005-define-ai-offer-optimization-contract.md",
+      "21_execution_plans/EP-TASK-006-plan-stock-order-profit-loop.md",
+      "21_execution_plans/EP-TASK-007-plan-growth-analytics-and-demand-loops.md",
+      "21_execution_plans/EP-TASK-008-plan-operations-trust-and-scale.md"
     ],
     "missing_validation_plan": []
   },
@@ -37,9 +44,16 @@
   "status": "pass",
   "tasks": {
     "missing_upstream_traceability": [],
-    "task_count": 1,
+    "task_count": 8,
     "task_files": [
-      "11_tasks/TASK-001-apply-ips-baseline.md"
+      "11_tasks/TASK-001-apply-ips-baseline.md",
+      "11_tasks/TASK-002-design-governed-publish-lifecycle.md",
+      "11_tasks/TASK-003-define-marketplace-policy-engine.md",
+      "11_tasks/TASK-004-design-catalog-sell-on-allegro-action.md",
+      "11_tasks/TASK-005-define-ai-offer-optimization-contract.md",
+      "11_tasks/TASK-006-plan-stock-order-profit-loop.md",
+      "11_tasks/TASK-007-plan-growth-analytics-and-demand-loops.md",
+      "11_tasks/TASK-008-plan-operations-trust-and-scale.md"
     ]
   }
 }

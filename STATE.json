@@ -1,1 +1,30 @@
-{"v":1,"project":"allegro-service","stage":"production","health":"ok","cycle":0,"last_cycle_at":"2026-04-05T00:00:00Z","tasks_active":0,"tasks_failed_last_cycle":0,"open_task_ids":[],"last_milestone":"documentation-standard-applied","next_focus":"review and update by owner","blockers":[],"budget_units_used":0,"metrics":{"custom":{}}}
+{
+  "v": 1,
+  "project": "allegro-service",
+  "stage": "production",
+  "health": "ok",
+  "cycle": 1,
+  "last_cycle_at": "2026-06-13T00:00:00Z",
+  "tasks_active": 1,
+  "tasks_failed_last_cycle": 0,
+  "open_task_ids": [
+    "TASK-002",
+    "TASK-003",
+    "TASK-004",
+    "TASK-005",
+    "TASK-006",
+    "TASK-007",
+    "TASK-008"
+  ],
+  "last_milestone": "revenue-roadmap-created",
+  "next_focus": "implement TASK-002 governed publish lifecycle after pre-coding gate and execution-plan approval",
+  "blockers": [],
+  "budget_units_used": 0,
+  "metrics": {
+    "custom": {
+      "planned_milestones": 7,
+      "planned_revenue_tasks": 7,
+      "active_revenue_task": "TASK-002"
+    }
+  }
+}
