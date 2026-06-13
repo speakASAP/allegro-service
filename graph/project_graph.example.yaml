@@ -1,0 +1,75 @@
+nodes:
+  - id: VISION-ALLEGRO-SERVICE
+    type: vision
+    path: 01_vision/VISION.md
+    title: allegro-service vision
+  - id: VG-004
+    type: goal
+    path: 01_vision/VISION.md
+    title: Operational production service
+  - id: SYS-001
+    type: system
+    path: 04_systems/SYS-001-allegro-marketplace-integration.md
+    title: Allegro Marketplace Integration
+  - id: FEAT-001
+    type: feature
+    path: 10_features/FEAT-001-ips-governed-allegro-delivery.md
+    title: IPS-Governed Allegro Delivery
+  - id: TASK-001
+    type: task
+    path: 11_tasks/TASK-001-apply-ips-baseline.md
+    title: Apply IPS Baseline
+  - id: EP-TASK-001
+    type: execution_plan
+    path: 21_execution_plans/EP-TASK-001-apply-ips-baseline.md
+    title: Apply IPS Baseline
+  - id: PROMPT-TASK-001-ips-baseline
+    type: coding_prompt
+    path: 14_prompts/PROMPT-TASK-001-ips-baseline.md
+    title: Apply IPS Baseline Prompt
+  - id: CP-TASK-001
+    type: context_package
+    path: 13_context_packages/CP-TASK-001-ips-baseline.md
+    title: IPS Baseline Context Package
+  - id: ADR-001
+    type: adr
+    path: 07_decisions/ADR-001-preserve-existing-nestjs-prisma-service-boundary.md
+    title: Preserve Existing NestJS And Prisma Service Boundary
+  - id: VAL-TASK-001-ips-baseline
+    type: validation_report
+    path: 12_validation/VAL-TASK-001-ips-baseline.md
+    title: IPS Baseline Validation
+edges:
+  - from: VISION-ALLEGRO-SERVICE
+    type: defines
+    to: VG-004
+  - from: VISION-ALLEGRO-SERVICE
+    type: traces_to
+    to: SYS-001
+  - from: SYS-001
+    type: enables
+    to: FEAT-001
+  - from: TASK-001
+    type: impacts_goal
+    to: VG-004
+  - from: TASK-001
+    type: implements
+    to: FEAT-001
+  - from: EP-TASK-001
+    type: derives_from
+    to: TASK-001
+  - from: EP-TASK-001
+    type: generates
+    to: PROMPT-TASK-001-ips-baseline
+  - from: EP-TASK-001
+    type: constrained_by
+    to: ADR-001
+  - from: PROMPT-TASK-001-ips-baseline
+    type: derives_from
+    to: EP-TASK-001
+  - from: PROMPT-TASK-001-ips-baseline
+    type: included_in_context
+    to: CP-TASK-001
+  - from: VAL-TASK-001-ips-baseline
+    type: validates
+    to: TASK-001
