@@ -2,7 +2,7 @@
 
 ```yaml
 id: FEAT-002
-status: planned
+status: in_progress
 owner: Project Owner
 created: 2026-06-13
 last_updated: 2026-06-13

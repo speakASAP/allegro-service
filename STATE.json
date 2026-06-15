@@ -17,7 +17,7 @@
     "TASK-008"
   ],
   "last_milestone": "revenue-roadmap-created",
-  "next_focus": "implement TASK-002 governed publish lifecycle after pre-coding gate and execution-plan approval",
+  "next_focus": "continue TASK-002 governed publish lifecycle by wrapping legacy direct mutation paths and adding queued-attempt execution",
   "blockers": [],
   "budget_units_used": 0,
   "metrics": {

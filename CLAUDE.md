@@ -45,3 +45,7 @@ warehouse-microservice → (stock.updated) → allegro-service
 ### Secrets
 
 All secrets in Vault (`secret/prod/allegro-service`) → ESO → K8s Secret `allegro-service-secret`.
+
+## Central Instruction Source
+
+Shared agent rules now live in `/home/ssf/.claude/CLAUDE.md`, `/home/ssf/Documents/Github/CLAUDE.md`, `/home/ssf/.codex/AGENTS.md`, and `/home/ssf/.ai-agent-standards/CROSS_AGENT_AUTOMATION_STANDARD.md`. Keep this file for repository-specific Claude constraints only; do not duplicate shared operating rules here.

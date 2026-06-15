@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-06-13T19:38:25Z",
+  "created_at": "2026-06-14T19:58:16Z",
   "gate": "deployment_readiness",
   "next_step": "ready_for_deployment_review",
   "pre_coding_gate": {
@@ -19,8 +19,58 @@
     "score": 100,
     "status": "PASS"
   },
-  "target": "TASK-001",
+  "target": "TASK-002",
   "unresolved_markers": [
+    {
+      "line": 162,
+      "marker": "[MISSING: orders-microservice authoritative `orders.create.v1` idempotency conflict response contract, including whether duplicate creates return 200/201, 409, or another status.]",
+      "path": "12_validation/VAL-TASK-006-validation-report.md"
+    },
+    {
+      "line": 163,
+      "marker": "[MISSING: durable order-forward attempt record or accepted contract for reusing `WebhookEvent` as the retry/reconciliation ledger.]",
+      "path": "12_validation/VAL-TASK-006-validation-report.md"
+    },
+    {
+      "line": 164,
+      "marker": "[MISSING: reconciliation endpoint/job contract for listing failed, pending, or blocked Allegro order forwards.]",
+      "path": "12_validation/VAL-TASK-006-validation-report.md"
+    },
+    {
+      "line": 165,
+      "marker": "[MISSING: approved redacted error taxonomy for `allegro.order.forward_failed` notification/logging payloads.]",
+      "path": "12_validation/VAL-TASK-006-validation-report.md"
+    },
+    {
+      "line": 166,
+      "marker": "[MISSING: confirmed order event source of truth: Allegro order-events availability vs order-list polling fallback for production accounts.]",
+      "path": "12_validation/VAL-TASK-006-validation-report.md"
+    },
+    {
+      "line": 167,
+      "marker": "[UNKNOWN: whether `orders-microservice` validates payload equality on idempotency conflict or only keys by external id.]",
+      "path": "12_validation/VAL-TASK-006-validation-report.md"
+    },
+    {
+      "line": 168,
+      "marker": "[UNKNOWN: expected central order status mapping for Allegro `payment.status` values.]",
+      "path": "12_validation/VAL-TASK-006-validation-report.md"
+    },
+    {
+      "line": 118,
+      "marker": "[MISSING: ...]",
+      "path": "21_execution_plans/EP-TASK-006-plan-stock-order-profit-loop.md"
+    },
+    {
+      "line": 124,
+      "marker": "[MISSING: ...]",
+      "path": "21_execution_plans/EP-TASK-007-plan-growth-analytics-and-demand-loops.md"
+    },
+    {
+      "line": 118,
+      "marker": "[MISSING: ...]",
+      "path": "21_execution_plans/EP-TASK-008-plan-operations-trust-and-scale.md"
+    },
     {
       "line": 16,
       "marker": "[MISSING: ...]",
@@ -75,16 +125,28 @@
       "line": 75,
       "marker": "[MISSING: ...]",
       "path": "23_documentation_contracts/DOCUMENTATION_COMPLETENESS_STANDARD.md"
+    },
+    {
+      "line": 60,
+      "marker": "[MISSING: ...]",
+      "path": "AGENT_OPERATIONS.md"
+    },
+    {
+      "line": 60,
+      "marker": "[UNKNOWN: ...]",
+      "path": "AGENT_OPERATIONS.md"
     }
   ],
   "validation_reports": {
     "matching_reports": [
-      "12_validation/VAL-TASK-001-ips-baseline.md"
+      "12_validation/VAL-TASK-002-validation-report.md"
     ],
     "reports": [
-      "12_validation/VAL-TASK-001-ips-baseline.md"
+      "12_validation/VAL-TASK-001-ips-baseline.md",
+      "12_validation/VAL-TASK-002-validation-report.md",
+      "12_validation/VAL-TASK-006-validation-report.md"
     ],
     "status": "pass",
-    "target": "TASK-001"
+    "target": "TASK-002"
   }
 }

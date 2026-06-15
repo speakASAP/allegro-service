@@ -18,11 +18,13 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Response } from 'express';
+import { createHash } from 'crypto';
 import { OffersService } from './offers.service';
 import { JwtAuthGuard, RolesGuard, Roles, LoggerService, MetricsService } from '@allegro/shared';
 import { CreateOfferDto } from '../dto/create-offer.dto';
 import { UpdateOfferDto } from '../dto/update-offer.dto';
 import { OfferQueryDto } from '../dto/offer-query.dto';
+import { PublishLifecycleService } from '../publish-lifecycle/publish-lifecycle.service';
 
 @Controller('allegro/offers')
 export class OffersController {
@@ -32,9 +34,33 @@ export class OffersController {
     private readonly offersService: OffersService,
     loggerService: LoggerService,
     private readonly metricsService: MetricsService,
+    private readonly publishLifecycleService: PublishLifecycleService,
   ) {
     this.logger = loggerService;
     this.logger.setContext('OffersController');
+  }
+
+  private isRemoteAffectingOfferUpdate(dto: UpdateOfferDto): boolean {
+    const remoteFields = [
+      'title',
+      'description',
+      'categoryId',
+      'price',
+      'currency',
+      'quantity',
+      'stockQuantity',
+      'images',
+      'publicationStatus',
+      'deliveryOptions',
+      'paymentOptions',
+      'attributes',
+    ];
+    return dto.syncToAllegro === true || remoteFields.some((field) => (dto as any)[field] !== undefined);
+  }
+
+  private buildLifecycleIdempotencyKey(prefix: string, userId: string, offerId: string, payload: unknown): string {
+    const digest = createHash('sha256').update(JSON.stringify(payload || {})).digest('hex').slice(0, 32);
+    return `${prefix}:${userId}:${offerId}:${digest}`;
   }
 
   @Get()
@@ -483,6 +509,19 @@ export class OffersController {
     });
 
     try {
+      if (dto.syncToAllegro !== false) {
+        throw new HttpException(
+          {
+            success: false,
+            error: {
+              code: 'GOVERNED_LIFECYCLE_REQUIRED',
+              message: 'Direct remote Allegro offer creation is disabled. Create a local draft with syncToAllegro=false, then use the governed publish lifecycle.',
+              lifecycleEndpoint: '/allegro/publish-lifecycle/prepare',
+            },
+          },
+          HttpStatus.CONFLICT,
+        );
+      }
     const offer = await this.offersService.createOffer(dto, userId);
       const duration = Date.now() - startTime;
       
@@ -526,6 +565,26 @@ export class OffersController {
         offerId: id,
         fields: Object.keys(dto),
       });
+      if (this.isRemoteAffectingOfferUpdate(dto)) {
+        const attempt = await this.publishLifecycleService.prepareConfirmAndExecute(
+          {
+            action: 'UPDATE',
+            offerId: id,
+            idempotencyKey: this.buildLifecycleIdempotencyKey('offer-update', userId, id, dto),
+            commandPayload: dto as Record<string, unknown>,
+          },
+          userId,
+          `offer-update-${id}-${Date.now()}`,
+        );
+        this.logger.log('Governed offer update completed', {
+          userId,
+          offerId: id,
+          attemptId: attempt?.id,
+          status: attempt?.status,
+        });
+        return { success: true, data: attempt };
+      }
+
       const offer = await this.offersService.updateOffer(id, dto, userId);
       this.logger.log('Offer updated successfully', {
         userId,
@@ -602,12 +661,16 @@ export class OffersController {
       timestamp: new Date().toISOString(),
     });
     try {
-      const result = await this.offersService.updateOffer(id, { syncToAllegro: true }, userId);
-      this.logger.log('[syncToAllegro] Sync-to-Allegro completed successfully', {
+      const result = await this.publishLifecycleService.prepareConfirmAndExecute(
+        { action: 'UPDATE', offerId: id, idempotencyKey: `sync-to-allegro:${userId}:${id}:${Date.now()}` },
+        userId,
+        `sync-to-allegro-${id}-${Date.now()}`,
+      );
+      this.logger.log('[syncToAllegro] Governed sync-to-Allegro completed', {
         offerId: id,
         userId,
-        hasResult: !!result,
-        resultKeys: result ? Object.keys(result) : [],
+        attemptId: result?.id,
+        status: result?.status,
         timestamp: new Date().toISOString(),
       });
       return { success: true, data: result };
@@ -868,9 +931,17 @@ export class OffersController {
         }); // Logger is now non-blocking (fire and forget)
         console.log('[publishAllOffers] logger.log for SERVICE_CALL_START called (non-blocking)');
         
-        console.log('[publishAllOffers] About to call offersService.publishOffersToAllegro');
-        const result = await this.offersService.publishOffersToAllegro(userId, offerIds, requestId);
-        console.log('[publishAllOffers] offersService.publishOffersToAllegro completed', { hasResult: !!result });
+        console.log('[publishAllOffers] About to call governed publish lifecycle executor');
+        const result = await this.publishLifecycleService.executeMany(
+          offerIds.map((offerId) => ({
+            action: 'PUBLISH' as const,
+            offerId,
+            idempotencyKey: `${requestId}:${offerId}`,
+          })),
+          userId,
+          requestId,
+        );
+        console.log('[publishAllOffers] governed publish lifecycle executor completed', { hasResult: !!result });
         
         this.logger.log(`[${requestId}] [publishAllOffers] Service method returned`, {
           userId,
@@ -898,12 +969,13 @@ export class OffersController {
           success: true,
           data: {
             requestId,
-            status: 'completed',
+            status: result.status || 'completed',
             total: result.total,
             successful: result.successful,
-            failed: result.failed,
+            failed: result.failed + (result.blocked || 0),
+            blocked: result.blocked || 0,
             results: result.results,
-            message: `Published ${result.successful} of ${result.total} offers successfully. ${result.failed > 0 ? `${result.failed} failed.` : ''}`,
+            message: `Published ${result.successful} of ${result.total} offers successfully. ${result.failed > 0 ? `${result.failed} failed.` : ''}${result.blocked > 0 ? ` ${result.blocked} blocked.` : ''}`,
             completedAt: new Date().toISOString(),
             duration: `${totalDuration}ms`,
           },

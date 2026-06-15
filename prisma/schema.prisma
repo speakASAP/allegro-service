@@ -114,8 +114,9 @@ model AllegroOffer {
 
   // Relations
   // NOTE: catalogProductId references catalog-microservice product ID (no foreign key constraint)
-  orders   AllegroOrder[]
-  syncJobs SyncJob[]
+  orders          AllegroOrder[]
+  syncJobs        SyncJob[]
+  publishAttempts AllegroPublishAttempt[]
 
   allegroProduct       AllegroProduct?        @relation(fields: [allegroProductId], references: [id], onDelete: SetNull)
   account              AllegroAccount?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
@@ -132,6 +133,50 @@ model AllegroOffer {
   @@index([accountId]) // Index for fast account filtering
   @@index([responsibleProducerId]) // Index for producer filtering
   @@map("allegro_offers")
+}
+
+// Governed publish/update attempt lifecycle for Allegro offer mutations
+model AllegroPublishAttempt {
+  id                String   @id @default(uuid()) @db.Uuid
+  action            String   @db.VarChar(50) // PUBLISH, UPDATE, END
+  status            String   @db.VarChar(50) // PREPARED, BLOCKED, CONFIRMED, QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELLED, STALE
+  idempotencyKey    String   @unique @db.VarChar(160)
+  requestedByUserId String   @db.VarChar(255)
+
+  accountId        String? @db.Uuid
+  catalogProductId String? @db.Uuid // Product ID from catalog-microservice (no FK constraint)
+  offerId          String? @db.Uuid
+  allegroOfferId   String? @db.VarChar(100)
+  commandId        String? @db.VarChar(255)
+
+  commandPayload     Json?
+  policySnapshot     Json
+  blockedReasons     Json?
+  failureContext     Json?
+  remediationContext Json?
+
+  preparedAt  DateTime  @default(now()) @db.Timestamp(6)
+  confirmedAt DateTime? @db.Timestamp(6)
+  queuedAt    DateTime? @db.Timestamp(6)
+  startedAt   DateTime? @db.Timestamp(6)
+  completedAt DateTime? @db.Timestamp(6)
+  staleAt     DateTime? @db.Timestamp(6)
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
+  updatedAt   DateTime  @updatedAt @db.Timestamp(6)
+
+  offer   AllegroOffer?   @relation(fields: [offerId], references: [id], onDelete: SetNull)
+  account AllegroAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@index([action])
+  @@index([status])
+  @@index([accountId])
+  @@index([catalogProductId])
+  @@index([offerId])
+  @@index([allegroOfferId])
+  @@index([commandId])
+  @@index([createdAt])
+  @@index([staleAt])
+  @@map("allegro_publish_attempts")
 }
 
 // Orders from Allegro
@@ -377,8 +422,9 @@ model AllegroAccount {
   updatedAt DateTime @updatedAt @db.Timestamp(6)
 
   // Relations
-  offers     AllegroOffer[]
-  producers  ResponsibleProducer[]
+  offers          AllegroOffer[]
+  producers       ResponsibleProducer[]
+  publishAttempts AllegroPublishAttempt[]
 
   @@index([userId])
   @@index([isActive])

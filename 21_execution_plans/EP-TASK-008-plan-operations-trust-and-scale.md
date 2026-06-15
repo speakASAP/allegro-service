@@ -102,6 +102,26 @@ Plan account-aware rate-limit controls, OAuth health, SLA dashboards, MinIO medi
 5. Run the IPS gates and targeted tests.
 6. Record validation evidence and deviations.
 
+## Parallel Execution
+
+TASK-008 can run four operations lanes in parallel for rate limits/queues, OAuth health, media contracts, and deployment evidence, followed by an operations integration lane.
+
+- Integration owner: Agent TASK-008-E integration owner.
+- Validation owner: Agent TASK-008-E validation owner.
+- Merge order: 1. TASK-008-A rate-limit and queue controls lane; 2. TASK-008-B OAuth health lane; 3. TASK-008-C MinIO media contract lane; 4. TASK-008-D smoke and rollback lane; 5. TASK-008-E final integration and validation evidence.
+- Shared files/contracts: deployment scripts, k8s manifests, operational gate definitions, 16_operations/INTEGRATIONS.md, validation reports, TASKS.md, and STATE.json. TASK-008-E owns final gate wording and merge order.
+
+| Workstream | Status | Objective | Scope | Allowed files | Forbidden files | Expected output | Dependencies/blockers |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| TASK-008-A | Ready now | Rate-limit and queue controls lane | Inspect account-aware Allegro throttling, queue/backpressure controls, and measurable failure modes. Produce control and metric plan only. | Allegro client/rate-limit modules; queue worker references; project invariants. | Do not change runtime throttling behavior without approved coding prompt. | Control map, metric list, synthetic failure-path cases. | None; ready to start now. |
+| TASK-008-B | Ready now | OAuth health lane | Inspect OAuth token lifecycle, expiry handling, and alertable health signals. Produce secret-safe monitoring plan. | OAuth services; environment variable references; operational docs. | No raw tokens, secrets, refresh values, or production auth logs. | OAuth risk map, alert candidates, redaction-safe evidence plan. | None; ready to start now. |
+| TASK-008-C | Ready now | MinIO media contract lane | Inspect media dependency references and define MinIO/media contract discovery requirements with blocked facts explicit. | 16_operations/INTEGRATIONS.md; media references; MinIO docs/contracts if present in repo. | No media storage implementation until contract is approved. | Media contract matrix and [MISSING: ...] markers for unavailable endpoints or ownership. | None; ready to start now. |
+| TASK-008-D | Ready now | Deployment smoke and rollback lane | Inspect deploy scripts, Kubernetes manifests, health checks, and rollback docs. Produce smoke checklist and deterministic validation steps. | scripts/deploy.sh; k8s manifests; health endpoints; existing readiness reports. | Do not deploy or mutate production unless explicitly requested. | Smoke checklist, rollback evidence requirements, failure-path tests. | None; ready to start now. |
+| TASK-008-E | Final integration | Operations readiness integration lane | Merge A-D outputs into a single operations trust plan and validation report, resolving shared operational gates. | 21_execution_plans/EP-TASK-008-plan-operations-trust-and-scale.md; 12_validation/VAL-TASK-008-validation-report.md; TASKS.md/STATE.json only if status changes are approved. | Do not start before A-D handoffs are available or explicitly marked blocked. | Integrated operations plan, validation evidence, deviations, and gate results. | Dependency-gated on prior lane handoffs. |
+
+### Agent-Ready Handoff Notes
+
+Start TASK-008-A through TASK-008-D in separate Codex threads only when operational planning begins. Keep deployment, manifests, and shared gate wording under TASK-008-E ownership until lane handoffs are merged.
 ## Test Plan
 
 - Run npm run ips:audit.
@@ -131,8 +151,7 @@ Revert task-scoped code and schema changes. Disable new routes, workers, or even
 
 ## Agent Handoff Prompt
 
-Implement TASK-008 as operations planning for a safe revenue engine. Keep controls config-gated and secret-safe.
-
+Start TASK-008-A through TASK-008-D in separate Codex threads only when operational planning begins. Keep deployment, manifests, and shared gate wording under TASK-008-E ownership until lane handoffs are merged.
 ## Completion Checklist
 
 - [ ] Implementation complete

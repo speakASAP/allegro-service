@@ -35,7 +35,9 @@ yarn-error.log*
 Thumbs.db
 
 # Prisma
-prisma/migrations/
+prisma/migrations/*
+!prisma/migrations/20260613213000_add_governed_publish_lifecycle/
+!prisma/migrations/20260613213000_add_governed_publish_lifecycle/migration.sql
 
 # Docker
 docker-compose.override.yml

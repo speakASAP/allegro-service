@@ -22,6 +22,8 @@ import { OAuthController } from './oauth/oauth.controller';
 import { ProductsController } from './products/products.controller';
 import { ProductsService } from './products/products.service';
 import { ProducersService } from './producers/producers.service';
+import { PublishLifecycleService } from './publish-lifecycle/publish-lifecycle.service';
+import { PublishLifecycleController } from './publish-lifecycle/publish-lifecycle.controller';
 
 @Module({
   imports: [
@@ -45,6 +47,7 @@ import { ProducersService } from './producers/producers.service';
     EventsController,
     OAuthController,
     ProductsController,
+    PublishLifecycleController,
   ],
   providers: [
     AllegroApiService,
@@ -57,8 +60,9 @@ import { ProducersService } from './producers/producers.service';
     EventsService,
     ProductsService,
     ProducersService,
+    PublishLifecycleService,
   ],
-  exports: [AllegroApiService, OffersService, OrdersService, CategoriesService, InventoryService, EventsService],
+  exports: [AllegroApiService, OffersService, OrdersService, CategoriesService, InventoryService, EventsService, PublishLifecycleService],
 })
 export class AllegroModule {}
 

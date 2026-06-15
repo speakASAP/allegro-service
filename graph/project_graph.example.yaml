@@ -127,6 +127,14 @@ nodes:
     type: validation_report
     path: 12_validation/VAL-TASK-001-ips-baseline.md
     title: IPS Baseline Validation
+  - id: VAL-TASK-002-validation-report
+    type: validation_report
+    path: 12_validation/VAL-TASK-002-validation-report.md
+    title: Governed Publish Lifecycle Validation
+  - id: VAL-TASK-006-validation-report
+    type: validation_report
+    path: 12_validation/VAL-TASK-006-validation-report.md
+    title: Stock Order Profit Loop Validation
 edges:
   - from: VISION-ALLEGRO-SERVICE
     type: defines
@@ -185,6 +193,12 @@ edges:
   - from: VAL-TASK-001-ips-baseline
     type: validates
     to: TASK-001
+  - from: VAL-TASK-002-validation-report
+    type: validates
+    to: TASK-002
+  - from: VAL-TASK-006-validation-report
+    type: validates
+    to: TASK-006
   - from: TASK-002
     type: impacts_goal
     to: VG-REVENUE

@@ -10,6 +10,23 @@ import { AllegroAuthService } from '../allegro-auth.service';
 import { ProducersService } from '../producers/producers.service';
 import * as crypto from 'crypto';
 
+
+type AllegroUpdateSyncTerminalStatus = 'SUCCEEDED' | 'FAILED';
+
+type AllegroUpdateSyncTerminalResult = {
+  terminal: true;
+  status: AllegroUpdateSyncTerminalStatus;
+  offerId: string;
+  allegroOfferId: string | null;
+  requestId?: string;
+  result?: any;
+  error?: {
+    code: string | number;
+    message: string;
+    details?: any;
+  };
+};
+
 @Injectable()
 export class OffersService {
   private readonly encryptionKey: string;
@@ -1388,6 +1405,77 @@ export class OffersService {
         error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+
+  async syncOfferUpdateToAllegroTerminal(
+    userId: string,
+    offerId: string,
+    requestId?: string,
+  ): Promise<AllegroUpdateSyncTerminalResult> {
+    const offer = await this.prisma.allegroOffer.findUnique({ where: { id: offerId } });
+
+    if (!offer) {
+      return {
+        terminal: true,
+        status: 'FAILED',
+        offerId,
+        allegroOfferId: null,
+        requestId,
+        error: {
+          code: 'OFFER_NOT_FOUND',
+          message: 'Offer not found: ' + offerId,
+        },
+      };
+    }
+
+    if (!offer.allegroOfferId || offer.allegroOfferId.startsWith('local-')) {
+      return {
+        terminal: true,
+        status: 'FAILED',
+        offerId,
+        allegroOfferId: offer.allegroOfferId || null,
+        requestId,
+        error: {
+          code: 'MISSING_REMOTE_OFFER_ID',
+          message: 'Cannot run UPDATE sync for an offer that does not have a remote Allegro offer id',
+        },
+      };
+    }
+
+    const result = await this.publishOffersToAllegro(
+      userId,
+      [offerId],
+      requestId || 'update-sync-' + offerId + '-' + Date.now(),
+    );
+    const item = Array.isArray(result?.results)
+      ? result.results.find((entry: any) => entry.offerId === offerId)
+      : null;
+
+    if (result?.failed > 0 || result?.successful === 0 || item?.status === 'failed') {
+      return {
+        terminal: true,
+        status: 'FAILED',
+        offerId,
+        allegroOfferId: item?.allegroOfferId || offer.allegroOfferId,
+        requestId,
+        result,
+        error: {
+          code: 'ALLEGRO_UPDATE_SYNC_FAILED',
+          message: item?.error || 'Allegro update sync did not complete successfully',
+          details: item || result,
+        },
+      };
+    }
+
+    return {
+      terminal: true,
+      status: 'SUCCEEDED',
+      offerId,
+      allegroOfferId: item?.allegroOfferId || offer.allegroOfferId,
+      requestId,
+      result,
+    };
   }
 
   /**

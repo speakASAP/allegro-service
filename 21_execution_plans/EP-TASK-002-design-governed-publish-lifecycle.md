@@ -2,7 +2,7 @@
 
 ```yaml
 id: EP-TASK-002
-status: draft
+status: approved_for_implementation
 source_task: ../11_tasks/TASK-002-design-governed-publish-lifecycle.md
 owner: Project Owner
 created: 2026-06-13
@@ -17,8 +17,8 @@ goal_impact: ../22_goal_impact/GOAL-IMPACT-TASK-002.md
 ## Metadata
 
 - Source task: ../11_tasks/TASK-002-design-governed-publish-lifecycle.md
-- Status: draft for owner review.
-- Lifecycle state: planned; not approved for coding until gate review passes.
+- Status: approved for implementation by owner instruction on 2026-06-13.
+- Lifecycle state: implementation started after pre-coding gate and owner instruction.
 
 ## Upstream Traceability
 

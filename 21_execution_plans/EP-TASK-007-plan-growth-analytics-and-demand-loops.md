@@ -102,6 +102,26 @@ Define versioned funnel events, lead signals, marketing segments, and notificati
 5. Run the IPS gates and targeted tests.
 6. Record validation evidence and deviations.
 
+## Parallel Execution
+
+TASK-007 can run four independent contract lanes for funnel taxonomy, leads/marketing, digest metrics, and redaction/versioning before a final integration lane publishes the coherent event contract plan.
+
+- Integration owner: Agent TASK-007-E integration owner.
+- Validation owner: Agent TASK-007-E validation owner.
+- Merge order: 1. TASK-007-A funnel taxonomy lane; 2. TASK-007-B leads and marketing schema lane; 3. TASK-007-C notification digest lane; 4. TASK-007-D redaction and replay lane; 5. TASK-007-E final integration and validation evidence.
+- Shared files/contracts: event contract names, 16_operations/INTEGRATIONS.md, validation reports, TASKS.md, and STATE.json. TASK-007-E owns final naming, event version consistency, and merge conflict resolution.
+
+| Workstream | Status | Objective | Scope | Allowed files | Forbidden files | Expected output | Dependencies/blockers |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| TASK-007-A | Ready now | Funnel event taxonomy lane | Define versioned funnel events from Allegro publish, offer, stock, order-forward, and conversion-relevant lifecycle points using synthetic examples. | roadmap Stage 5; feature/task/goal-impact docs; existing logging/event references. | Do not add production event emission or customer identifiers. | Versioned taxonomy draft, event names, required fields, and missing source markers. | None; ready to start now. |
+| TASK-007-B | Ready now | Leads and marketing schema lane | Map demand and remarketing signals into leads/marketing contract candidates with ownership and consent boundaries explicit. | 16_operations/INTEGRATIONS.md; leads/marketing shared client references if present; sensitive data policy. | No production writes to leads/marketing and no PII exports. | Schema candidates, consent/redaction requirements, and blocked integration facts. | None; ready to start now. |
+| TASK-007-C | Ready now | Notification digest metrics lane | Define digest payload and metrics from available synthetic operational data, including source fields and deterministic aggregation windows. | notification service references; operational metrics references; roadmap demand-loop text. | Do not include raw order/customer records or production logs. | Digest payload draft, metric source map, and synthetic validation cases. | None; ready to start now. |
+| TASK-007-D | Ready now | Redaction, replay, and versioning lane | Define redaction tests, replay/idempotency keys, event versioning rules, and backwards-compatibility checks for all event contract lanes. | 17_governance/PROJECT_INVARIANTS.md; sensitive-data policy; existing validation scripts. | Do not weaken sensitive-data rules or invent approvals. | Redaction/replay checklist and contract validation cases. | None; ready to start now. |
+| TASK-007-E | Final integration | Growth contract integration lane | Merge A-D outputs into a coherent event contract plan and validation report, resolving naming/version conflicts. | 21_execution_plans/EP-TASK-007-plan-growth-analytics-and-demand-loops.md; 12_validation/VAL-TASK-007-validation-report.md; TASKS.md/STATE.json only if status changes are approved. | Do not start before A-D handoffs are available or explicitly marked blocked. | Integrated growth contract plan, validation evidence, deviations, and gate results. | Dependency-gated on prior lane handoffs. |
+
+### Agent-Ready Handoff Notes
+
+Start TASK-007-A through TASK-007-D in separate Codex threads only after TASK-006 integration no longer needs the same shared integration files, or assign TASK-007-E as explicit conflict resolver. Each worker must return synthetic examples and [MISSING: ...] markers instead of inventing external contracts.
 ## Test Plan
 
 - Run npm run ips:audit.
@@ -131,8 +151,9 @@ Revert task-scoped code and schema changes. Disable new routes, workers, or even
 
 ## Agent Handoff Prompt
 
-Implement TASK-007 as contract-first growth analytics planning with redacted, replay-safe event schemas.
+You are a TASK-007 worker for allegro-service. Preserve the chain Vision -> Goal Impact -> System -> Feature -> Task -> Execution Plan -> Coding Prompt -> Code -> Validation. Work only against approved TASK-007 scope, use synthetic examples, and keep raw customer/order data, secrets, production logs, and OAuth material out of notes, tests, prompts, and reports.
 
+Read the roadmap Stage 5, FEAT-007, TASK-007, this execution plan, project invariants, integrations map, and sensitive-data policy before producing output. TASK-007-A through TASK-007-D may run only after TASK-006 integration no longer needs the same shared integration files, or after TASK-007-E is explicitly assigned as conflict resolver. Return event names, contract fields, source mappings, validation cases, blockers, and explicit unavailable-fact markers for missing or unknown external contracts instead of inventing them. Do not edit shared event names, validation reports, TASKS.md, STATE.json, or integration wording unless TASK-007-E owns that merge.
 ## Completion Checklist
 
 - [ ] Implementation complete
