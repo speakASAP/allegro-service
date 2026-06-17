@@ -2,10 +2,10 @@
 
 ```yaml
 id: TASK-002
-status: in_progress
+status: completed
 owner: Project Owner
 created: 2026-06-13
-last_updated: 2026-06-13
+last_updated: 2026-06-15
 completeness_level: complete
 upstream:
   - ../10_features/FEAT-002-governed-publish-lifecycle.md
@@ -71,12 +71,12 @@ High. Publish/update attempts must use idempotency keys and deterministic lifecy
 
 ## Acceptance Criteria
 
-- [ ] Execution plan is reviewed before coding.
-- [ ] Schema design preserves catalog, order, stock, and OAuth ownership boundaries.
-- [ ] Publish lifecycle states are documented and tested.
-- [ ] Idempotency prevents duplicate publish/update attempts.
-- [ ] Attempt records include redacted failure and remediation context.
-- [ ] Validation evidence is captured under `12_validation/` or `reports/validation/`.
+- [x] Execution plan is reviewed before coding.
+- [x] Schema design preserves catalog, order, stock, and OAuth ownership boundaries.
+- [x] Publish lifecycle states are documented and tested.
+- [x] Idempotency prevents duplicate publish/update attempts.
+- [x] Attempt records include redacted failure and remediation context.
+- [x] Validation evidence is captured under `12_validation/` or `reports/validation/`.
 
 ## Required Context
 

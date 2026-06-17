@@ -2,10 +2,10 @@
 
 ```yaml
 id: TASK-003
-status: draft
+status: completed_for_implementation
 owner: Project Owner
 created: 2026-06-13
-last_updated: 2026-06-13
+last_updated: 2026-06-15
 completeness_level: complete
 upstream:
   - ../10_features/FEAT-003-marketplace-policy-engine.md
@@ -56,10 +56,10 @@ No AI generation, no direct publish, no payment/supplier writes.
 
 ## Acceptance Criteria
 
-- [ ] Policy result distinguishes blockers, warnings, and recommendations.
-- [ ] Every blocker has owner service and remediation guidance.
-- [ ] Policy output is reusable by lifecycle, catalog action, AI suggestions, and monitoring.
-- [ ] Tests cover synthetic passing and blocked products.
+- [x] Policy result distinguishes blockers, warnings, and recommendations.
+- [x] Every blocker has owner service and remediation guidance.
+- [x] Policy output is reusable by lifecycle, catalog action, AI suggestions, and monitoring.
+- [x] Tests cover synthetic passing and blocked products.
 
 ## Required Context
 

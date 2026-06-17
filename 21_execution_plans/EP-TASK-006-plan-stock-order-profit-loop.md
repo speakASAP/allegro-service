@@ -18,7 +18,7 @@ goal_impact: ../22_goal_impact/GOAL-IMPACT-TASK-006.md
 
 - Source task: ../11_tasks/TASK-006-plan-stock-order-profit-loop.md
 - Status: draft for owner review.
-- Lifecycle state: planned; not approved for coding until gate review passes.
+- Lifecycle state: contract-discovery integrated; not approved for coding until missing external contracts are resolved.
 
 ## Upstream Traceability
 
@@ -104,24 +104,24 @@ Plan stock-to-Allegro sync, order reconciliation, payment read-only status, supp
 
 ## Parallel Execution
 
-TASK-006 can start with four independent contract-discovery lanes, then one integration lane resolves ownership, sequencing, and validation evidence.
+TASK-006 ran four independent contract-discovery lanes, then one integration lane merged the lane evidence into the validation report. The task is still not coding-ready because external ownership and contract facts remain missing.
 
 - Integration owner: Agent TASK-006-E integration owner.
 - Validation owner: Agent TASK-006-E validation owner.
-- Merge order: 1. TASK-006-A stock contract lane; 2. TASK-006-B order reconciliation lane; 3. TASK-006-C payments and suppliers read-only lane; 4. TASK-006-D margin computation lane; 5. TASK-006-E final integration and validation evidence.
+- Merge order completed for planning evidence: 1. TASK-006-A stock contract lane; 2. TASK-006-B order reconciliation lane; 3. TASK-006-C payments and suppliers read-only lane; 4. TASK-006-D margin computation lane; 5. TASK-006-E final integration and validation evidence.
 - Shared files/contracts: 16_operations/INTEGRATIONS.md, shared client contracts, prisma/schema.prisma if later schema changes are approved, TASKS.md, STATE.json, and validation reports. Only TASK-006-E may merge shared contract wording after reviewing lane outputs.
 
 | Workstream | Status | Objective | Scope | Allowed files | Forbidden files | Expected output | Dependencies/blockers |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| TASK-006-A | Ready now | Stock drift and publishable quantity lane | Inspect warehouse client, offer stock fields, Allegro stock mutation boundaries, and existing synthetic stock fixtures. Produce stock-drift detection contract notes and validation cases only. | 11_tasks/TASK-006-plan-stock-order-profit-loop.md; 10_features/FEAT-006-stock-order-profit-loop.md; 16_operations/INTEGRATIONS.md; warehouse client references; offer stock DTOs. | Do not edit orders, payments, supplier, margin, Prisma migrations, or production secrets. | Stock contract findings, fixture needs, idempotency notes, and proposed validation evidence section. | None; ready to start now. |
-| TASK-006-B | Ready now | Order retry and reconciliation lane | Inspect order forwarding, RabbitMQ subscriber behavior, orders-microservice boundary, and retry/reconciliation records. Produce replay-safe order reconciliation contract notes only. | order forwarding modules; RabbitMQ subscriber; orders client references; ALG-INV-003 ownership boundary. | Do not add local order ownership, payment behavior, stock mutations, or schema changes without integration owner approval. | Order reconciliation findings, idempotency/replay notes, and proposed validation cases. | None; ready to start now. |
-| TASK-006-C | Ready now | Payments and suppliers read-only lane | Inspect available payments and supplier integration references. Define read-only/dry-run contract discovery questions, synthetic payloads, and blocked facts. | 16_operations/INTEGRATIONS.md; shared clients; payment/supplier references if present. | No payment writes, no supplier purchase automation, no raw customer/payment/supplier production data. | Read-only contract matrix with [MISSING: ...] markers where endpoints or ownership are unavailable. | None; ready to start now. |
-| TASK-006-D | Ready now | Margin computation lane | Inspect product cost, supplier cost, Allegro fee, shipping, and offer price sources. Define deterministic margin inputs and synthetic fixture plan. | catalog/product references; supplier cost references; Allegro fee/price DTOs; roadmap profit-protection text. | Do not invent unavailable fee formulas or supplier terms; mark unknown inputs explicitly. | Margin source map, deterministic calculation assumptions, missing data markers, and validation fixture outline. | None; ready to start now. |
-| TASK-006-E | Final integration | Plan integration and evidence lane | Merge A-D outputs into one execution-ready TASK-006 contract plan, update validation report, resolve shared-file conflicts, and run IPS gates. | 21_execution_plans/EP-TASK-006-plan-stock-order-profit-loop.md; 12_validation/VAL-TASK-006-validation-report.md; TASKS.md/STATE.json only if status changes are approved. | Do not start before A-D handoffs are available or explicitly marked blocked. | Integrated plan, validation evidence references, deviations, and gate results. | Dependency-gated on prior lane handoffs. |
+| TASK-006-A | Completed handoff | Stock drift and publishable quantity lane | Inspect warehouse client, offer stock fields, Allegro stock mutation boundaries, and existing synthetic stock fixtures. Produce stock-drift detection contract notes and validation cases only. | 11_tasks/TASK-006-plan-stock-order-profit-loop.md; 10_features/FEAT-006-stock-order-profit-loop.md; 16_operations/INTEGRATIONS.md; warehouse client references; offer stock DTOs. | Do not edit orders, payments, supplier, margin, Prisma migrations, or production secrets. | Stock contract findings, fixture needs, idempotency notes, and proposed validation evidence section. | None; ready to start now. |
+| TASK-006-B | Completed handoff | Order retry and reconciliation lane | Inspect order forwarding, RabbitMQ subscriber behavior, orders-microservice boundary, and retry/reconciliation records. Produce replay-safe order reconciliation contract notes only. | order forwarding modules; RabbitMQ subscriber; orders client references; ALG-INV-003 ownership boundary. | Do not add local order ownership, payment behavior, stock mutations, or schema changes without integration owner approval. | Order reconciliation findings, idempotency/replay notes, and proposed validation cases. | None; ready to start now. |
+| TASK-006-C | Completed handoff | Payments and suppliers read-only lane | Inspect available payments and supplier integration references. Define read-only/dry-run contract discovery questions, synthetic payloads, and blocked facts. | 16_operations/INTEGRATIONS.md; shared clients; payment/supplier references if present. | No payment writes, no supplier purchase automation, no raw customer/payment/supplier production data. | Read-only contract matrix with [MISSING: ...] markers where endpoints or ownership are unavailable. | None; ready to start now. |
+| TASK-006-D | Completed handoff | Margin computation lane | Inspect product cost, supplier cost, Allegro fee, shipping, and offer price sources. Define deterministic margin inputs and synthetic fixture plan. | catalog/product references; supplier cost references; Allegro fee/price DTOs; roadmap profit-protection text. | Do not invent unavailable fee formulas or supplier terms; mark unknown inputs explicitly. | Margin source map, deterministic calculation assumptions, missing data markers, and validation fixture outline. | None; ready to start now. |
+| TASK-006-E | Integrated planning evidence | Plan integration and evidence lane | Merge A-D outputs into one execution-ready TASK-006 contract plan, update validation report, resolve shared-file conflicts, and run IPS gates. | 21_execution_plans/EP-TASK-006-plan-stock-order-profit-loop.md; 12_validation/VAL-TASK-006-validation-report.md; TASKS.md/STATE.json only if status changes are approved. | Do not start before A-D handoffs are available or explicitly marked blocked. | Integrated plan, validation evidence references, deviations, and gate results. | Dependency-gated on prior lane handoffs. |
 
 ### Agent-Ready Handoff Notes
 
-Start TASK-006-A, TASK-006-B, TASK-006-C, and TASK-006-D in separate Codex threads. Keep this thread as TASK-006-E integration owner. Each worker must preserve Vision -> Goal Impact -> System -> Feature -> Task -> Execution Plan -> Coding Prompt -> Code -> Validation and return only synthetic evidence, missing facts, touched files, and gate output.
+TASK-006-A through TASK-006-D have completed handoffs and TASK-006-E has integrated planning evidence into `12_validation/VAL-TASK-006-validation-report.md`. Do not generate coding prompts yet. Split future implementation into smaller tasks only after missing stock, order, payment, supplier, and margin contracts are resolved or explicitly marked blocked by their owners.
 ## Test Plan
 
 - Run npm run ips:audit.
@@ -151,7 +151,7 @@ Revert task-scoped code and schema changes. Disable new routes, workers, or even
 
 ## Agent Handoff Prompt
 
-Start TASK-006-A, TASK-006-B, TASK-006-C, and TASK-006-D in separate Codex threads. Keep this thread as TASK-006-E integration owner. Each worker must preserve Vision -> Goal Impact -> System -> Feature -> Task -> Execution Plan -> Coding Prompt -> Code -> Validation and return only synthetic evidence, missing facts, touched files, and gate output.
+TASK-006-A through TASK-006-D have completed handoffs and TASK-006-E has integrated planning evidence into `12_validation/VAL-TASK-006-validation-report.md`. Do not generate coding prompts yet. Split future implementation into smaller tasks only after missing stock, order, payment, supplier, and margin contracts are resolved or explicitly marked blocked by their owners.
 ## Completion Checklist
 
 - [ ] Implementation complete

@@ -1,20 +1,14 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';
-import { CatalogClientService, LoggerService, PrismaService } from '@allegro/shared';
+import { LoggerService, PrismaService } from '@allegro/shared';
 import { OffersService } from '../offers/offers.service';
+import { MarketplacePolicyEngineService, MarketplacePolicyGateResult } from '../policy/policy-engine.service';
 import {
   PreparePublishAttemptDto,
   PublishAttemptQueryDto,
   PublishLifecycleAction,
   PublishLifecycleStatus,
 } from './publish-lifecycle.dto';
-
-type PolicyResult = {
-  gate: string;
-  status: 'PASS' | 'BLOCK' | 'WARN';
-  reason?: string;
-  evidence?: Record<string, unknown>;
-};
 
 const SECRET_KEYS = ['authorization', 'token', 'accessToken', 'refreshToken', 'clientSecret', 'secret', 'apiKey', 'password'];
 const TERMINAL_STATUSES = ['SUCCEEDED', 'FAILED', 'CANCELLED'] as const;
@@ -24,8 +18,8 @@ export class PublishLifecycleService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly logger: LoggerService,
-    private readonly catalogClient: CatalogClientService,
     private readonly offersService: OffersService,
+    private readonly policyEngine: MarketplacePolicyEngineService,
   ) {}
 
   async prepare(dto: PreparePublishAttemptDto, requestedByUserId: string): Promise<any> {
@@ -65,13 +59,14 @@ export class PublishLifecycleService {
       return this.withDerivedStatus(existing);
     }
 
-    const policyResults = await this.evaluatePolicy({
+    const policyEvaluation = await this.policyEngine.evaluate({
       action: dto.action,
       offer,
       accountId,
       catalogProductId,
       requestedByUserId,
     });
+    const policyResults = policyEvaluation.results;
     const blocked = policyResults.some((result) => result.status === 'BLOCK');
     const status: PublishLifecycleStatus = blocked ? 'BLOCKED' : 'PREPARED';
     const blockedReasons = policyResults
@@ -90,9 +85,7 @@ export class PublishLifecycleService {
         offerId: offer?.id || null,
         commandPayload: this.redact(dto.commandPayload || {}),
         policySnapshot: {
-          version: 'TASK-002.v1',
-          evaluatedAt: now.toISOString(),
-          results: policyResults,
+          ...policyEvaluation,
           lifecycleStates: ['PREPARED', 'BLOCKED', 'CONFIRMED', 'QUEUED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'STALE'],
           legacyDirectPaths: [
             'POST /allegro/offers/publish-all',
@@ -380,104 +373,6 @@ export class PublishLifecycleService {
         },
       },
     });
-  }
-
-  private async evaluatePolicy(input: {
-    action: PublishLifecycleAction;
-    offer: any;
-    accountId: string | null;
-    catalogProductId: string | null;
-    requestedByUserId: string;
-  }): Promise<PolicyResult[]> {
-    const results: PolicyResult[] = [];
-    const now = new Date();
-
-    if (!input.catalogProductId) {
-      results.push({ gate: 'catalog-validation', status: 'BLOCK', reason: 'catalogProductId is required before Allegro offer mutation' });
-    } else {
-      try {
-        const product = await this.catalogClient.getProductById(input.catalogProductId);
-        results.push({
-          gate: 'catalog-validation',
-          status: product ? 'PASS' : 'BLOCK',
-          reason: product ? undefined : 'catalog product was not returned',
-          evidence: { catalogProductId: input.catalogProductId, productFound: !!product },
-        });
-      } catch (error: any) {
-        results.push({
-          gate: 'catalog-validation',
-          status: 'BLOCK',
-          reason: `catalog validation unavailable: ${error.message}`,
-          evidence: { catalogProductId: input.catalogProductId, errorCode: error.status || error.response?.status || 'CATALOG_UNAVAILABLE' },
-        });
-      }
-    }
-
-    if (!input.accountId) {
-      results.push({ gate: 'account-readiness', status: 'BLOCK', reason: 'accountId is required before Allegro offer mutation' });
-    } else {
-      const account = await (this.prisma as any).allegroAccount.findFirst({
-        where: { id: input.accountId, userId: input.requestedByUserId },
-        select: { id: true, isActive: true, tokenExpiresAt: true },
-      });
-      const tokenExpiresAt = account?.tokenExpiresAt ? new Date(account.tokenExpiresAt) : null;
-      const tokenPresent = account
-        ? (await (this.prisma as any).allegroAccount.count({ where: { id: account.id, accessToken: { not: null } } })) > 0
-        : false;
-      const hasUsableToken = tokenPresent && (!tokenExpiresAt || tokenExpiresAt > now);
-      results.push({
-        gate: 'account-readiness',
-        status: account && hasUsableToken ? 'PASS' : 'BLOCK',
-        reason: account ? (hasUsableToken ? undefined : 'OAuth token missing or expired') : 'account not found for requester',
-        evidence: { accountId: input.accountId, accountFound: !!account, tokenState: hasUsableToken ? 'present' : 'missing_or_expired' },
-      });
-    }
-
-    results.push({
-      gate: 'rate-limit-readiness',
-      status: 'PASS',
-      evidence: { policy: 'Allegro account max 1 request per second; confirmed attempts enter queue before execution' },
-    });
-
-    if (input.action === 'UPDATE') {
-      results.push({
-        gate: 'update-terminal-contract',
-        status: 'PASS',
-        reason: 'Remote offer updates execute through a synchronous terminal lifecycle result contract',
-        evidence: { terminalStatuses: ['SUCCEEDED', 'FAILED'] },
-      });
-    }
-
-    if (input.offer) {
-      const readiness = this.evaluateOfferReadiness(input.offer);
-      results.push({
-        gate: 'offer-readiness',
-        status: readiness.blockers.length > 0 ? 'BLOCK' : readiness.warnings.length > 0 ? 'WARN' : 'PASS',
-        reason: readiness.blockers.length > 0 ? readiness.blockers.join('; ') : undefined,
-        evidence: { blockers: readiness.blockers, warnings: readiness.warnings },
-      });
-    }
-
-    results.push({
-      gate: 'legacy-direct-path-review',
-      status: 'WARN',
-      reason: 'Legacy direct offer mutation endpoints remain present and must be wrapped in a follow-up execution step',
-    });
-
-    return results;
-  }
-
-  private evaluateOfferReadiness(offer: any): { blockers: string[]; warnings: string[] } {
-    const blockers: string[] = [];
-    const warnings: string[] = [];
-    if (!offer.title || !String(offer.title).trim()) blockers.push('missing title');
-    if (!offer.categoryId || !String(offer.categoryId).trim()) blockers.push('missing category');
-    if (!offer.price || Number(offer.price) <= 0) blockers.push('invalid price');
-    if (offer.stockQuantity === undefined || offer.stockQuantity === null || Number(offer.stockQuantity) < 0) blockers.push('invalid stock');
-    if (!offer.images || !Array.isArray(offer.images) || offer.images.length === 0) warnings.push('missing local image evidence');
-    if (!offer.deliveryOptions && !offer.rawData?.delivery) warnings.push('missing delivery evidence');
-    if (!offer.paymentOptions && !offer.rawData?.payments) warnings.push('missing payment evidence');
-    return { blockers, warnings };
   }
 
   private buildIdempotencyKey(action: string, requestedByUserId: string, target: Record<string, unknown>): string {

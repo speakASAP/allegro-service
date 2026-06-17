@@ -2,11 +2,11 @@
 
 ```yaml
 id: EP-TASK-002
-status: approved_for_implementation
+status: validated
 source_task: ../11_tasks/TASK-002-design-governed-publish-lifecycle.md
 owner: Project Owner
 created: 2026-06-13
-last_updated: 2026-06-13
+last_updated: 2026-06-15
 completeness_level: complete
 vision: ../01_vision/VISION.md
 constitution: ../00_constitution/CONSTITUTION.md
@@ -18,7 +18,7 @@ goal_impact: ../22_goal_impact/GOAL-IMPACT-TASK-002.md
 
 - Source task: ../11_tasks/TASK-002-design-governed-publish-lifecycle.md
 - Status: approved for implementation by owner instruction on 2026-06-13.
-- Lifecycle state: implementation started after pre-coding gate and owner instruction.
+- Lifecycle state: implemented and validated for TASK-002 closure on 2026-06-15.
 
 ## Upstream Traceability
 
@@ -135,8 +135,8 @@ Implement TASK-002 by adding a governed Allegro publish lifecycle. Preserve cata
 
 ## Completion Checklist
 
-- [ ] Implementation complete
-- [ ] Tests complete
-- [ ] Validation evidence collected
-- [ ] Documentation updated
-- [ ] Deviations documented
+- [x] Implementation complete
+- [x] Tests complete
+- [x] Validation evidence collected
+- [x] Documentation updated
+- [x] Deviations documented

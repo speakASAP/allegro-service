@@ -24,6 +24,7 @@ import { ProductsService } from './products/products.service';
 import { ProducersService } from './producers/producers.service';
 import { PublishLifecycleService } from './publish-lifecycle/publish-lifecycle.service';
 import { PublishLifecycleController } from './publish-lifecycle/publish-lifecycle.controller';
+import { MarketplacePolicyEngineService } from './policy/policy-engine.service';
 
 @Module({
   imports: [
@@ -61,8 +62,9 @@ import { PublishLifecycleController } from './publish-lifecycle/publish-lifecycl
     ProductsService,
     ProducersService,
     PublishLifecycleService,
+    MarketplacePolicyEngineService,
   ],
-  exports: [AllegroApiService, OffersService, OrdersService, CategoriesService, InventoryService, EventsService, PublishLifecycleService],
+  exports: [AllegroApiService, OffersService, OrdersService, CategoriesService, InventoryService, EventsService, PublishLifecycleService, MarketplacePolicyEngineService],
 })
 export class AllegroModule {}
 

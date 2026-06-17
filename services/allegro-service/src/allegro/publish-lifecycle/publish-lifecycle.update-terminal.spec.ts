@@ -1,5 +1,6 @@
 import { strict as assert } from 'assert';
 import { PublishLifecycleService } from './publish-lifecycle.service';
+import { MarketplacePolicyEngineService } from '../policy/policy-engine.service';
 
 type AttemptRecord = Record<string, any>;
 
@@ -115,7 +116,8 @@ function createServiceHarness() {
     },
   };
 
-  const service = new PublishLifecycleService(prisma as any, logger as any, catalogClient as any, offersService as any);
+  const policyEngine = new MarketplacePolicyEngineService(prisma as any, catalogClient as any);
+  const service = new PublishLifecycleService(prisma as any, logger as any, offersService as any, policyEngine as any);
 
   return {
     service,

@@ -115,10 +115,26 @@ nodes:
     type: coding_prompt
     path: 14_prompts/PROMPT-TASK-001-ips-baseline.md
     title: Apply IPS Baseline Prompt
+  - id: PROMPT-TASK-002-governed-publish-lifecycle
+    type: coding_prompt
+    path: 14_prompts/PROMPT-TASK-002-governed-publish-lifecycle.md
+    title: Governed Publish Lifecycle Prompt
+  - id: PROMPT-TASK-003-marketplace-policy-engine
+    type: coding_prompt
+    path: 14_prompts/PROMPT-TASK-003-marketplace-policy-engine.md
+    title: Marketplace Policy Engine Prompt
   - id: CP-TASK-001
     type: context_package
     path: 13_context_packages/CP-TASK-001-ips-baseline.md
     title: IPS Baseline Context Package
+  - id: CP-TASK-002
+    type: context_package
+    path: 13_context_packages/CP-TASK-002-governed-publish-lifecycle.md
+    title: Governed Publish Lifecycle Context Package
+  - id: CP-TASK-003
+    type: context_package
+    path: 13_context_packages/CP-TASK-003-marketplace-policy-engine.md
+    title: Marketplace Policy Engine Context Package
   - id: ADR-001
     type: adr
     path: 07_decisions/ADR-001-preserve-existing-nestjs-prisma-service-boundary.md
@@ -135,6 +151,10 @@ nodes:
     type: validation_report
     path: 12_validation/VAL-TASK-006-validation-report.md
     title: Stock Order Profit Loop Validation
+  - id: VAL-TASK-003-validation-report
+    type: validation_report
+    path: 12_validation/VAL-TASK-003-validation-report.md
+    title: Marketplace Policy Engine Validation
 edges:
   - from: VISION-ALLEGRO-SERVICE
     type: defines
@@ -199,6 +219,9 @@ edges:
   - from: VAL-TASK-006-validation-report
     type: validates
     to: TASK-006
+  - from: VAL-TASK-003-validation-report
+    type: validates
+    to: TASK-003
   - from: TASK-002
     type: impacts_goal
     to: VG-REVENUE
@@ -208,6 +231,15 @@ edges:
   - from: EP-TASK-002
     type: derives_from
     to: TASK-002
+  - from: EP-TASK-002
+    type: generates
+    to: PROMPT-TASK-002-governed-publish-lifecycle
+  - from: PROMPT-TASK-002-governed-publish-lifecycle
+    type: derives_from
+    to: EP-TASK-002
+  - from: PROMPT-TASK-002-governed-publish-lifecycle
+    type: included_in_context
+    to: CP-TASK-002
   - from: EP-TASK-002
     type: constrained_by
     to: ADR-001
@@ -220,6 +252,15 @@ edges:
   - from: EP-TASK-003
     type: derives_from
     to: TASK-003
+  - from: EP-TASK-003
+    type: generates
+    to: PROMPT-TASK-003-marketplace-policy-engine
+  - from: PROMPT-TASK-003-marketplace-policy-engine
+    type: derives_from
+    to: EP-TASK-003
+  - from: PROMPT-TASK-003-marketplace-policy-engine
+    type: included_in_context
+    to: CP-TASK-003
   - from: EP-TASK-003
     type: constrained_by
     to: ADR-001

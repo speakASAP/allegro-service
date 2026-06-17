@@ -2,186 +2,156 @@
 
 ```yaml
 id: VAL-TASK-006
-status: draft
-owner: TASK-006 validation lanes
+status: partial
+owner: TASK-006-E integration owner
 created: 2026-06-13
-last_updated: 2026-06-13
+last_updated: 2026-06-15
 source_task: ../11_tasks/TASK-006-plan-stock-order-profit-loop.md
 execution_plan: ../21_execution_plans/EP-TASK-006-plan-stock-order-profit-loop.md
 classification: synthetic
 ```
 
-## Purpose
-
-Collect contract-discovery evidence for TASK-006 before any implementation work. This report uses only synthetic examples and source inspection notes. It must not include production order/customer/payment data, OAuth tokens, secrets, or raw logs.
+Validation id: VAL-TASK-006  
+Target: TASK-006  
+Date: 2026-06-15  
+Validator: AI agent
 
 ## Summary
 
-TASK-006 contract discovery is in progress. The file currently preserves full TASK-006-B order retry and reconciliation evidence. TASK-006-A stock evidence is recoverable from the completed worker final, and TASK-006-C payments/suppliers plus TASK-006-D margin completed as read-only handoff threads; TASK-006-E still needs to merge A/C/D into this report before closure.
+TASK-006 contract-discovery lanes A-D were integrated at the planning level. The work remains partial because no external payments, suppliers, order-idempotency, Allegro fee, shipping-cost, or stock-sync attempt contracts are approved yet. No runtime code, schema, production data, deployment, payment write, supplier write, stock mutation, or local order ownership change was introduced by this validation update.
 
 ## Upstream goal
 
-TASK-006 supports FEAT-006 and the roadmap Stage 4 goal to make Allegro sales update stock, fulfillment, margin, and replenishment signals across the ecosystem while preserving warehouse, orders, payment, supplier, and sensitive-data ownership boundaries.
+TASK-006 supports FEAT-006 and roadmap Stage 4: close stock, order, payment, supplier, and profit feedback loops so Allegro sales can be fulfilled profitably while preserving warehouse ownership of stock, orders-microservice ownership of orders, read-only-first payment and supplier boundaries, account-aware Allegro rate limits, and sensitive-data controls.
 
 ## Criteria checked
 
 | Criterion | Result | Evidence |
 |---|---|---|
-| Order ownership boundary | Partial | TASK-006-B confirms `orders-microservice` remains source of truth and Allegro keeps only channel projection and forwarding evidence. |
-| Replay-safe order forwarding | Partial | Existing `orders.create.v1` idempotency fields exist, but authoritative duplicate-response behavior is not confirmed. |
-| Durable reconciliation visibility | Gap | No dedicated order-forward attempt ledger or reconciliation endpoint was found in preserved TASK-006-B evidence. |
-| Sensitive-data handling | Partial | Preserved synthetic fixture uses synthetic IDs and example.invalid email; final integrated report still needs a full sensitive-data scan. |
-| Parallel lane completeness | Partial | B is preserved in this report; A is recoverable from worker final; C and D completed read-only final handoffs and await TASK-006-E merge. |
+| Stock drift and publishable quantity lane | Partial | TASK-006-A found local offer stock fields, warehouse stock event handling, and existing Allegro stock mutation paths, but no durable account-rate-limited stock sync attempt contract or stock drift fixture exists yet. |
+| Order retry and reconciliation lane | Partial | TASK-006-B confirmed `orders.create.v1` forwarding inputs and local Allegro order projection, but duplicate/idempotency response behavior and durable reconciliation storage remain missing. |
+| Payments and suppliers read-only lane | Blocked | TASK-006-C found no dedicated payments client or supplier client; supplier runtime is placeholder-only and includes write-like methods that are not approved for this task. |
+| Margin computation lane | Blocked | TASK-006-D found offer price, order revenue, catalog pricing hooks, supplier placeholder cost fields, and delivery/payment JSON anchors, but no fee, settlement, deterministic shipping-cost, or approved margin-floor contract. |
+| Sensitive-data handling | Partial | All lane handoffs used synthetic examples and avoided runtime rows/logs; full closure still needs a final sensitive-data scan after any future contract artifacts are added. |
+| Parallel execution recovery | Pass | A-D lane handoffs have been reviewed and summarized here after earlier concurrent shared-file overwrites. Future lanes must avoid shared report writes unless assigned integration ownership. |
+
+## Gate evidence
+
+- `npm run ips:audit`: pending rerun after this TASK-006-E integration update.
+- `npm run ips:pre-coding`: pending rerun after this TASK-006-E integration update.
+- `python3 scripts/deployment_readiness_gate.py --root . --target TASK-002`: pending rerun after this TASK-006-E integration update.
+- Targeted runtime tests: not run because TASK-006-E integrated contract-discovery documentation only and did not change runtime code.
+
+## Invariant evidence
+
+- ALG-INV-002: Stock and Allegro mutation planning remains account/rate-limit gated; no direct stock-to-Allegro implementation was added.
+- ALG-INV-003: Order ownership remains with orders-microservice; Allegro local records remain channel projection and forwarding evidence only.
+- ALG-INV-004: Validation examples are synthetic; no OAuth tokens, secrets, raw production logs, real buyers, real payments, or production supplier data were added.
+- ALG-INV-005: No ownership boundary change or ADR-level decision was made.
+- ALG-INV-006: TASK-006 remains linked through feature, goal impact, execution plan, and this validation report before coding.
+- ALG-INV-007: Closure is not claimed; validation evidence remains partial and blockers are explicit.
+
+## Sensitive-data scan evidence
+
+Lane handoffs used synthetic identifiers such as synthetic order IDs, synthetic account IDs, synthetic supplier IDs, and example.invalid email addresses. No production payloads, OAuth tokens, Authorization headers, payment details, raw customer records, raw order logs, or supplier secrets were intentionally inspected or recorded. A final automated sensitive-data scan remains required before TASK-006 closure if any contract files, fixtures, or tests are added later.
+
+## Replay and determinism evidence
+
+- Stock lane: future stock sync must use durable idempotent account-rate-limited attempt records before writing to Allegro; no such contract exists yet.
+- Order lane: existing replay relies on order upsert by Allegro order ID plus `orders.create.v1` idempotency fields, but duplicate-response behavior must be confirmed with the orders owner.
+- Payments/suppliers lane: proposed reads require contract versions, source service names, observation timestamps, and idempotency keys; no runtime client exists yet.
+- Margin lane: proposed calculation is coverage-based and deterministic: return UNKNOWN when required economics are unavailable rather than inventing fee, settlement, shipping, currency, or margin-floor rules.
+
+## Integrated lane findings
+
+### TASK-006-A Stock
+
+Current evidence: warehouse stock events update local offers, local offer stock fields exist, and Allegro stock mutation paths exist elsewhere. The safe contract is not direct event-to-Allegro propagation; it is a durable, idempotent, account-rate-limited stock sync attempt with observable terminal results.
+
+Integration decision: warehouse availability remains authoritative. Reverse warehouse writes from inventory/import flows require owner review before stock automation is approved.
+
+Missing facts:
+
+- [MISSING: warehouse stock event schema and accepted stock semantics for Allegro publishable quantity]
+- [MISSING: stock drift threshold and reconciliation cadence]
+- [MISSING: durable stock sync attempt or queue contract]
+- [MISSING: terminal Allegro stock update result contract]
+- [MISSING: synthetic stock drift fixtures and stock subscriber tests]
+- [MISSING: stock-out deactivation or quantity-zero policy]
+- [UNKNOWN: authoritative remote Allegro quantity reconciliation source for production accounts]
+
+### TASK-006-B Orders
+
+Current evidence: `shared/clients/order-client.service.ts` forwards `orders.create.v1` with `externalOrderId`, `channel`, and `channelAccountId`; `OrdersService.syncOrdersFromAllegro()` upserts local Allegro order projection and forwards mapped order data when a related offer exists. No order RabbitMQ subscriber was found; `WebhookEvent` exists but is not proven as an order-forward retry ledger.
+
+Integration decision: preserve orders-microservice as source of truth. Treat `(channel, channelAccountId, externalOrderId)` as the candidate idempotency identity, but do not code reconciliation until duplicate-response behavior is confirmed.
+
+Missing facts:
+
+- [MISSING: orders-microservice authoritative `orders.create.v1` duplicate/idempotency response contract]
+- [MISSING: durable order-forward attempt record or approved reuse of `WebhookEvent`]
+- [MISSING: reconciliation endpoint or job contract for pending, failed, or blocked Allegro order forwards]
+- [MISSING: approved redacted order-forward failure taxonomy]
+- [MISSING: confirmed order-events versus order-list polling source of truth]
+- [UNKNOWN: whether orders-microservice validates payload equality on idempotency conflict]
+- [UNKNOWN: expected central order status mapping for Allegro payment status values]
+
+### TASK-006-C Payments And Suppliers
+
+Current evidence: no dedicated payments client, supplier client, payment DTO contract, or supplier DTO contract exists in shared clients. Allegro local order records contain payment status evidence only. Supplier-related code is placeholder-only; the placeholder includes write-like methods and is not an approved integration contract.
+
+Integration decision: payments and suppliers remain contract-blocked. TASK-006 may define read-only or dry-run contracts, but must not add payment writes, supplier purchase automation, refund/capture/settlement behavior, or real reservation behavior.
+
+Missing facts:
+
+- [MISSING: payments-microservice read-only status, settlement, fee, and refund contract]
+- [MISSING: canonical payment lookup key and payment status enum]
+- [MISSING: payment redaction contract and freshness semantics]
+- [MISSING: suppliers-microservice read-only availability, cost, lead-time, and dry-run reservation contracts]
+- [MISSING: supplier identity, stock semantics, cost basis, and dry-run semantics]
+- [UNKNOWN: whether suppliers service can simulate reservation without creating supplier-side state]
+
+### TASK-006-D Margin
+
+Current evidence: offer price, order revenue, catalog pricing hooks, supplier placeholder cost fields, and delivery/payment JSON fields exist. Current order forwarding sets shipping and tax values to zero, so those values cannot be treated as known economics. No Allegro fee client, payment settlement client, deterministic shipping-cost source, approved margin floor, or FX source exists in the inspected runtime paths.
+
+Integration decision: margin planning must be coverage-based. Profitability is UNKNOWN when required inputs are missing; WARNING/PASS are allowed only when all required inputs and currency semantics are approved.
+
+Missing facts:
+
+- [MISSING: Allegro fee or commission formula, or read-only fee endpoint contract]
+- [MISSING: payments-microservice settlement, payment-fee, refund, and chargeback contract]
+- [MISSING: deterministic shipping-cost source]
+- [MISSING: catalog pricing DTO shape]
+- [MISSING: approved margin floor by product, category, account, or currency]
+- [MISSING: supplier terms beyond placeholder supplier price, currency, and stock]
+- [MISSING: approved FX conversion source]
+- [UNKNOWN: whether Allegro total price includes delivery, fees, discounts, or taxes in the intended semantics]
+- [UNKNOWN: VAT or tax treatment for margin]
+
+## Proposed validation cases for future coding tasks
+
+- Stock sync attempt: repeated synthetic stock event produces one durable account-rate-limited sync attempt and deterministic terminal state.
+- Stock drift: synthetic warehouse quantity and remote Allegro quantity mismatch is classified without mutating Allegro until policy allows it.
+- Order replay: duplicate `orders.create.v1` attempt resolves through confirmed idempotency behavior or explicit manual-review state.
+- Missing offer order: Allegro order without local matching offer is visible as blocked without stock, payment, or supplier side effects.
+- Payment read-only: future payment client exposes reads only and rejects capture, refund, settlement, or payout mutation in TASK-006 scope.
+- Supplier dry-run: future supplier reservation feasibility requires dry-run semantics and cannot place real supplier orders.
+- Margin coverage: missing fee, shipping, payment, supplier, FX, or margin-floor input returns UNKNOWN, not PASS or WARNING.
+- Redaction: synthetic fixtures and reports contain no real customer, supplier, payment, OAuth, token, or production log data.
 
 ## Issues found
 
-- Concurrent TASK-006 workers wrote the same validation report and overwrote lane handoffs; the current file preserves only TASK-006-B order evidence.
-- TASK-006-A stock evidence must be recovered from its completed worker final.
-- TASK-006-C payments/suppliers and TASK-006-D margin lanes completed as read-only handoff threads and must be merged by TASK-006-E.
-- Orders duplicate/idempotency behavior, durable reconciliation storage, redacted order failure taxonomy, and order event source of truth remain unresolved contract gaps.
+- Shared validation report writes caused prior TASK-006 lane overwrites. Integration ownership is now explicit; future workers should return handoffs instead of editing shared reports unless assigned owner.
+- TASK-006 is not coding-ready because multiple external ownership and contract facts remain missing.
+- Existing supplier placeholder includes write-like methods and must not be reused as the TASK-006 supplier contract.
+- Current order forwarding economics treat shipping and tax as zero, which is insufficient for margin truth.
+- No runtime validation suite exists yet for stock drift, order reconciliation, read-only payments/suppliers, or margin coverage.
 
 ## Recommendation
 
-Accept the current TASK-006-B handoff as partial evidence only. Do not close TASK-006 or generate coding prompts until TASK-006-E integrates A-D handoffs, resolves missing external contract facts, runs IPS gates, and records validation evidence.
+Accept TASK-006-E integration as planning evidence only. Do not close TASK-006 and do not generate coding prompts until service owners confirm the missing contracts, synthetic fixtures are added, and targeted tests are defined. The next planning step should split TASK-006 follow-up into smaller implementation-ready tasks: stock sync attempt contract, order reconciliation contract, read-only payments/suppliers contracts, and margin coverage contract.
 
 ## Traceability confirmation
 
-TASK-006 remains aligned to FEAT-006, GOAL-IMPACT-TASK-006, the Allegro revenue roadmap, and invariants ALG-INV-002, ALG-INV-003, ALG-INV-004, ALG-INV-006, and ALG-INV-007. The preserved order lane does not change order ownership and does not introduce production data or runtime behavior.
-
-
-## Parallel Lane Recovery Notes
-
-### TASK-006-A Stock Lane Status
-
-Status: completed worker final, not fully preserved in this file. The final handoff says warehouse availability should remain authoritative, stock events must not write directly to Allegro until a durable idempotent account-rate-limited sync attempt contract exists, and reverse warehouse writes from inventory/import flows need owner review before stock automation is approved.
-
-Key missing markers from the completed worker final include warehouse stock event schema, stock drift threshold, publishable quantity formula, durable stock sync attempt/queue, terminal Allegro stock update result contract, stock fixture/tests, stock-out deactivation policy, and remote Allegro quantity reconciliation source.
-
-### TASK-006-C Payments And Suppliers Lane Status
-
-Status: completed as read-only final handoff. No files were modified. The lane found no dedicated payments client and no supplier client. Existing payment data is Allegro/order-local evidence only, supplier runtime is placeholder-only, and the supplier placeholder includes write-like methods that must not be treated as an approved TASK-006 contract.
-
-TASK-006-E must treat payments and suppliers as blocked on explicit read-only external contracts for endpoint ownership, DTOs, status enums, redaction rules, cost/settlement semantics, and supplier dry-run behavior.
-
-### TASK-006-D Margin Lane Status
-
-Status: completed as read-only final handoff. No files were modified. The lane identified offer price, order revenue, catalog pricing hooks, supplier placeholder cost fields, and delivery/payment JSON as possible source anchors, but found no implemented Allegro fee client, payment-settlement client, deterministic shipping cost source, or approved margin floor.
-
-TASK-006-E should design margin as a coverage-based contract: return UNKNOWN when required economics are missing, avoid invented fee/shipping/payment formulas, and use only synthetic fixtures until external contracts are approved.
-
-## TASK-006-B Order Lane Handoff
-
-### Scope
-
-TASK-006-B inspected order forwarding, RabbitMQ subscriber behavior, the orders-microservice ownership boundary, and existing retry/reconciliation records. This lane did not modify runtime code, schemas, payment behavior, stock mutations, or production configuration.
-
-### Source Files Inspected
-
-- `AGENTS.md`
-- `11_tasks/TASK-006-plan-stock-order-profit-loop.md`
-- `21_execution_plans/EP-TASK-006-plan-stock-order-profit-loop.md`
-- `10_features/FEAT-006-stock-order-profit-loop.md`
-- `16_operations/INTEGRATIONS.md`
-- `17_governance/PROJECT_INVARIANTS.md`
-- `shared/clients/order-client.service.ts`
-- `services/allegro-service/src/allegro/orders/orders.service.ts`
-- `services/allegro-service/src/allegro/orders/orders.controller.ts`
-- `services/allegro-service/src/allegro/events/events.service.ts`
-- `services/allegro-service/src/allegro/events/events.controller.ts`
-- `services/allegro-service/src/allegro/allegro-api.service.ts`
-- `shared/rabbitmq/stock-events.subscriber.ts`
-- `shared/rabbitmq/rabbitmq.module.ts`
-- `services/allegro-service/src/allegro/allegro.module.ts`
-- `prisma/schema.prisma`
-
-### Current Contract Evidence
-
-- Ownership boundary: `16_operations/INTEGRATIONS.md` and `17_governance/PROJECT_INVARIANTS.md` require orders to be forwarded to `orders-microservice`; `allegro-service` must not become local source of truth for orders.
-- Forwarding client: `shared/clients/order-client.service.ts` posts to `ORDER_SERVICE_URL || http://orders-microservice:3203`, endpoint `orders.create.v1 HTTP endpoint`, with `contractVersion: orders.create.v1` and normalized `channelAccountId` defaulting to `default`.
-- Idempotency inputs: `CreateCentralOrderRequest` includes `externalOrderId`, `channel`, and `channelAccountId`; comments state these fields allow safe retries. The assumed idempotency key is the tuple `(channel, channelAccountId, externalOrderId)`.
-- Existing sync path: `OrdersService.syncOrdersFromAllegro()` fetches `Allegro order list endpoint`, upserts an `AllegroOrder` projection by unique `allegroOrderId`, then forwards mapped order data to `orders-microservice` when a related offer exists.
-- Existing local projection: Prisma model `AllegroOrder` stores marketplace order projection fields and has a unique `allegroOrderId`. This exists today, but TASK-006-B does not expand it or treat it as order ownership.
-- Existing webhook/event record: Prisma model `WebhookEvent` has `eventId`, `eventType`, `payload`, `processed`, `processedAt`, `processingError`, and `retryCount`; no source usage was found in the inspected Allegro service source.
-- Existing event path: `EventsService.getOrderEvents()` exposes Allegro order event polling through `AllegroApiService.getOrderEvents()`, which attempts `Allegro order events endpoint` and returns an empty result on unavailable endpoint.
-- RabbitMQ behavior: the only inspected RabbitMQ subscriber is `StockEventsSubscriber`, bound to exchange `stock.events`, queue `stock.allegro-service`, routing key `stock.#`; it acks successful stock events and `nack(msg, false, false)` on processing errors. No order RabbitMQ subscriber was found.
-
-### Replay-Safe Reconciliation Contract Notes
-
-- Replaying order sync should be safe only if `orders-microservice` accepts repeated `orders.create.v1` requests with identical `(channel, channelAccountId, externalOrderId)` as an idempotent success or a retrievable existing order.
-- A `409` from `orders-microservice` is currently mapped to `ORDER_IDEMPOTENCY_CONFLICT` by the client and then logged by `OrdersService` as a forwarding failure. For reconciliation, a duplicate/idempotency conflict should be resolved by `findByExternalId()` and classified as `already_forwarded` when the existing central order matches the synthetic contract fixture.
-- Retrying by rerunning `syncOrdersFromAllegro()` currently re-attempts forwarding because `AllegroOrder.upsert()` is deterministic by `allegroOrderId`; however, there is no durable forward attempt state to distinguish `pending`, `accepted`, `already_forwarded`, `retryable_failed`, `terminal_failed`, or `blocked_missing_offer`.
-- The current sync only forwards when a related offer is found. Orders without a matching offer are locally upserted but not forwarded and have no explicit reconciliation marker. Proposed contract status: `blocked_missing_offer` with redacted reason and next action for integration owner review.
-- Forwarding failure currently does not fail the overall sync loop. This preserves ingestion progress, but reconciliation needs a durable marker or synthetic validation query so failures are visible and replayable.
-- `WebhookEvent.retryCount` is generic event infrastructure, not a proven order-forward retry ledger. Do not rely on it as the TASK-006 order attempt record unless TASK-006-E explicitly accepts that contract and validates usage.
-- No local stock reservation, stock decrement, payment write, refund behavior, supplier purchase, or central order mutation beyond `orders.create.v1` should be added in this lane.
-
-### Proposed Synthetic Contract Fixture
-
-```json
-{
-  "contractVersion": "orders.create.v1",
-  "externalOrderId": "ALG-SYNTH-ORDER-0001",
-  "channel": "allegro",
-  "channelAccountId": "ALG-SYNTH-ACCOUNT-0001",
-  "customer": {
-    "email": "synthetic-buyer@example.invalid",
-    "login": "synthetic-buyer"
-  },
-  "items": [
-    {
-      "productId": "00000000-0000-4000-8000-000000000001",
-      "sku": null,
-      "title": "Synthetic Product",
-      "quantity": 2,
-      "unitPrice": 25.5,
-      "totalPrice": 51
-    }
-  ],
-  "subtotal": 51,
-  "shippingCost": 0,
-  "taxAmount": 0,
-  "total": 51,
-  "currency": "PLN",
-  "paymentStatus": "READY_FOR_PROCESSING",
-  "orderedAt": "2026-06-13T00:00:00.000Z"
-}
-```
-
-### Proposed Validation Cases For TASK-006-E
-
-- First forward succeeds: synthetic Allegro order with matching offer produces one `orders.create.v1` call and records/observes accepted central order id without storing raw customer data in validation evidence.
-- Replay same order: rerun with same `(channel, channelAccountId, externalOrderId)` and confirm either idempotent accepted response or `409` followed by `findByExternalId()` reconciliation to `already_forwarded`.
-- Retryable failure: simulate orders-microservice timeout/5xx; verify the order is visible as retryable without blocking subsequent Allegro order ingestion.
-- Missing offer: simulate Allegro order whose line item offer id has no local `AllegroOffer`; verify it is not forwarded, is visible as `blocked_missing_offer`, and does not create stock/payment side effects.
-- Contract mismatch: simulate `409 ORDER_IDEMPOTENCY_CONFLICT` where existing central order does not match the synthetic payload; verify terminal/manual-review classification, not silent success.
-- RabbitMQ non-order scope: verify no order reconciliation depends on `StockEventsSubscriber`; order retry/reconciliation should use polling/attempt records unless a future ADR approves an order event queue contract.
-- Redaction: validation evidence must use synthetic ids/emails only and must not include raw Allegro payloads or production logs.
-
-### Missing Markers
-
-- [MISSING: orders-microservice authoritative `orders.create.v1` idempotency conflict response contract, including whether duplicate creates return 200/201, 409, or another status.]
-- [MISSING: durable order-forward attempt record or accepted contract for reusing `WebhookEvent` as the retry/reconciliation ledger.]
-- [MISSING: reconciliation endpoint/job contract for listing failed, pending, or blocked Allegro order forwards.]
-- [MISSING: approved redacted error taxonomy for `allegro.order.forward_failed` notification/logging payloads.]
-- [MISSING: confirmed order event source of truth: Allegro order-events availability vs order-list polling fallback for production accounts.]
-- [UNKNOWN: whether `orders-microservice` validates payload equality on idempotency conflict or only keys by external id.]
-- [UNKNOWN: expected central order status mapping for Allegro `payment.status` values.]
-
-### Deviations
-
-- No runtime code or schema changes were made because this worker is scoped to replay-safe contract notes only.
-- No IPS gate commands or test suites were run because this lane produced source-inspection documentation only; TASK-006-E should run `npm run ips:audit`, `npm run ips:pre-coding`, and any targeted contract tests after integrating A-D handoffs.
-- Remote `apply_patch` was unavailable, so this report was created via a direct one-off SSH write to the allowed remote validation file.
-
-### Validation Evidence
-
-- `sed` inspection confirmed TASK-006 objective, acceptance criteria, non-goals, and execution-plan lane scope.
-- `sed` inspection confirmed integrations/invariants require `orders-microservice` ownership and prohibit local order source-of-truth expansion.
-- `rg` inspection found order forwarding references in `shared/clients/order-client.service.ts` and `services/allegro-service/src/allegro/orders/orders.service.ts`.
-- `nl -ba` inspection confirmed `OrdersService.syncOrdersFromAllegro()` upserts by `allegroOrderId`, maps synthetic-compatible order fields, catches forwarding errors, and continues the sync loop.
-- `rg` inspection found no order RabbitMQ subscriber; only `StockEventsSubscriber` is wired through `RabbitMQModule` and imported by `AllegroModule`.
-- `sed` inspection confirmed `WebhookEvent` retry fields exist in Prisma but no inspected service usage proves it is an order-forward attempt ledger.
-
-### Handoff For TASK-006-E Integration Owner
-
-Treat TASK-006-B as a contract-discovery handoff, not an implementation. The smallest replay-safe integration plan should define an explicit order-forward reconciliation contract before coding: preserve `orders-microservice` as owner; use `(channel, channelAccountId, externalOrderId)` as idempotency identity; classify duplicate conflicts through `findByExternalId()`; add or approve a durable attempt/reconciliation record; and keep stock, payment, and supplier effects out of order forwarding. Resolve the missing `orders.create.v1` duplicate-response contract with the orders owner before turning this into a coding prompt.
+TASK-006 remains aligned with VISION, VG-REVENUE, SYS-001, FEAT-006, GOAL-IMPACT-TASK-006, EP-TASK-006, and project invariants. The integrated report preserves the Intent Preservation chain from Vision -> Goal Impact -> System -> Feature -> Task -> Execution Plan -> Validation and does not claim code completion.

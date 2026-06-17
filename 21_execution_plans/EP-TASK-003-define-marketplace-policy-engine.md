@@ -2,11 +2,11 @@
 
 ```yaml
 id: EP-TASK-003
-status: draft
+status: validated
 source_task: ../11_tasks/TASK-003-define-marketplace-policy-engine.md
 owner: Project Owner
 created: 2026-06-13
-last_updated: 2026-06-13
+last_updated: 2026-06-15
 completeness_level: complete
 vision: ../01_vision/VISION.md
 constitution: ../00_constitution/CONSTITUTION.md
@@ -17,8 +17,8 @@ goal_impact: ../22_goal_impact/GOAL-IMPACT-TASK-003.md
 ## Metadata
 
 - Source task: ../11_tasks/TASK-003-define-marketplace-policy-engine.md
-- Status: draft for owner review.
-- Lifecycle state: planned; not approved for coding until gate review passes.
+- Status: approved for implementation by owner instruction on 2026-06-15.
+- Lifecycle state: implemented and validated for TASK-003 closure on 2026-06-15.
 
 ## Upstream Traceability
 
@@ -135,8 +135,8 @@ Implement TASK-003 by creating a reusable Allegro policy engine. Keep output act
 
 ## Completion Checklist
 
-- [ ] Implementation complete
-- [ ] Tests complete
-- [ ] Validation evidence collected
-- [ ] Documentation updated
-- [ ] Deviations documented
+- [x] Implementation complete
+- [x] Tests complete
+- [x] Validation evidence collected
+- [x] Documentation updated
+- [x] Deviations documented
