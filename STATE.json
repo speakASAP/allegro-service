@@ -4,28 +4,28 @@
   "stage": "production",
   "health": "ok",
   "cycle": 1,
-  "last_cycle_at": "2026-06-15T00:00:00Z",
+  "last_cycle_at": "2026-06-19T11:28:41Z",
   "tasks_active": 1,
   "tasks_failed_last_cycle": 0,
   "open_task_ids": [
-    "TASK-004",
     "TASK-005",
     "TASK-006",
     "TASK-007",
     "TASK-008"
   ],
-  "last_milestone": "task-003-marketplace-policy-engine-validated",
-  "next_focus": "review TASK-004 catalog Sell on Allegro action execution plan; do not generate coding prompts or code until the draft plan is explicitly approved",
+  "last_milestone": "task-004-catalog-sell-on-allegro-action-validated",
+  "next_focus": "review TASK-005 ai offer optimization execution plan; do not generate coding prompts or code until the draft plan is explicitly approved",
   "blockers": [],
   "budget_units_used": 0,
   "metrics": {
     "custom": {
       "planned_milestones": 7,
       "planned_revenue_tasks": 7,
-      "active_revenue_task": "TASK-004",
+      "active_revenue_task": "TASK-005",
       "completed_revenue_tasks": [
         "TASK-002",
-        "TASK-003"
+        "TASK-003",
+        "TASK-004"
       ]
     }
   }

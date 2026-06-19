@@ -25,6 +25,8 @@ import { ProducersService } from './producers/producers.service';
 import { PublishLifecycleService } from './publish-lifecycle/publish-lifecycle.service';
 import { PublishLifecycleController } from './publish-lifecycle/publish-lifecycle.controller';
 import { MarketplacePolicyEngineService } from './policy/policy-engine.service';
+import { CatalogSellActionController } from './catalog-sell-action/catalog-sell-action.controller';
+import { CatalogSellActionService } from './catalog-sell-action/catalog-sell-action.service';
 
 @Module({
   imports: [
@@ -49,6 +51,7 @@ import { MarketplacePolicyEngineService } from './policy/policy-engine.service';
     OAuthController,
     ProductsController,
     PublishLifecycleController,
+    CatalogSellActionController,
   ],
   providers: [
     AllegroApiService,
@@ -63,8 +66,9 @@ import { MarketplacePolicyEngineService } from './policy/policy-engine.service';
     ProducersService,
     PublishLifecycleService,
     MarketplacePolicyEngineService,
+    CatalogSellActionService,
   ],
-  exports: [AllegroApiService, OffersService, OrdersService, CategoriesService, InventoryService, EventsService, PublishLifecycleService, MarketplacePolicyEngineService],
+  exports: [AllegroApiService, OffersService, OrdersService, CategoriesService, InventoryService, EventsService, PublishLifecycleService, MarketplacePolicyEngineService, CatalogSellActionService],
 })
 export class AllegroModule {}
 

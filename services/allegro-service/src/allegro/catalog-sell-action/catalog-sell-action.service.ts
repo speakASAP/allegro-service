@@ -1,0 +1,313 @@
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { CatalogClientService, LoggerService, PrismaService } from '@allegro/shared';
+import { OffersService } from '../offers/offers.service';
+import { PublishLifecycleService } from '../publish-lifecycle/publish-lifecycle.service';
+import { BulkPrepareCatalogSellActionDto, PrepareCatalogSellActionDto } from './catalog-sell-action.dto';
+
+@Injectable()
+export class CatalogSellActionService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly logger: LoggerService,
+    private readonly offersService: OffersService,
+    private readonly publishLifecycleService: PublishLifecycleService,
+    private readonly catalogClient: CatalogClientService,
+  ) {
+    this.logger.setContext('CatalogSellActionService');
+  }
+
+  async prepare(dto: PrepareCatalogSellActionDto, requestedByUserId: string): Promise<any> {
+    const catalogProduct = await this.loadCatalogProduct(dto.catalogProductId);
+    const accountChoices = await this.listAccountChoices(requestedByUserId);
+    const selectedAccountId = dto.accountId || accountChoices[0]?.id || null;
+
+    let draft = dto.forceNewDraft
+      ? null
+      : await this.findReusableDraft(dto, requestedByUserId, selectedAccountId);
+    const draftCreated = !draft;
+
+    if (!draft) {
+      draft = await this.createDraftFromCatalog(dto, catalogProduct, selectedAccountId, requestedByUserId);
+    }
+
+    const attempt = await this.publishLifecycleService.prepare(
+      {
+        action: 'PUBLISH',
+        offerId: draft.id,
+        accountId: selectedAccountId || draft.accountId || null,
+        catalogProductId: dto.catalogProductId,
+        idempotencyKey: dto.idempotencyKey,
+        commandPayload: {
+          source: 'catalog-sell-action',
+          catalogProductId: dto.catalogProductId,
+          localDraftOfferId: draft.id,
+        },
+      },
+      requestedByUserId,
+    );
+
+    return {
+      status: attempt.status,
+      nextAction: this.deriveNextAction(attempt),
+      draftCreated,
+      draft: this.toDraftSummary(draft),
+      attempt,
+      accountChoices,
+      categoryChoice: this.buildCategoryChoice(dto, draft, catalogProduct),
+      catalogProduct: this.toCatalogSummary(catalogProduct),
+    };
+  }
+
+  async bulkPrepare(dto: BulkPrepareCatalogSellActionDto, requestedByUserId: string): Promise<any> {
+    const results = [] as any[];
+    const perAccountCount = new Map<string, number>();
+
+    for (const item of dto.items) {
+      const prepared = await this.prepare(item, requestedByUserId);
+      const accountKey = prepared.attempt.accountId || 'no-account';
+      const slotOffsetSeconds = perAccountCount.get(accountKey) || 0;
+      perAccountCount.set(accountKey, slotOffsetSeconds + 1);
+      results.push({
+        ...prepared,
+        rateLimitSlot: {
+          accountId: prepared.attempt.accountId || null,
+          slotOffsetSeconds,
+        },
+      });
+    }
+
+    return {
+      total: results.length,
+      results,
+      accountRateLimitPlan: Array.from(perAccountCount.entries()).map(([accountId, count]) => ({
+        accountId: accountId == 'no-account' ? null : accountId,
+        maxOneRequestPerSecond: true,
+        reservedSlots: count,
+      })),
+    };
+  }
+
+  async confirm(attemptId: string, requestedByUserId: string): Promise<any> {
+    const attempt = await this.publishLifecycleService.confirm(attemptId, requestedByUserId);
+    const draft = attempt.offerId ? await (this.prisma as any).allegroOffer.findUnique({ where: { id: attempt.offerId } }) : null;
+
+    return {
+      status: attempt.status,
+      nextAction: this.deriveNextAction(attempt),
+      attempt,
+      draft: this.toDraftSummary(draft),
+    };
+  }
+
+  async getStatus(attemptId: string): Promise<any> {
+    const attempt = await this.publishLifecycleService.getAttempt(attemptId);
+    const draft = attempt.offerId ? await (this.prisma as any).allegroOffer.findUnique({ where: { id: attempt.offerId } }) : null;
+
+    return {
+      status: attempt.status,
+      nextAction: this.deriveNextAction(attempt),
+      attempt,
+      draft: this.toDraftSummary(draft),
+    };
+  }
+
+  private async loadCatalogProduct(catalogProductId: string): Promise<any> {
+    try {
+      return await this.catalogClient.getProductById(catalogProductId);
+    } catch (error: any) {
+      throw new HttpException(
+        `Failed to load catalog product ${catalogProductId}: ${error.message}`,
+        error.status || error.response?.status || HttpStatus.BAD_GATEWAY,
+      );
+    }
+  }
+
+  private async listAccountChoices(requestedByUserId: string): Promise<any[]> {
+    const prismaAny = this.prisma as any;
+    const accounts = await prismaAny.allegroAccount.findMany({
+      where: { userId: requestedByUserId, isActive: true },
+      select: {
+        id: true,
+        name: true,
+        isActive: true,
+        tokenExpiresAt: true,
+      },
+      orderBy: [{ isActive: 'desc' }, { createdAt: 'asc' }],
+    });
+
+    return accounts.map((account: any) => ({
+      id: account.id,
+      name: account.name,
+      isActive: account.isActive,
+      tokenExpiresAt: account.tokenExpiresAt,
+    }));
+  }
+
+  private async findReusableDraft(
+    dto: PrepareCatalogSellActionDto,
+    requestedByUserId: string,
+    selectedAccountId: string | null,
+  ): Promise<any | null> {
+    const prismaAny = this.prisma as any;
+    if (dto.offerId) {
+      return prismaAny.allegroOffer.findFirst({
+        where: {
+          id: dto.offerId,
+          account: dto.accountId || selectedAccountId ? { id: dto.accountId || selectedAccountId, userId: requestedByUserId } : undefined,
+        },
+      });
+    }
+
+    return prismaAny.allegroOffer.findFirst({
+      where: {
+        catalogProductId: dto.catalogProductId,
+        accountId: selectedAccountId || undefined,
+        publicationStatus: { in: ['INACTIVE', 'ENDED'] },
+      },
+      orderBy: [{ updatedAt: 'desc' }],
+    });
+  }
+
+  private async createDraftFromCatalog(
+    dto: PrepareCatalogSellActionDto,
+    catalogProduct: any,
+    accountId: string | null,
+    requestedByUserId: string,
+  ): Promise<any> {
+    const mapped = this.mapCatalogProductToLocalDraft(dto, catalogProduct, accountId, requestedByUserId);
+    const draft = await this.offersService.createOffer(mapped, requestedByUserId);
+    if (accountId && draft.accountId !== accountId) {
+      return (this.prisma as any).allegroOffer.update({
+        where: { id: draft.id },
+        data: { accountId },
+      });
+    }
+    return draft;
+  }
+
+  private mapCatalogProductToLocalDraft(
+    dto: PrepareCatalogSellActionDto,
+    catalogProduct: any,
+    accountId: string | null,
+    requestedByUserId: string,
+  ): Record<string, unknown> {
+    const images = this.extractImageUrls(catalogProduct);
+    const title = dto.title || catalogProduct?.title || catalogProduct?.name || `Catalog product ${dto.catalogProductId}`;
+    const description = dto.description || catalogProduct?.description || catalogProduct?.shortDescription || null;
+    const categoryId = dto.categoryId || catalogProduct?.allegroCategoryId || catalogProduct?.categoryId || 'UNASSIGNED';
+    const quantity = this.toNonNegativeNumber(dto.quantity, catalogProduct?.stockQuantity, catalogProduct?.quantity, catalogProduct?.stock, 0);
+    const price = this.toNonNegativeNumber(dto.price, catalogProduct?.price?.gross, catalogProduct?.price, catalogProduct?.salePrice, 0);
+    const currency = catalogProduct?.price?.currency || catalogProduct?.currency || 'PLN';
+
+    return {
+      title,
+      description,
+      categoryId,
+      price,
+      quantity,
+      stockQuantity: quantity,
+      currency,
+      images,
+      status: 'DRAFT',
+      publicationStatus: 'INACTIVE',
+      catalogProductId: dto.catalogProductId,
+      accountId,
+      syncToAllegro: false,
+      rawData: {
+        source: 'catalog-sell-action',
+        createdBy: 'TASK-004',
+        requestedByUserId,
+        catalogSnapshot: {
+          id: catalogProduct?.id || dto.catalogProductId,
+          sku: catalogProduct?.sku || null,
+          title,
+          brand: catalogProduct?.brand || null,
+          ean: catalogProduct?.ean || null,
+          price,
+          currency,
+          quantity,
+          imageCount: images.length,
+          selectedCategoryId: categoryId,
+        },
+      },
+    };
+  }
+
+  private extractImageUrls(catalogProduct: any): string[] {
+    const candidates = [
+      ...(Array.isArray(catalogProduct?.images) ? catalogProduct.images : []),
+      ...(Array.isArray(catalogProduct?.media) ? catalogProduct.media : []),
+    ];
+
+    return candidates
+      .map((entry: any) => {
+        if (typeof entry === 'string') return entry;
+        if (typeof entry?.url === 'string') return entry.url;
+        if (typeof entry?.src === 'string') return entry.src;
+        return null;
+      })
+      .filter((value: string | null): value is string => !!value)
+      .slice(0, 16);
+  }
+
+  private toNonNegativeNumber(...values: unknown[]): number {
+    for (const value of values) {
+      const numeric = Number(value);
+      if (Number.isFinite(numeric) && numeric >= 0) {
+        return numeric;
+      }
+    }
+    return 0;
+  }
+
+  private buildCategoryChoice(dto: PrepareCatalogSellActionDto, draft: any, catalogProduct: any): any {
+    const selectedCategoryId = dto.categoryId || draft?.categoryId || catalogProduct?.allegroCategoryId || catalogProduct?.categoryId || null;
+    return {
+      selectedCategoryId,
+      source: dto.categoryId
+        ? 'request'
+        : draft?.categoryId && draft.categoryId != 'UNASSIGNED'
+          ? 'existing-draft'
+          : catalogProduct?.allegroCategoryId || catalogProduct?.categoryId
+            ? 'catalog'
+            : '[MISSING: catalog category mapping contract]',
+    };
+  }
+
+  private toDraftSummary(draft: any): any {
+    if (!draft) return null;
+    return {
+      id: draft.id,
+      accountId: draft.accountId || null,
+      catalogProductId: draft.catalogProductId || null,
+      title: draft.title,
+      categoryId: draft.categoryId,
+      price: draft.price,
+      currency: draft.currency,
+      quantity: draft.quantity,
+      publicationStatus: draft.publicationStatus,
+      status: draft.status,
+      updatedAt: draft.updatedAt,
+    };
+  }
+
+  private toCatalogSummary(catalogProduct: any): any {
+    if (!catalogProduct) return null;
+    return {
+      id: catalogProduct.id || null,
+      sku: catalogProduct.sku || null,
+      title: catalogProduct.title || catalogProduct.name || null,
+      brand: catalogProduct.brand || null,
+      ean: catalogProduct.ean || null,
+    };
+  }
+
+  private deriveNextAction(attempt: any): string {
+    if (attempt.status === 'BLOCKED') return 'resolve_blockers';
+    if (attempt.status === 'PREPARED') return 'confirm_publish';
+    if (attempt.status === 'QUEUED' || attempt.status === 'RUNNING') return 'monitor_publish_queue';
+    if (attempt.status === 'SUCCEEDED') return 'completed';
+    if (attempt.status === 'FAILED') return 'review_failure';
+    return 'inspect_status';
+  }
+}

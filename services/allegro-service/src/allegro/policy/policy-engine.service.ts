@@ -165,7 +165,7 @@ export class MarketplacePolicyEngineService {
     const offer = input.offer;
     const gates: MarketplacePolicyGateResult[] = [];
 
-    gates.push(!this.present(offer.categoryId)
+    gates.push(!this.present(offer.categoryId) || offer.categoryId === 'UNASSIGNED'
       ? this.block('category-readiness', 'catalog-microservice', 'missing category', 'Map the catalog product to an Allegro category before preparing mutation.')
       : this.pass('category-readiness', 'catalog-microservice', 'Category is present.', { categoryId: offer.categoryId }));
 

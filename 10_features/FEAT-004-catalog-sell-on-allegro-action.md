@@ -2,10 +2,10 @@
 
 ```yaml
 id: FEAT-004
-status: planned
+status: validated
 owner: Project Owner
 created: 2026-06-13
-last_updated: 2026-06-13
+last_updated: 2026-06-19
 completeness_level: complete
 upstream:
   - ../09_milestones/MS-003-catalog-to-allegro-conversion-engine.md
@@ -46,4 +46,4 @@ As a catalog user, I need to click Sell on Allegro for a product and receive dra
 
 ## Validation
 
-Contract tests, controller tests, policy integration tests, and gateway smoke tests.
+Contract tests, controller tests, policy integration tests, gateway smoke tests, and targeted catalog-sell-action validation all passed on 2026-06-19.

@@ -2,11 +2,11 @@
 
 ```yaml
 id: EP-TASK-004
-status: draft
+status: validated
 source_task: ../11_tasks/TASK-004-design-catalog-sell-on-allegro-action.md
 owner: Project Owner
 created: 2026-06-13
-last_updated: 2026-06-13
+last_updated: 2026-06-19
 completeness_level: complete
 vision: ../01_vision/VISION.md
 constitution: ../00_constitution/CONSTITUTION.md
@@ -17,8 +17,8 @@ goal_impact: ../22_goal_impact/GOAL-IMPACT-TASK-004.md
 ## Metadata
 
 - Source task: ../11_tasks/TASK-004-design-catalog-sell-on-allegro-action.md
-- Status: draft for owner review.
-- Lifecycle state: planned; not approved for coding until gate review passes.
+- Status: approved for implementation by owner instruction on 2026-06-19.
+- Lifecycle state: implemented and validated for TASK-004 closure on 2026-06-19.
 
 ## Upstream Traceability
 
@@ -135,8 +135,8 @@ Implement TASK-004 by adding a catalog-facing Sell on Allegro action that reuses
 
 ## Completion Checklist
 
-- [ ] Implementation complete
-- [ ] Tests complete
-- [ ] Validation evidence collected
-- [ ] Documentation updated
-- [ ] Deviations documented
+- [x] Implementation complete
+- [x] Tests complete
+- [x] Validation evidence collected
+- [x] Documentation updated
+- [x] Deviations documented

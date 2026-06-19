@@ -123,6 +123,10 @@ nodes:
     type: coding_prompt
     path: 14_prompts/PROMPT-TASK-003-marketplace-policy-engine.md
     title: Marketplace Policy Engine Prompt
+  - id: PROMPT-TASK-004-catalog-sell-on-allegro-action
+    type: coding_prompt
+    path: 14_prompts/PROMPT-TASK-004-catalog-sell-on-allegro-action.md
+    title: Catalog Sell On Allegro Action Prompt
   - id: CP-TASK-001
     type: context_package
     path: 13_context_packages/CP-TASK-001-ips-baseline.md
@@ -135,6 +139,10 @@ nodes:
     type: context_package
     path: 13_context_packages/CP-TASK-003-marketplace-policy-engine.md
     title: Marketplace Policy Engine Context Package
+  - id: CP-TASK-004
+    type: context_package
+    path: 13_context_packages/CP-TASK-004-catalog-sell-on-allegro-action.md
+    title: Catalog Sell On Allegro Action Context Package
   - id: ADR-001
     type: adr
     path: 07_decisions/ADR-001-preserve-existing-nestjs-prisma-service-boundary.md
@@ -155,6 +163,10 @@ nodes:
     type: validation_report
     path: 12_validation/VAL-TASK-003-validation-report.md
     title: Marketplace Policy Engine Validation
+  - id: VAL-TASK-004-validation-report
+    type: validation_report
+    path: 12_validation/VAL-TASK-004-validation-report.md
+    title: Catalog Sell On Allegro Action Validation
 edges:
   - from: VISION-ALLEGRO-SERVICE
     type: defines
@@ -272,6 +284,18 @@ edges:
     to: FEAT-004
   - from: EP-TASK-004
     type: derives_from
+    to: TASK-004
+  - from: EP-TASK-004
+    type: generates
+    to: PROMPT-TASK-004-catalog-sell-on-allegro-action
+  - from: PROMPT-TASK-004-catalog-sell-on-allegro-action
+    type: derives_from
+    to: EP-TASK-004
+  - from: PROMPT-TASK-004-catalog-sell-on-allegro-action
+    type: included_in_context
+    to: CP-TASK-004
+  - from: VAL-TASK-004-validation-report
+    type: validates
     to: TASK-004
   - from: EP-TASK-004
     type: constrained_by

@@ -281,6 +281,8 @@ export class OffersService {
 
     // If syncToAllegro is false, create local-only offer
     if (dto.syncToAllegro === false) {
+      const quantity = Number.isFinite(Number(dto.quantity)) ? Number(dto.quantity) : 0;
+      const stockQuantity = Number.isFinite(Number(dto.stockQuantity)) ? Number(dto.stockQuantity) : quantity;
       const offer = await this.prisma.allegroOffer.create({
         data: {
           allegroOfferId: dto.allegroOfferId || `local-${crypto.randomUUID()}`,
@@ -288,14 +290,17 @@ export class OffersService {
           allegroProductId: allegroProductId || null,
           title: dto.title,
           description: dto.description || null,
-          categoryId: dto.categoryId || null,
+          categoryId: dto.categoryId || 'UNASSIGNED',
           price: dto.price || 0,
-          quantity: dto.quantity || 0,
-          stockQuantity: dto.quantity || 0,
+          quantity,
+          stockQuantity,
           currency: dto.currency || this.getDefaultCurrency(),
           status: dto.status || 'ACTIVE',
           publicationStatus: dto.publicationStatus || 'INACTIVE',
           images: dto.images || null,
+          deliveryOptions: dto.deliveryOptions || null,
+          paymentOptions: dto.paymentOptions || null,
+          accountId: dto.accountId || null,
           syncStatus: 'PENDING',
           syncSource: 'MANUAL',
           lastSyncedAt: new Date(),

@@ -73,6 +73,10 @@ The roadmap standardizes these business events for logging, analytics, notificat
 | `allegro.margin.warning` | Product/order margin falls below floor. | logging, notifications, marketing |
 | `allegro.demand.signal` | Inquiry, out-of-stock demand, repeated interest, or failed sale signal is detected. | leads, marketing |
 
+## Approved Task Contracts
+
+- TASK-004 catalog sell action: `POST /allegro/catalog-sell/prepare`, `POST /allegro/catalog-sell/bulk-prepare`, `POST /allegro/catalog-sell/:attemptId/confirm`, and `GET /allegro/catalog-sell/:attemptId/status` compose catalog ownership, lifecycle queueing, and policy evaluation without direct publish side effects.
+
 ## Validation
 
 Contract-affecting tasks must identify affected integrations, source-of-truth ownership, test commands, failure behavior, rollback plan, and redaction evidence in the execution plan.

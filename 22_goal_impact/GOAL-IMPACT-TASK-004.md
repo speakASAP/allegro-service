@@ -16,7 +16,7 @@ upstream_links:
 downstream_links:
   - 21_execution_plans/EP-TASK-004-design-catalog-sell-on-allegro-action.md
 validation_method: Contract, idempotency, policy, and gateway tests.
-status: draft
+status: validated
 ```
 
 ## Explanation
@@ -29,4 +29,4 @@ Bazos `catalog sell-action` is the proven reference pattern.
 
 ## Validation
 
-Validated when prepare/confirm/status flows work with synthetic catalog products and cannot bypass policy gates.
+Validated on 2026-06-19 when synthetic catalog sell-action flows created or reused drafts, queued guarded publish attempts, and returned next-action status without bypassing policy gates.

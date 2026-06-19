@@ -2,10 +2,10 @@
 
 ```yaml
 id: TASK-004
-status: draft
+status: validated
 owner: Project Owner
 created: 2026-06-13
-last_updated: 2026-06-13
+last_updated: 2026-06-19
 completeness_level: complete
 upstream:
   - ../10_features/FEAT-004-catalog-sell-on-allegro-action.md
@@ -56,10 +56,10 @@ No direct catalog posting to Allegro. No AI generation in this task.
 
 ## Acceptance Criteria
 
-- [ ] Prepare creates or reuses draft only.
-- [ ] Confirm queues only policy-allowed attempts.
-- [ ] Status returns blockers and next action.
-- [ ] Bulk operations respect rate limits.
+- [x] Prepare creates or reuses draft only.
+- [x] Confirm queues only policy-allowed attempts.
+- [x] Status returns blockers and next action.
+- [x] Bulk operations respect rate limits.
 
 ## Required Context
 
@@ -75,4 +75,4 @@ Contract review, pre-coding gate, targeted tests, deployment-readiness gate.
 
 ## Execution Plan Requirement
 
-This task must not be converted into a coding prompt until an approved execution plan exists.
+This task was approved for implementation by owner instruction on 2026-06-19 and is now implemented and validated.

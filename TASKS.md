@@ -11,7 +11,7 @@
 
 ## Active
 <!-- Coordinator-maintained -->
-- TASK-004 design catalog Sell on Allegro action review: `11_tasks/TASK-004-design-catalog-sell-on-allegro-action.md`
+- TASK-005 define AI offer optimization contract review: `11_tasks/TASK-005-define-ai-offer-optimization-contract.md`
 
 ## Completed
 <!-- Coordinator-append-only -->
@@ -19,3 +19,4 @@
 - 2026-06-13 revenue-roadmap-created: expanded IPS roadmap into MS-002 through MS-007 with features, tasks, execution plans, goal-impact records, integrations map, and tracked backlog.
 - 2026-06-15 TASK-002-governed-publish-lifecycle-validated: lifecycle schema, publish/update attempts, guarded remote update routing, targeted spec, build, strict audit, pre-coding gate, and deployment-readiness gate passed.
 - 2026-06-15 TASK-003-marketplace-policy-engine-validated: reusable read-only policy engine implemented, lifecycle integrated, targeted policy/lifecycle specs and build passed.
+- 2026-06-19 TASK-004-catalog-sell-on-allegro-action-validated: catalog-facing prepare/confirm/status and bulk-planning contract implemented with draft reuse/creation, lifecycle-backed queueing, targeted spec, build, strict audit, pre-coding gate, and deployment-readiness gate passed.
