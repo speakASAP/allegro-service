@@ -1,113 +1,107 @@
 import { createHash } from 'crypto';
 
 export const AI_OFFER_OPTIMIZATION_CONTRACT_VERSION = 'TASK-005.v1' as const;
+export const AI_SUGGESTION_KINDS = [
+  'title-rewrite',
+  'description-rewrite',
+  'attribute-completion',
+  'category-review',
+  'image-upgrade',
+  'price-test',
+  'quality-risk',
+] as const;
 
-export type AiOfferOptimizationFocusArea =
-  | 'title'
-  | 'description'
-  | 'attributes'
-  | 'category'
-  | 'images'
-  | 'price'
-  | 'quality';
+export type AiSuggestionKind = (typeof AI_SUGGESTION_KINDS)[number];
 
-export type AiOfferOptimizationReviewState =
-  | 'NEEDS_REVIEW'
-  | 'APPROVED'
-  | 'REJECTED'
-  | 'APPLIED'
-  | 'EXPIRED';
-
-export type AiSuggestionStatus = 'DRAFT' | 'APPROVED' | 'REJECTED';
-
-export type AiListingAttribute = {
-  name: string;
-  values: string[];
-};
-
-export type AiOfferListingSnapshot = {
-  catalogProductId: string;
-  offerId: string | null;
-  accountId: string | null;
-  title: string;
-  description: string | null;
-  categoryId: string | null;
-  images: string[];
-  price: {
-    amount: number;
-    currency: string;
+export type AiOptimizationRequest = {
+  contractVersion: typeof AI_OFFER_OPTIMIZATION_CONTRACT_VERSION;
+  mode: 'suggestion_only';
+  generatedAt: string;
+  requestedByUserId: string;
+  requestedSuggestionKinds: AiSuggestionKind[];
+  redaction: {
+    classification: 'synthetic';
+    appliedRules: string[];
+    omittedFields: string[];
   };
-  quantity: number;
-  attributes: AiListingAttribute[];
-  publicationStatus: string | null;
-  product: {
+  offerSnapshot: {
+    offerId: string | null;
+    catalogProductId: string | null;
+    accountId: string | null;
+    title: string;
+    description: string | null;
+    categoryId: string;
+    price: number;
+    currency: string;
+    quantity: number;
+    attributes: Array<{ name: string; values: string[] }>;
+    imageUrls: string[];
+  };
+  catalogSnapshot: {
     sku: string | null;
     brand: string | null;
-    isAiCoCreated: boolean;
+    categoryPath: string[];
+    sellable: boolean | null;
   };
-  policySummary: {
-    blockers: string[];
-    warnings: string[];
-    recommendations: string[];
+  metrics: {
+    views7d: number | null;
+    clicks7d: number | null;
+    conversions7d: number | null;
+    addToCart7d: number | null;
+    returnRate30d: number | null;
   };
-};
-
-export type AiOfferOptimizationRequest = {
-  contractVersion: typeof AI_OFFER_OPTIMIZATION_CONTRACT_VERSION;
-  sourceService: 'allegro-service';
-  correlationId: string;
-  advisoryOnly: true;
-  requiresHumanReview: true;
-  lifecycleActionOnApproval: 'UPDATE';
+  policyContext: {
+    requiresHumanReview: true;
+    requiresPolicyConfirmation: true;
+    blockedReasons: string[];
+    allowedMutationPath: 'publish_lifecycle_only';
+  };
   snapshotHash: string;
-  requestedAt: string;
-  listingSnapshot: AiOfferListingSnapshot;
-  redaction: {
-    strategy: 'TASK-005.v1';
-    maskedFields: string[];
-  };
-  constraints: {
-    allowAutonomousPublish: false;
-    allowDirectMarketplaceMutation: false;
-    allowUnreviewedPriceChange: false;
-  };
 };
 
-export type AiOfferOptimizationSuggestion = {
-  id: string;
-  focusArea: AiOfferOptimizationFocusArea;
-  confidence: number;
-  summary: string;
-  rationale: string;
-  proposedValue: string | number | string[] | Record<string, unknown>;
-  policyBlockers: string[];
-  rollbackNotes: string;
-};
-
-export type AiOfferOptimizationResponse = {
+export type AiOptimizationResponse = {
   contractVersion: typeof AI_OFFER_OPTIMIZATION_CONTRACT_VERSION;
-  correlationId: string;
+  mode: 'suggestion_only';
   model: {
     provider: string;
-    model: string;
-    modelVersion: string | null;
+    name: string;
+    version: string | null;
   };
-  suggestions: AiOfferOptimizationSuggestion[];
+  suggestions: Array<{
+    suggestionId: string;
+    kind: AiSuggestionKind;
+    summary: string;
+    proposedValue: unknown;
+    confidence: number;
+    expectedImpact: string;
+    evidence: string[];
+    policyBlockers: string[];
+    rollbackNotes: string;
+  }>;
 };
 
-export type AiSuggestionRecord = {
-  recordVersion: typeof AI_OFFER_OPTIMIZATION_CONTRACT_VERSION;
-  correlationId: string;
-  snapshotHash: string;
-  reviewState: AiOfferOptimizationReviewState;
-  approvalRequired: true;
+export type LocalAiSuggestionRecord = {
+  recordId: string;
+  suggestionId: string;
+  kind: AiSuggestionKind;
+  reviewState: 'pending_review';
+  inputSnapshotHash: string;
+  approvalPath: {
+    requiresHumanReview: true;
+    requiresPolicyConfirmation: true;
+    lifecycleAction: 'publish_lifecycle_required';
+    nextAction: 'operator_review';
+  };
   offerId: string | null;
-  catalogProductId: string;
   accountId: string | null;
-  requestedAt: string;
-  model: AiOfferOptimizationResponse['model'];
-  suggestions: Array<AiOfferOptimizationSuggestion & { status: AiSuggestionStatus }>;
-  approvedSuggestionIds: string[];
+  model: AiOptimizationResponse['model'];
+  suggestedValue: unknown;
+  confidence: number;
+  expectedImpact: string;
+  evidence: string[];
+  policyBlockers: string[];
+  rollbackNotes: string;
+  createdAt: string;
 };
 
 export type ApprovedSuggestionPatch = {
@@ -125,107 +119,198 @@ export type ApprovedSuggestionPatch = {
       categoryId?: string;
       price?: number;
       images?: string[];
-      attributes?: AiListingAttribute[];
+      attributes?: Array<{ name: string; values: string[] }>;
     };
   };
   reviewState: 'APPROVED';
   reviewedByUserId: string;
 };
 
-export type BuildAiOfferOptimizationRequestInput = {
+type LegacyDraftOfferOptimizationInput = {
+  requestedByUserId: string;
+  offer: {
+    offerId?: string | null;
+    catalogProductId?: string | null;
+    accountId?: string | null;
+    title: string;
+    description?: string | null;
+    categoryId: string;
+    price: number;
+    currency?: string | null;
+    quantity?: number | null;
+    attributes?: Array<{ name: string; values: string[] }>;
+    imageUrls?: string[];
+    rawData?: Record<string, unknown>;
+  };
+  catalog?: {
+    sku?: string | null;
+    brand?: string | null;
+    categoryPath?: string[];
+    sellable?: boolean | null;
+    rawData?: Record<string, unknown>;
+  };
+  metrics?: {
+    views7d?: number | null;
+    clicks7d?: number | null;
+    conversions7d?: number | null;
+    addToCart7d?: number | null;
+    returnRate30d?: number | null;
+  };
+  blockedReasons?: string[];
+  requestedSuggestionKinds?: AiSuggestionKind[];
+};
+
+type SnapshotInput = {
   correlationId: string;
   requestedAt?: string;
-  listingSnapshot: Omit<AiOfferListingSnapshot, 'description' | 'title'> & {
+  listingSnapshot: {
+    catalogProductId: string;
+    offerId: string | null;
+    accountId: string | null;
     title: string;
     description: string | null;
+    categoryId: string | null;
+    images: string[];
+    price: { amount: number; currency: string };
+    quantity: number;
+    attributes: Array<{ name: string; values: string[] }>;
+    publicationStatus: string | null;
+    product: {
+      sku: string | null;
+      brand: string | null;
+      isAiCoCreated: boolean;
+    };
+    policySummary: {
+      blockers: string[];
+      warnings: string[];
+      recommendations: string[];
+    };
   };
 };
 
+type BuildAiOfferOptimizationRequestInput = LegacyDraftOfferOptimizationInput | SnapshotInput;
+
+const REDACTION_RULES = [
+  'exclude_customer_and_order_data',
+  'exclude_oauth_tokens_and_secrets',
+  'exclude_authorization_headers',
+  'whitelist_offer_fields_only',
+] as const;
+const OMITTED_FIELDS = [
+  'buyerEmail',
+  'buyerLogin',
+  'customerNotes',
+  'oauthToken',
+  'authorizationHeader',
+  'clientSecret',
+  'paymentDetails',
+  'rawData',
+] as const;
 const TOKEN_PATTERNS: Array<[RegExp, string]> = [
   [/\bBearer\s+[A-Za-z0-9._\-]+/gi, 'Bearer [REDACTED_TOKEN]'],
   [/\b(api[_-]?key|client[_-]?secret|password|token)\s*[:=]\s*([^\s,;]+)/gi, '$1=[REDACTED_SECRET]'],
   [/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[REDACTED_EMAIL]'],
 ];
 
-export function buildAiOfferOptimizationRequest(input: BuildAiOfferOptimizationRequestInput): AiOfferOptimizationRequest {
-  const sanitizedSnapshot: AiOfferListingSnapshot = {
-    ...input.listingSnapshot,
-    title: redactFreeText(input.listingSnapshot.title),
-    description: redactNullableText(input.listingSnapshot.description),
-    attributes: input.listingSnapshot.attributes.map((attribute) => ({
-      name: redactFreeText(attribute.name),
-      values: attribute.values.map((value) => redactFreeText(value)),
-    })),
-  };
-  const snapshotHash = hashValue(sanitizedSnapshot);
-
-  return {
-    contractVersion: AI_OFFER_OPTIMIZATION_CONTRACT_VERSION,
-    sourceService: 'allegro-service',
-    correlationId: input.correlationId,
-    advisoryOnly: true,
-    requiresHumanReview: true,
-    lifecycleActionOnApproval: 'UPDATE',
-    snapshotHash,
-    requestedAt: input.requestedAt || new Date().toISOString(),
-    listingSnapshot: sanitizedSnapshot,
-    redaction: {
-      strategy: AI_OFFER_OPTIMIZATION_CONTRACT_VERSION,
-      maskedFields: ['title', 'description', 'attributes[].name', 'attributes[].values[]'],
-    },
-    constraints: {
-      allowAutonomousPublish: false,
-      allowDirectMarketplaceMutation: false,
-      allowUnreviewedPriceChange: false,
-    },
-  };
+export function buildAiOfferOptimizationRequest(input: BuildAiOfferOptimizationRequestInput): AiOptimizationRequest {
+  if ('listingSnapshot' in input) {
+    return fromSnapshotInput(input);
+  }
+  return fromLegacyInput(input);
 }
 
 export function buildAiSuggestionRecord(
-  request: AiOfferOptimizationRequest,
-  response: AiOfferOptimizationResponse,
-): AiSuggestionRecord {
+  request: AiOptimizationRequest,
+  response: AiOptimizationResponse,
+): LocalAiSuggestionRecord {
+  validateResponseContract(response);
+  const suggestion = response.suggestions[0];
+  if (!suggestion) throw new Error('At least one suggestion is required');
+
   return {
-    recordVersion: AI_OFFER_OPTIMIZATION_CONTRACT_VERSION,
-    correlationId: response.correlationId,
-    snapshotHash: request.snapshotHash,
-    reviewState: 'NEEDS_REVIEW',
-    approvalRequired: true,
-    offerId: request.listingSnapshot.offerId,
-    catalogProductId: request.listingSnapshot.catalogProductId,
-    accountId: request.listingSnapshot.accountId,
-    requestedAt: request.requestedAt,
+    recordId: createRecordId(request.snapshotHash, 0),
+    suggestionId: suggestion.suggestionId,
+    kind: suggestion.kind,
+    reviewState: 'pending_review',
+    inputSnapshotHash: request.snapshotHash,
+    approvalPath: {
+      requiresHumanReview: true,
+      requiresPolicyConfirmation: true,
+      lifecycleAction: 'publish_lifecycle_required',
+      nextAction: 'operator_review',
+    },
+    offerId: request.offerSnapshot.offerId,
+    accountId: request.offerSnapshot.accountId,
     model: response.model,
-    suggestions: response.suggestions.map((suggestion) => ({
-      ...suggestion,
-      status: 'DRAFT',
-    })),
-    approvedSuggestionIds: [],
+    suggestedValue: suggestion.proposedValue,
+    confidence: suggestion.confidence,
+    expectedImpact: suggestion.expectedImpact,
+    evidence: [...suggestion.evidence],
+    policyBlockers: [...suggestion.policyBlockers],
+    rollbackNotes: suggestion.rollbackNotes,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+export function createSyntheticAiOfferOptimizationResponse(
+  overrides: Partial<AiOptimizationResponse> & { suggestions?: AiOptimizationResponse['suggestions'] } = {},
+): AiOptimizationResponse {
+  return {
+    contractVersion: AI_OFFER_OPTIMIZATION_CONTRACT_VERSION,
+    mode: 'suggestion_only',
+    model: {
+      provider: 'openai',
+      name: 'gpt-5',
+      version: '2026-06-01',
+      ...(overrides.model || {}),
+    },
+    suggestions: overrides.suggestions || [
+      {
+        suggestionId: 's-1',
+        kind: 'title-rewrite',
+        summary: 'Lead with the strongest buyer keyword.',
+        proposedValue: { title: 'Synthetic optimized title' },
+        confidence: 0.81,
+        expectedImpact: 'Can improve click-through rate.',
+        evidence: ['Synthetic listing CTR fixture.'],
+        policyBlockers: [],
+        rollbackNotes: 'Restore the previous title if CTR falls.',
+      },
+    ],
+    ...overrides,
   };
 }
 
 export function buildApprovedSuggestionPatch(
-  record: AiSuggestionRecord,
+  record: LocalAiSuggestionRecord,
   approvedSuggestionIds: string[],
   reviewedByUserId: string,
 ): ApprovedSuggestionPatch {
   if (!record.offerId) {
     throw new Error('offerId is required before approved AI suggestions can enter lifecycle-gated updates');
   }
-
-  const approvedSuggestions = record.suggestions.filter((suggestion) => approvedSuggestionIds.includes(suggestion.id));
-  if (approvedSuggestions.length === 0) {
-    throw new Error('at least one approved suggestion is required');
+  if (!approvedSuggestionIds.includes(record.suggestionId)) {
+    throw new Error('the supplied suggestion record is not approved');
   }
 
   const changes: ApprovedSuggestionPatch['lifecycleInput']['changes'] = {};
-  for (const suggestion of approvedSuggestions) {
-    if (suggestion.focusArea === 'title' && typeof suggestion.proposedValue === 'string') changes.title = suggestion.proposedValue;
-    if (suggestion.focusArea === 'description' && typeof suggestion.proposedValue === 'string') changes.description = suggestion.proposedValue;
-    if (suggestion.focusArea === 'category' && typeof suggestion.proposedValue === 'string') changes.categoryId = suggestion.proposedValue;
-    if (suggestion.focusArea === 'price' && typeof suggestion.proposedValue === 'number') changes.price = suggestion.proposedValue;
-    if (suggestion.focusArea === 'images' && Array.isArray(suggestion.proposedValue)) changes.images = suggestion.proposedValue as string[];
-    if (suggestion.focusArea === 'attributes' && isAttributeArray(suggestion.proposedValue)) changes.attributes = suggestion.proposedValue;
+  if (record.kind === 'title-rewrite' && isRecord(record.suggestedValue) && typeof record.suggestedValue.title === 'string') {
+    changes.title = record.suggestedValue.title;
+  }
+  if (record.kind === 'description-rewrite' && isRecord(record.suggestedValue) && typeof record.suggestedValue.description === 'string') {
+    changes.description = record.suggestedValue.description;
+  }
+  if (record.kind === 'category-review' && isRecord(record.suggestedValue) && typeof record.suggestedValue.categoryId === 'string') {
+    changes.categoryId = record.suggestedValue.categoryId;
+  }
+  if (record.kind === 'price-test' && isRecord(record.suggestedValue) && typeof record.suggestedValue.price === 'number') {
+    changes.price = record.suggestedValue.price;
+  }
+  if (record.kind === 'image-upgrade' && isRecord(record.suggestedValue) && Array.isArray(record.suggestedValue.images)) {
+    changes.images = record.suggestedValue.images as string[];
+  }
+  if (record.kind === 'attribute-completion' && isRecord(record.suggestedValue) && Array.isArray(record.suggestedValue.attributes)) {
+    changes.attributes = record.suggestedValue.attributes as Array<{ name: string; values: string[] }>;
   }
 
   return {
@@ -235,13 +320,157 @@ export function buildApprovedSuggestionPatch(
       accountId: record.accountId,
       requiresConfirmation: true,
       source: 'TASK-005',
-      suggestionRecordVersion: record.recordVersion,
+      suggestionRecordVersion: AI_OFFER_OPTIMIZATION_CONTRACT_VERSION,
       approvedSuggestionIds,
       changes,
     },
     reviewState: 'APPROVED',
     reviewedByUserId,
   };
+}
+
+function fromLegacyInput(input: LegacyDraftOfferOptimizationInput): AiOptimizationRequest {
+  const requestedKinds = resolveSuggestionKinds(input.requestedSuggestionKinds);
+  const request: AiOptimizationRequest = {
+    contractVersion: AI_OFFER_OPTIMIZATION_CONTRACT_VERSION,
+    mode: 'suggestion_only',
+    generatedAt: new Date().toISOString(),
+    requestedByUserId: input.requestedByUserId,
+    requestedSuggestionKinds: requestedKinds,
+    redaction: {
+      classification: 'synthetic',
+      appliedRules: [...REDACTION_RULES],
+      omittedFields: [...OMITTED_FIELDS],
+    },
+    offerSnapshot: {
+      offerId: input.offer.offerId || null,
+      catalogProductId: input.offer.catalogProductId || null,
+      accountId: input.offer.accountId || null,
+      title: redactFreeText(input.offer.title),
+      description: redactNullableText(input.offer.description || null),
+      categoryId: input.offer.categoryId,
+      price: Number(input.offer.price),
+      currency: input.offer.currency || 'PLN',
+      quantity: toNonNegativeInteger(input.offer.quantity),
+      attributes: Array.isArray(input.offer.attributes)
+        ? input.offer.attributes.map((attribute) => ({
+            name: redactFreeText(attribute.name),
+            values: attribute.values.map((value) => redactFreeText(value)),
+          }))
+        : [],
+      imageUrls: Array.isArray(input.offer.imageUrls) ? input.offer.imageUrls.slice(0, 8) : [],
+    },
+    catalogSnapshot: {
+      sku: input.catalog?.sku || null,
+      brand: input.catalog?.brand || null,
+      categoryPath: Array.isArray(input.catalog?.categoryPath) ? [...input.catalog.categoryPath] : [],
+      sellable: typeof input.catalog?.sellable === 'boolean' ? input.catalog.sellable : null,
+    },
+    metrics: {
+      views7d: toMetric(input.metrics?.views7d),
+      clicks7d: toMetric(input.metrics?.clicks7d),
+      conversions7d: toMetric(input.metrics?.conversions7d),
+      addToCart7d: toMetric(input.metrics?.addToCart7d),
+      returnRate30d: toMetric(input.metrics?.returnRate30d),
+    },
+    policyContext: {
+      requiresHumanReview: true,
+      requiresPolicyConfirmation: true,
+      blockedReasons: [...(input.blockedReasons || [])],
+      allowedMutationPath: 'publish_lifecycle_only',
+    },
+    snapshotHash: '',
+  };
+  request.snapshotHash = hashSnapshot(request);
+  return request;
+}
+
+function fromSnapshotInput(input: SnapshotInput): AiOptimizationRequest {
+  const request: AiOptimizationRequest = {
+    contractVersion: AI_OFFER_OPTIMIZATION_CONTRACT_VERSION,
+    mode: 'suggestion_only',
+    generatedAt: input.requestedAt || new Date().toISOString(),
+    requestedByUserId: input.correlationId,
+    requestedSuggestionKinds: [...AI_SUGGESTION_KINDS],
+    redaction: {
+      classification: 'synthetic',
+      appliedRules: [...REDACTION_RULES],
+      omittedFields: [...OMITTED_FIELDS],
+    },
+    offerSnapshot: {
+      offerId: input.listingSnapshot.offerId,
+      catalogProductId: input.listingSnapshot.catalogProductId,
+      accountId: input.listingSnapshot.accountId,
+      title: redactFreeText(input.listingSnapshot.title),
+      description: redactNullableText(input.listingSnapshot.description),
+      categoryId: input.listingSnapshot.categoryId || 'UNASSIGNED',
+      price: Number(input.listingSnapshot.price.amount),
+      currency: input.listingSnapshot.price.currency,
+      quantity: toNonNegativeInteger(input.listingSnapshot.quantity),
+      attributes: input.listingSnapshot.attributes.map((attribute) => ({
+        name: redactFreeText(attribute.name),
+        values: attribute.values.map((value) => redactFreeText(value)),
+      })),
+      imageUrls: input.listingSnapshot.images.slice(0, 8),
+    },
+    catalogSnapshot: {
+      sku: input.listingSnapshot.product.sku,
+      brand: input.listingSnapshot.product.brand,
+      categoryPath: [],
+      sellable: true,
+    },
+    metrics: {
+      views7d: null,
+      clicks7d: null,
+      conversions7d: null,
+      addToCart7d: null,
+      returnRate30d: null,
+    },
+    policyContext: {
+      requiresHumanReview: true,
+      requiresPolicyConfirmation: true,
+      blockedReasons: [...input.listingSnapshot.policySummary.blockers],
+      allowedMutationPath: 'publish_lifecycle_only',
+    },
+    snapshotHash: '',
+  };
+  request.snapshotHash = hashSnapshot(request);
+  return request;
+}
+
+function validateResponseContract(response: AiOptimizationResponse): void {
+  if (response.contractVersion !== AI_OFFER_OPTIMIZATION_CONTRACT_VERSION) {
+    throw new Error(`Unsupported contract version: ${response.contractVersion}`);
+  }
+  if (response.mode !== 'suggestion_only') {
+    throw new Error('AI offer optimization must remain suggestion_only');
+  }
+  if (!response.model?.provider || !response.model?.name) {
+    throw new Error('AI model metadata is required');
+  }
+  if (!Array.isArray(response.suggestions) || response.suggestions.length === 0) {
+    throw new Error('At least one suggestion is required');
+  }
+  for (const suggestion of response.suggestions) {
+    if (!AI_SUGGESTION_KINDS.includes(suggestion.kind)) {
+      throw new Error(`Unsupported suggestion kind: ${String(suggestion.kind)}`);
+    }
+  }
+}
+
+function resolveSuggestionKinds(kinds?: AiSuggestionKind[]): AiSuggestionKind[] {
+  if (!Array.isArray(kinds) || kinds.length === 0) return [...AI_SUGGESTION_KINDS];
+  return kinds.filter((kind, index) => AI_SUGGESTION_KINDS.includes(kind) && kinds.indexOf(kind) === index);
+}
+
+function hashSnapshot(request: Omit<AiOptimizationRequest, 'snapshotHash'> | AiOptimizationRequest): string {
+  const clone = { ...request } as Record<string, unknown>;
+  delete clone.snapshotHash;
+  return createHash('sha256').update(JSON.stringify(clone)).digest('hex');
+}
+
+function createRecordId(snapshotHash: string, index: number): string {
+  return `ai-suggestion-${snapshotHash.slice(0, 12)}-${index + 1}`;
 }
 
 function redactNullableText(value: string | null): string | null {
@@ -252,21 +481,16 @@ function redactFreeText(value: string): string {
   return TOKEN_PATTERNS.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), value);
 }
 
-function hashValue(value: unknown): string {
-  return createHash('sha256').update(stableStringify(value)).digest('hex');
+function toMetric(value: number | null | undefined): number | null {
+  if (value == null) return null;
+  return Number.isFinite(value) ? Number(value) : null;
 }
 
-function stableStringify(value: unknown): string {
-  if (Array.isArray(value)) {
-    return `[${value.map((entry) => stableStringify(entry)).join(',')}]`;
-  }
-  if (value && typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>).sort(([left], [right]) => left.localeCompare(right));
-    return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`).join(',')}}`;
-  }
-  return JSON.stringify(value);
+function toNonNegativeInteger(value: number | null | undefined): number {
+  if (value == null || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.trunc(Number(value)));
 }
 
-function isAttributeArray(value: unknown): value is AiListingAttribute[] {
-  return Array.isArray(value) && value.every((entry) => typeof entry?.name === 'string' && Array.isArray(entry?.values));
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
 }

@@ -18,7 +18,7 @@ Validator: AI agent
 
 ## Summary
 
-Validated TASK-005 by approving and documenting an advisory-only ai-microservice contract, synthetic fixtures, review-state lifecycle, and redaction profile for Allegro offer optimization without introducing runtime DTOs, Prisma schema, workers, or direct marketplace mutation.
+Validated TASK-005 by approving and implementing an advisory-only ai-microservice contract module, service wrapper, targeted specs, synthetic fixtures, review-state lifecycle, and redaction profile for Allegro offer optimization without introducing direct marketplace mutation, Prisma schema changes, or worker execution.
 
 ## Upstream goal
 
@@ -37,6 +37,9 @@ TASK-005 supports FEAT-005 and the roadmap goal to improve listing readiness and
 
 - `npm run ips:audit`: PASS on 2026-06-20.
 - `npm run ips:pre-coding`: PASS on 2026-06-20.
+- `cd services/allegro-service && npm run build`: PASS on 2026-06-20.
+- `cd services/allegro-service && LOGGING_SERVICE_URL=http://127.0.0.1 AUTH_SERVICE_URL=http://127.0.0.1 NOTIFICATION_SERVICE_URL=http://127.0.0.1 JWT_SECRET=test-secret ENCRYPTION_KEY=0123456789abcdef0123456789abcdef npx ts-node src/allegro/ai-offer-optimization/ai-offer-optimization.spec.ts`: PASS on 2026-06-20.
+- `cd services/allegro-service && npx ts-node src/allegro/ai-offer-optimization/ai-offer-optimization.contract.spec.ts`: PASS on 2026-06-20.
 - `python3 scripts/deployment_readiness_gate.py --root . --target TASK-005`: PASS on 2026-06-20.
 
 ## Invariant evidence
@@ -45,7 +48,7 @@ TASK-005 supports FEAT-005 and the roadmap goal to improve listing readiness and
 - ALG-INV-002: request payloads carry account context and keep future apply paths subject to account-aware rate limits rather than bypassing them.
 - ALG-INV-003: no order ownership behavior changed; only aggregated performance signals are allowed.
 - ALG-INV-004: the fixtures and contract remain synthetic and redacted; no OAuth token, Authorization header, secret, customer identifier, payment detail, supplier secret, or raw log was introduced.
-- ALG-INV-005: no runtime ownership boundary changed; TASK-005 is documentation-only and explicitly marks missing ai-microservice auth/runtime facts instead of inventing them.
+- ALG-INV-005: no runtime ownership boundary changed; TASK-005 adds only a task-scoped advisory contract module/service/spec slice and explicitly marks missing ai-microservice auth/runtime facts instead of inventing them.
 - ALG-INV-006: TASK-005 is linked through feature, goal impact, execution plan, context package, coding prompt, contract document, validation report, and graph updates.
 - ALG-INV-007: validation evidence is recorded before closure.
 
@@ -68,4 +71,4 @@ Close TASK-005 as implemented and validated. Continue with TASK-006 execution-pl
 
 ## Traceability confirmation
 
-TASK-005 remains aligned with FEAT-005, EP-TASK-005, GOAL-IMPACT-TASK-005, CP-TASK-005, PROMPT-TASK-005, the approved AI contract document, and the Allegro revenue roadmap. The implementation preserves the IPS chain and introduces no runtime side effects.
+TASK-005 remains aligned with FEAT-005, EP-TASK-005, GOAL-IMPACT-TASK-005, CP-TASK-005, PROMPT-TASK-005, the approved AI contract document, the new ai-offer-optimization contract/service/spec files, and the Allegro revenue roadmap. The implementation preserves the IPS chain and introduces no direct marketplace side effects.
