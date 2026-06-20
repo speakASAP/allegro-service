@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-06-20T07:29:22Z",
+  "created_at": "2026-06-20T07:33:55Z",
   "gate": "deployment_readiness",
   "next_step": "ready_for_deployment_review",
   "pre_coding_gate": {
@@ -165,6 +165,36 @@
       "line": 130,
       "marker": "[UNKNOWN: VAT or tax treatment for margin]",
       "path": "12_validation/VAL-TASK-006-validation-report.md"
+    },
+    {
+      "line": 39,
+      "marker": "[MISSING: ai-microservice owner-approved internal auth contract]",
+      "path": "16_operations/AI_OFFER_OPTIMIZATION_CONTRACT.md"
+    },
+    {
+      "line": 161,
+      "marker": "[MISSING: provider version metadata]",
+      "path": "16_operations/AI_OFFER_OPTIMIZATION_CONTRACT.md"
+    },
+    {
+      "line": 206,
+      "marker": "[MISSING: owner-approved experiment window defaults by category/account]",
+      "path": "16_operations/AI_OFFER_OPTIMIZATION_CONTRACT.md"
+    },
+    {
+      "line": 214,
+      "marker": "[MISSING: ai-microservice owner-approved auth handshake]",
+      "path": "16_operations/AI_OFFER_OPTIMIZATION_CONTRACT.md"
+    },
+    {
+      "line": 215,
+      "marker": "[MISSING: provider/model registry contract for runtime metadata]",
+      "path": "16_operations/AI_OFFER_OPTIMIZATION_CONTRACT.md"
+    },
+    {
+      "line": 216,
+      "marker": "[MISSING: owner-approved experiment window defaults by category/account]",
+      "path": "16_operations/AI_OFFER_OPTIMIZATION_CONTRACT.md"
     },
     {
       "line": 118,
