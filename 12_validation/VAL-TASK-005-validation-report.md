@@ -39,6 +39,7 @@ TASK-005 supports FEAT-005 and roadmap Stage 4 by defining how ai-microservice c
 - `npm run ips:audit`: passed on 2026-06-19.
 - `npm run ips:pre-coding`: passed on 2026-06-19.
 - `npm run ips:readiness`: passed on 2026-06-19.
+- `python3 scripts/deployment_readiness_gate.py --root . --target TASK-005`: passed on 2026-06-20.
 - Targeted runtime tests: not run because this pass changed planning and validation artifacts only.
 
 ## Invariant evidence

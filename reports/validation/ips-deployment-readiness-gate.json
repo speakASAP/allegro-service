@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-06-19T12:27:55Z",
+  "created_at": "2026-06-20T07:19:07Z",
   "gate": "deployment_readiness",
   "next_step": "ready_for_deployment_review",
   "pre_coding_gate": {
@@ -19,7 +19,7 @@
     "score": 100,
     "status": "PASS"
   },
-  "target": "TASK-004",
+  "target": "TASK-005",
   "unresolved_markers": [
     {
       "line": 75,
@@ -167,6 +167,16 @@
       "path": "12_validation/VAL-TASK-006-validation-report.md"
     },
     {
+      "line": 25,
+      "marker": "[MISSING: explicit approval for TASK-005 coding. Until this is supplied, stop after reading this file and return without changing runtime code.]",
+      "path": "14_prompts/PROMPT-TASK-005-ai-offer-optimization-contract.md"
+    },
+    {
+      "line": 116,
+      "marker": "[MISSING: ...]",
+      "path": "21_execution_plans/EP-TASK-005-define-ai-offer-optimization-contract.md"
+    },
+    {
       "line": 118,
       "marker": "[MISSING: ...]",
       "path": "21_execution_plans/EP-TASK-006-plan-stock-order-profit-loop.md"
@@ -249,17 +259,18 @@
   ],
   "validation_reports": {
     "matching_reports": [
-      "12_validation/VAL-TASK-003-validation-report.md",
-      "12_validation/VAL-TASK-004-validation-report.md"
+      "12_validation/VAL-TASK-004-validation-report.md",
+      "12_validation/VAL-TASK-005-validation-report.md"
     ],
     "reports": [
       "12_validation/VAL-TASK-001-ips-baseline.md",
       "12_validation/VAL-TASK-002-validation-report.md",
       "12_validation/VAL-TASK-003-validation-report.md",
       "12_validation/VAL-TASK-004-validation-report.md",
+      "12_validation/VAL-TASK-005-validation-report.md",
       "12_validation/VAL-TASK-006-validation-report.md"
     ],
     "status": "pass",
-    "target": "TASK-004"
+    "target": "TASK-005"
   }
 }
