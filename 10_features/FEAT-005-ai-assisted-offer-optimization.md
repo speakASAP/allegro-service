@@ -2,10 +2,10 @@
 
 ```yaml
 id: FEAT-005
-status: planned
+status: validated
 owner: Project Owner
 created: 2026-06-13
-last_updated: 2026-06-13
+last_updated: 2026-06-20
 completeness_level: complete
 upstream:
   - ../09_milestones/MS-004-intelligent-offer-optimization.md
@@ -42,4 +42,4 @@ As an operator, I need AI recommendations that explain how to improve a listing 
 
 ## Validation
 
-Synthetic AI contract tests, prompt redaction review, policy-gate tests, and suggestion acceptance/rejection tests.
+Synthetic AI contract tests, prompt redaction review, deterministic snapshot-hash checks, and review-gated suggestion record tests all passed on 2026-06-19.

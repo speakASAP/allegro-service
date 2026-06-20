@@ -67,7 +67,7 @@ Roadmap Stage 3, FEAT-005, sensitive data policy, lifecycle and policy docs.
 
 ## Validation Task
 
-Contract review, synthetic fixture tests, redaction scan.
+Contract review, synthetic fixture tests, redaction scan, and deterministic snapshot-hash checks.
 
 ## Required Gates
 
@@ -75,4 +75,4 @@ Pre-coding gate, contract validation, deployment-readiness gate before runtime u
 
 ## Execution Plan Requirement
 
-This task was approved for implementation by owner instruction on 2026-06-20 and is now implemented and validated.
+This task was approved for implementation by owner instruction on 2026-06-19 and is now implemented and validated.
