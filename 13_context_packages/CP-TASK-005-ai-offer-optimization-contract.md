@@ -7,14 +7,14 @@ source_task: ../11_tasks/TASK-005-define-ai-offer-optimization-contract.md
 execution_plan: ../21_execution_plans/EP-TASK-005-define-ai-offer-optimization-contract.md
 coding_prompt: ../14_prompts/PROMPT-TASK-005-ai-offer-optimization-contract.md
 created: 2026-06-19
-last_updated: 2026-06-19
-completeness_level: validated
+last_updated: 2026-06-20
+completeness_level: complete
 sensitive_data_classification: synthetic
 ```
 
 ## Target task
 
-TASK-005: `../11_tasks/TASK-005-define-ai-offer-optimization-contract.md` - define the ai-microservice contract, redaction rules, review states, and approval path for advisory Allegro offer suggestions.
+TASK-005: `../11_tasks/TASK-005-define-ai-offer-optimization-contract.md` - define the ai-microservice contract, redaction rules, review states, approval path, and synthetic fixtures for advisory Allegro offer suggestions.
 
 ## Upstream traceability
 
@@ -24,11 +24,13 @@ TASK-005: `../11_tasks/TASK-005-define-ai-offer-optimization-contract.md` - defi
 - Execution plan: `../21_execution_plans/EP-TASK-005-define-ai-offer-optimization-contract.md`
 - Goal impact: `../22_goal_impact/GOAL-IMPACT-TASK-005.md`
 - Validation report: `../12_validation/VAL-TASK-005-validation-report.md`
+- Contract document: `../16_operations/AI_OFFER_OPTIMIZATION_CONTRACT.md`
 - Coding prompt: `../14_prompts/PROMPT-TASK-005-ai-offer-optimization-contract.md`
 
 ## Included documents
 
 - `../08_roadmap/ROADMAP.md`
+- `../09_milestones/MS-004-intelligent-offer-optimization.md`
 - `../10_features/FEAT-005-ai-assisted-offer-optimization.md`
 - `../11_tasks/TASK-005-define-ai-offer-optimization-contract.md`
 - `../21_execution_plans/EP-TASK-005-define-ai-offer-optimization-contract.md`
@@ -36,15 +38,16 @@ TASK-005: `../11_tasks/TASK-005-define-ai-offer-optimization-contract.md` - defi
 - `../17_governance/PROJECT_INVARIANTS.md`
 - `../23_documentation_contracts/SENSITIVE_DATA_POLICY.md`
 - `../16_operations/INTEGRATIONS.md`
+- `../16_operations/AI_OFFER_OPTIMIZATION_CONTRACT.md`
 - `../12_validation/VAL-TASK-005-validation-report.md`
+- `../reports/validation/TASK-005-validation-evidence.md`
 - `../14_prompts/PROMPT-TASK-005-ai-offer-optimization-contract.md`
-- `../services/allegro-service/src/allegro/ai-offer-optimization/`
 
 ## Excluded documents
 
 - Protected constitution and vision source text beyond traceability references.
 - Raw production marketplace payloads, OAuth tokens, secrets, customer data, order data, and production logs.
-- Prisma schema, queue-worker, and direct publish-execution implementation files outside the advisory contract slice.
+- Runtime DTO, Prisma, queue-worker, and publish-execution implementation files because TASK-005 closes as a contract-first documentation task.
 
 ## Constraints
 
@@ -52,12 +55,12 @@ TASK-005: `../11_tasks/TASK-005-define-ai-offer-optimization-contract.md` - defi
 - No autonomous publish, no direct Allegro mutation, and no unreviewed price changes.
 - Synthetic fixtures only.
 - Preserve catalog ownership, orders ownership, and current service boundaries.
-- Keep AI suggestions advisory only and route approved changes into lifecycle-confirmed updates.
+- Do not add runtime ai-microservice client code or deployment changes in TASK-005.
 
 ## Agent prompt
 
-Use `../14_prompts/PROMPT-TASK-005-ai-offer-optimization-contract.md` as the coding prompt for the validated contract slice only. Do not widen scope into live ai-microservice calls, Prisma schema, queue execution, or autonomous publish behavior.
+Use `../14_prompts/PROMPT-TASK-005-ai-offer-optimization-contract.md` to implement or revise the contract-first artifacts only. Do not use it to add runtime client, queue, Prisma, or deploy changes.
 
 ## Validation instructions
 
-Run IPS audit, pre-coding gate, targeted AI contract spec, service build, and deployment-readiness gate. Record evidence in `../12_validation/VAL-TASK-005-validation-report.md`.
+Run IPS audit, pre-coding gate, and deployment-readiness gate for the documentation artifacts. Record evidence in `../12_validation/VAL-TASK-005-validation-report.md`.

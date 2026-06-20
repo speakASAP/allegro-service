@@ -131,6 +131,10 @@ nodes:
     type: coding_prompt
     path: 14_prompts/PROMPT-TASK-005-ai-offer-optimization-contract.md
     title: AI Offer Optimization Contract Prompt
+  - id: PROMPT-TASK-005-ai-offer-optimization-contract
+    type: coding_prompt
+    path: 14_prompts/PROMPT-TASK-005-ai-offer-optimization-contract.md
+    title: AI Offer Optimization Contract Prompt
   - id: CP-TASK-001
     type: context_package
     path: 13_context_packages/CP-TASK-001-ips-baseline.md
@@ -147,6 +151,10 @@ nodes:
     type: context_package
     path: 13_context_packages/CP-TASK-004-catalog-sell-on-allegro-action.md
     title: Catalog Sell On Allegro Action Context Package
+  - id: CP-TASK-005
+    type: context_package
+    path: 13_context_packages/CP-TASK-005-ai-offer-optimization-contract.md
+    title: AI Offer Optimization Contract Context Package
   - id: CP-TASK-005
     type: context_package
     path: 13_context_packages/CP-TASK-005-ai-offer-optimization-contract.md
@@ -175,6 +183,10 @@ nodes:
     type: validation_report
     path: 12_validation/VAL-TASK-004-validation-report.md
     title: Catalog Sell On Allegro Action Validation
+  - id: VAL-TASK-005-validation-report
+    type: validation_report
+    path: 12_validation/VAL-TASK-005-validation-report.md
+    title: AI Offer Optimization Contract Validation
   - id: VAL-TASK-005-validation-report
     type: validation_report
     path: 12_validation/VAL-TASK-005-validation-report.md

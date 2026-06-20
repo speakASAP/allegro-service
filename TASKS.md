@@ -10,7 +10,7 @@
 
 ## Active
 <!-- Coordinator-maintained -->
-- TASK-006 plan stock/order/profit loop review: `11_tasks/TASK-006-plan-stock-order-profit-loop.md`
+- TASK-007 growth analytics and demand loops execution-plan review: `11_tasks/TASK-007-plan-growth-analytics-and-demand-loops.md`
 
 ## Completed
 <!-- Coordinator-append-only -->
@@ -19,4 +19,4 @@
 - 2026-06-15 TASK-002-governed-publish-lifecycle-validated: lifecycle schema, publish/update attempts, guarded remote update routing, targeted spec, build, strict audit, pre-coding gate, and deployment-readiness gate passed.
 - 2026-06-15 TASK-003-marketplace-policy-engine-validated: reusable read-only policy engine implemented, lifecycle integrated, targeted policy/lifecycle specs and build passed.
 - 2026-06-19 TASK-004-catalog-sell-on-allegro-action-validated: catalog-facing prepare/confirm/status and bulk-planning contract implemented with draft reuse/creation, lifecycle-backed queueing, targeted spec, build, strict audit, pre-coding gate, and deployment-readiness gate passed.
-- 2026-06-20 TASK-005-ai-offer-optimization-contract-validated: advisory ai-microservice request/response and local suggestion-record contract implemented with deterministic snapshot hashing, approval-gated lifecycle handoff, synthetic redaction fixtures, IPS gates, targeted spec, build, and deployment-readiness gate passed.
+- 2026-06-20 TASK-005-ai-offer-optimization-contract-validated: advisory ai-microservice contract, review-state model, synthetic fixtures, redaction profile, IPS prompt/context updates, and validation evidence completed without runtime code changes.

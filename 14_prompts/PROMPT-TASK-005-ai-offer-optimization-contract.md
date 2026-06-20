@@ -6,25 +6,26 @@ status: validated
 source_task: ../11_tasks/TASK-005-define-ai-offer-optimization-contract.md
 execution_plan: ../21_execution_plans/EP-TASK-005-define-ai-offer-optimization-contract.md
 created: 2026-06-19
-last_updated: 2026-06-19
-completeness_level: validated
+last_updated: 2026-06-20
+completeness_level: complete
 sensitive_data_classification: synthetic
-approval_status: approved_for_implementation_by_owner_instruction_2026_06_20
+approval_status: approved_for_contract_first_artifacts_2026-06-20
 ```
 
 ## Role
 
-You are a worker agent for TASK-005 in allegro-service. Preserve the existing NestJS and Prisma service boundary, catalog ownership, publish-lifecycle guardrails, and IPS traceability chain while implementing the advisory AI contract slice only.
+You are a worker agent for TASK-005 in allegro-service. Preserve the existing NestJS and Prisma service boundary, catalog ownership, account-aware publish guardrails, OAuth secrecy, and IPS traceability chain.
 
 ## Task
 
-Define the advisory ai-microservice contract, local suggestion review states, deterministic snapshot hashing, approval-gated lifecycle handoff, redaction rules, and synthetic validation fixtures for Allegro offer optimization without granting direct marketplace mutation authority.
+Define and validate the advisory ai-microservice contract, local suggestion review states, redaction rules, and synthetic fixtures for Allegro offer optimization without granting direct marketplace mutation authority.
 
 ## Context
 
-Read before coding:
+Read before changing files:
 
 - `08_roadmap/ROADMAP.md`
+- `09_milestones/MS-004-intelligent-offer-optimization.md`
 - `10_features/FEAT-005-ai-assisted-offer-optimization.md`
 - `11_tasks/TASK-005-define-ai-offer-optimization-contract.md`
 - `21_execution_plans/EP-TASK-005-define-ai-offer-optimization-contract.md`
@@ -32,25 +33,26 @@ Read before coding:
 - `17_governance/PROJECT_INVARIANTS.md`
 - `23_documentation_contracts/SENSITIVE_DATA_POLICY.md`
 - `16_operations/INTEGRATIONS.md`
+- `16_operations/AI_OFFER_OPTIMIZATION_CONTRACT.md`
 - `13_context_packages/CP-TASK-005-ai-offer-optimization-contract.md`
 - `12_validation/VAL-TASK-005-validation-report.md`
-- `services/allegro-service/src/allegro/ai-offer-optimization/`
+- `reports/validation/TASK-005-validation-evidence.md`
 
 ## Constraints
 
 - Keep AI suggestions advisory only.
 - Use synthetic fixtures and redacted examples only.
-- Do not add production secrets, OAuth tokens, Authorization headers, raw customer data, raw order data, or raw marketplace logs.
+- Do not add production secrets, OAuth tokens, Authorization headers, raw customer data, raw order data, raw marketplace logs, or supplier/payment secrets.
 - Do not change catalog, order, payment, stock, or supplier ownership boundaries without approved upstream decisions.
-- Do not add live ai-microservice HTTP calls, queue execution, Prisma schema changes, or autonomous publish behavior in this task.
+- Do not add runtime ai-microservice clients, DTOs, Prisma schema, queues, or deploy changes in TASK-005.
 - Do not deploy from this prompt.
 
 ## Acceptance criteria
 
 - Advisory request/response contract is documented and validated.
-- Review-state lifecycle, snapshot-hash metadata, and approval checkpoints are explicit.
+- Review-state lifecycle and approval checkpoints are explicit.
 - Redaction and data-minimization rules are documented with synthetic fixtures.
-- Validation evidence records IPS gates, targeted contract tests, build, and deviations.
+- Validation evidence records IPS gates, documentation-only scope, and deviations.
 
 ## Validation
 
@@ -59,7 +61,5 @@ Run and record:
 ```bash
 npm run ips:audit
 npm run ips:pre-coding
-cd services/allegro-service && npm run build
-cd services/allegro-service && LOGGING_SERVICE_URL=http://127.0.0.1 AUTH_SERVICE_URL=http://127.0.0.1 NOTIFICATION_SERVICE_URL=http://127.0.0.1 JWT_SECRET=test-secret ENCRYPTION_KEY=0123456789abcdef0123456789abcdef npx ts-node src/allegro/ai-offer-optimization/ai-offer-optimization.spec.ts
 python3 scripts/deployment_readiness_gate.py --root . --target TASK-005
 ```
