@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-06-20T07:36:10Z",
+  "created_at": "2026-06-20T11:03:46Z",
   "gate": "deployment_readiness",
   "next_step": "ready_for_deployment_review",
   "pre_coding_gate": {
@@ -19,7 +19,7 @@
     "score": 100,
     "status": "PASS"
   },
-  "target": "TASK-005",
+  "target": "TASK-007",
   "unresolved_markers": [
     {
       "line": 75,
@@ -197,6 +197,11 @@
       "path": "16_operations/AI_OFFER_OPTIMIZATION_CONTRACT.md"
     },
     {
+      "line": 82,
+      "marker": "[MISSING: ...]",
+      "path": "16_operations/INTEGRATIONS.md"
+    },
+    {
       "line": 118,
       "marker": "[MISSING: ...]",
       "path": "21_execution_plans/EP-TASK-006-plan-stock-order-profit-loop.md"
@@ -279,8 +284,8 @@
   ],
   "validation_reports": {
     "matching_reports": [
-      "12_validation/VAL-TASK-004-validation-report.md",
-      "12_validation/VAL-TASK-005-validation-report.md"
+      "12_validation/VAL-TASK-002-validation-report.md",
+      "12_validation/VAL-TASK-007-validation-report.md"
     ],
     "reports": [
       "12_validation/VAL-TASK-001-ips-baseline.md",
@@ -288,9 +293,10 @@
       "12_validation/VAL-TASK-003-validation-report.md",
       "12_validation/VAL-TASK-004-validation-report.md",
       "12_validation/VAL-TASK-005-validation-report.md",
-      "12_validation/VAL-TASK-006-validation-report.md"
+      "12_validation/VAL-TASK-006-validation-report.md",
+      "12_validation/VAL-TASK-007-validation-report.md"
     ],
     "status": "pass",
-    "target": "TASK-005"
+    "target": "TASK-007"
   }
 }

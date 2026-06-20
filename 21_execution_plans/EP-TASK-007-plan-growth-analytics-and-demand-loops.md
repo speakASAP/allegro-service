@@ -2,11 +2,11 @@
 
 ```yaml
 id: EP-TASK-007
-status: draft
+status: validated
 source_task: ../11_tasks/TASK-007-plan-growth-analytics-and-demand-loops.md
 owner: Project Owner
 created: 2026-06-13
-last_updated: 2026-06-13
+last_updated: 2026-06-20
 completeness_level: complete
 vision: ../01_vision/VISION.md
 constitution: ../00_constitution/CONSTITUTION.md
@@ -17,8 +17,8 @@ goal_impact: ../22_goal_impact/GOAL-IMPACT-TASK-007.md
 ## Metadata
 
 - Source task: ../11_tasks/TASK-007-plan-growth-analytics-and-demand-loops.md
-- Status: draft for owner review.
-- Lifecycle state: planned; not approved for coding until gate review passes.
+- Status: approved for contract-first implementation by owner instruction on 2026-06-20.
+- Lifecycle state: implemented and validated for TASK-007 closure on 2026-06-20; runtime downstream writes remain blocked pending external contracts.
 
 ## Upstream Traceability
 
@@ -78,7 +78,7 @@ Define versioned funnel events, lead signals, marketing segments, and notificati
 ## Files to Create
 
 - 12_validation/VAL-TASK-007-validation-report.md
-- reports/validation/TASK-007-validation-evidence.md when generated evidence is needed
+- reports/validation/TASK-007-validation-evidence.md
 
 ## Files to Modify
 
@@ -104,12 +104,12 @@ Define versioned funnel events, lead signals, marketing segments, and notificati
 
 ## Parallel Execution
 
-TASK-007 can run four independent contract lanes for funnel taxonomy, leads/marketing, digest metrics, and redaction/versioning before a final integration lane publishes the coherent event contract plan.
+TASK-007 executed as four independent contract lanes plus one integration lane. TASK-007-A through TASK-007-D produced isolated handoff artifacts, and TASK-007-E integrated the shared naming, validation evidence, and repo-state updates without runtime code changes.
 
-- Integration owner: Agent TASK-007-E integration owner.
-- Validation owner: Agent TASK-007-E validation owner.
-- Merge order: 1. TASK-007-A funnel taxonomy lane; 2. TASK-007-B leads and marketing schema lane; 3. TASK-007-C notification digest lane; 4. TASK-007-D redaction and replay lane; 5. TASK-007-E final integration and validation evidence.
-- Shared files/contracts: event contract names, 16_operations/INTEGRATIONS.md, validation reports, TASKS.md, and STATE.json. TASK-007-E owns final naming, event version consistency, and merge conflict resolution.
+- Integration owner: TASK-007-E orchestrator lane.
+- Validation owner: TASK-007-E orchestrator lane.
+- Merge order completed: 1. TASK-007-A funnel taxonomy handoff; 2. TASK-007-B leads and marketing schema handoff; 3. TASK-007-C notification digest handoff; 4. TASK-007-D redaction and replay handoff; 5. TASK-007-E integrated validation report, evidence summary, integrations map update, and status files.
+- Shared files/contracts: event contract names, `16_operations/INTEGRATIONS.md`, validation reports, `TASKS.md`, and `STATE.json`. TASK-007-E resolved final shared wording and preserved missing external contract markers.
 
 | Workstream | Status | Objective | Scope | Allowed files | Forbidden files | Expected output | Dependencies/blockers |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -121,7 +121,7 @@ TASK-007 can run four independent contract lanes for funnel taxonomy, leads/mark
 
 ### Agent-Ready Handoff Notes
 
-Start TASK-007-A through TASK-007-D in separate Codex threads only after TASK-006 integration no longer needs the same shared integration files, or assign TASK-007-E as explicit conflict resolver. Each worker must return synthetic examples and [MISSING: ...] markers instead of inventing external contracts.
+TASK-007-A through TASK-007-D completed as isolated remote handoffs under `reports/validation/`, and TASK-007-E integrated them into the repo validation/state artifacts. External contract gaps remain explicit `[MISSING: ...]` blockers for future runtime tasks.
 ## Test Plan
 
 - Run npm run ips:audit.
@@ -156,8 +156,8 @@ You are a TASK-007 worker for allegro-service. Preserve the chain Vision -> Goal
 Read the roadmap Stage 5, FEAT-007, TASK-007, this execution plan, project invariants, integrations map, and sensitive-data policy before producing output. TASK-007-A through TASK-007-D may run only after TASK-006 integration no longer needs the same shared integration files, or after TASK-007-E is explicitly assigned as conflict resolver. Return event names, contract fields, source mappings, validation cases, blockers, and explicit unavailable-fact markers for missing or unknown external contracts instead of inventing them. Do not edit shared event names, validation reports, TASKS.md, STATE.json, or integration wording unless TASK-007-E owns that merge.
 ## Completion Checklist
 
-- [ ] Implementation complete
-- [ ] Tests complete
-- [ ] Validation evidence collected
-- [ ] Documentation updated
-- [ ] Deviations documented
+- [x] Implementation complete
+- [x] Tests complete
+- [x] Validation evidence collected
+- [x] Documentation updated
+- [x] Deviations documented

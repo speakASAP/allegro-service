@@ -10,7 +10,7 @@
 
 ## Active
 <!-- Coordinator-maintained -->
-- TASK-007 growth analytics and demand loops execution-plan review: `11_tasks/TASK-007-plan-growth-analytics-and-demand-loops.md`
+- TASK-008 operations trust and scale execution-plan review: `11_tasks/TASK-008-plan-operations-trust-and-scale.md`
 
 ## Completed
 <!-- Coordinator-append-only -->
@@ -20,3 +20,4 @@
 - 2026-06-15 TASK-003-marketplace-policy-engine-validated: reusable read-only policy engine implemented, lifecycle integrated, targeted policy/lifecycle specs and build passed.
 - 2026-06-19 TASK-004-catalog-sell-on-allegro-action-validated: catalog-facing prepare/confirm/status and bulk-planning contract implemented with draft reuse/creation, lifecycle-backed queueing, targeted spec, build, strict audit, pre-coding gate, and deployment-readiness gate passed.
 - 2026-06-20 TASK-005-ai-offer-optimization-contract-validated: advisory ai-microservice contract, contract module/service/specs, review-state model, synthetic fixtures, redaction profile, build/spec validation, and IPS evidence completed without direct marketplace mutation.
+- 2026-06-20 TASK-007-growth-analytics-contract-pack-validated: funnel taxonomy, leads/marketing envelope drafts, digest payload definitions, redaction/replay/versioning rules, integrated validation evidence, and repo-state updates completed without downstream runtime writes.

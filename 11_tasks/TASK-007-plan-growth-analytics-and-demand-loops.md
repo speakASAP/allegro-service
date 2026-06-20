@@ -2,10 +2,10 @@
 
 ```yaml
 id: TASK-007
-status: draft
+status: validated
 owner: Project Owner
 created: 2026-06-13
-last_updated: 2026-06-13
+last_updated: 2026-06-20
 completeness_level: complete
 upstream:
   - ../10_features/FEAT-007-growth-analytics-and-demand-loops.md
@@ -56,10 +56,10 @@ No production writes to leads/marketing until contracts are validated. No custom
 
 ## Acceptance Criteria
 
-- [ ] Funnel event taxonomy is versioned.
-- [ ] Leads and marketing events have explicit schemas.
-- [ ] Digest metrics are defined from available data.
-- [ ] Redaction rules are testable.
+- [x] Funnel event taxonomy is versioned.
+- [x] Leads and marketing events have explicit schemas.
+- [x] Digest metrics are defined from available data.
+- [x] Redaction rules are testable.
 
 ## Required Context
 
@@ -75,4 +75,4 @@ Pre-coding gate, contract validation, replay/idempotency review.
 
 ## Execution Plan Requirement
 
-This task must not be converted into a coding prompt until an approved execution plan exists.
+This task was approved for contract-first implementation by owner instruction on 2026-06-20 and is now implemented and validated without runtime leads, marketing, logging, or notification writes.

@@ -15,7 +15,7 @@ upstream_links:
 downstream_links:
   - 21_execution_plans/EP-TASK-007-plan-growth-analytics-and-demand-loops.md
 validation_method: Contract tests, redaction scan, replay review.
-status: draft
+status: validated
 ```
 
 ## Explanation
@@ -24,8 +24,8 @@ The system should learn from each marketplace outcome and feed that learning to 
 
 ## Evidence
 
-Roadmap Stage 5 and integration taxonomy.
+Roadmap Stage 5 now has an integrated contract pack for funnel taxonomy, leads and marketing candidate schemas, digest metrics, and redaction/replay rules recorded under `reports/validation/TASK-007-*.md` and the TASK-007 validation report.
 
 ## Validation
 
-Validated when events are versioned, redacted, replay-safe, and mapped to consumers.
+Validated on 2026-06-20 when the contract pack, synthetic examples, digest metrics, replay/redaction rules, and IPS gate evidence were integrated without enabling downstream runtime writes.

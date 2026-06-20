@@ -3,17 +3,16 @@
   "project": "allegro-service",
   "stage": "production",
   "health": "ok",
-  "cycle": 2,
-  "last_cycle_at": "2026-06-20T07:21:37Z",
+  "cycle": 3,
+  "last_cycle_at": "2026-06-20T10:54:21Z",
   "tasks_active": 1,
   "tasks_failed_last_cycle": 0,
   "open_task_ids": [
     "TASK-006",
-    "TASK-007",
     "TASK-008"
   ],
-  "last_milestone": "task-005-ai-offer-optimization-contract-validated",
-  "next_focus": "review TASK-007 growth analytics and demand loops execution plan; TASK-006 remains blocked by missing external contract owners and approved economics facts",
+  "last_milestone": "task-007-growth-analytics-contract-pack-validated",
+  "next_focus": "review TASK-008 operations trust and scale execution plan; TASK-006 remains blocked by missing external contract owners, click/digest runtime facts, and approved economics sources",
   "blockers": [
     "TASK-006 remains blocked by [MISSING: durable stock sync attempt contract]",
     "TASK-006 remains blocked by [MISSING: approved redacted order-forward failure taxonomy]",
@@ -25,12 +24,13 @@
     "custom": {
       "planned_milestones": 7,
       "planned_revenue_tasks": 7,
-      "active_revenue_task": "TASK-007",
+      "active_revenue_task": "TASK-008",
       "completed_revenue_tasks": [
         "TASK-002",
         "TASK-003",
         "TASK-004",
-        "TASK-005"
+        "TASK-005",
+        "TASK-007"
       ]
     }
   }
