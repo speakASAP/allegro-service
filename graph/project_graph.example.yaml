@@ -127,6 +127,10 @@ nodes:
     type: coding_prompt
     path: 14_prompts/PROMPT-TASK-004-catalog-sell-on-allegro-action.md
     title: Catalog Sell On Allegro Action Prompt
+  - id: PROMPT-TASK-005-ai-offer-optimization-contract
+    type: coding_prompt
+    path: 14_prompts/PROMPT-TASK-005-ai-offer-optimization-contract.md
+    title: AI Offer Optimization Contract Prompt
   - id: CP-TASK-001
     type: context_package
     path: 13_context_packages/CP-TASK-001-ips-baseline.md
@@ -143,6 +147,10 @@ nodes:
     type: context_package
     path: 13_context_packages/CP-TASK-004-catalog-sell-on-allegro-action.md
     title: Catalog Sell On Allegro Action Context Package
+  - id: CP-TASK-005
+    type: context_package
+    path: 13_context_packages/CP-TASK-005-ai-offer-optimization-contract.md
+    title: AI Offer Optimization Contract Context Package
   - id: ADR-001
     type: adr
     path: 07_decisions/ADR-001-preserve-existing-nestjs-prisma-service-boundary.md
@@ -167,6 +175,10 @@ nodes:
     type: validation_report
     path: 12_validation/VAL-TASK-004-validation-report.md
     title: Catalog Sell On Allegro Action Validation
+  - id: VAL-TASK-005-validation-report
+    type: validation_report
+    path: 12_validation/VAL-TASK-005-validation-report.md
+    title: AI Offer Optimization Contract Validation
 edges:
   - from: VISION-ALLEGRO-SERVICE
     type: defines
@@ -308,6 +320,18 @@ edges:
     to: FEAT-005
   - from: EP-TASK-005
     type: derives_from
+    to: TASK-005
+  - from: EP-TASK-005
+    type: generates
+    to: PROMPT-TASK-005-ai-offer-optimization-contract
+  - from: PROMPT-TASK-005-ai-offer-optimization-contract
+    type: derives_from
+    to: EP-TASK-005
+  - from: PROMPT-TASK-005-ai-offer-optimization-contract
+    type: included_in_context
+    to: CP-TASK-005
+  - from: VAL-TASK-005-validation-report
+    type: validates
     to: TASK-005
   - from: EP-TASK-005
     type: constrained_by

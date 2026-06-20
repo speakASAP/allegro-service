@@ -11,7 +11,7 @@
 
 ## Active
 <!-- Coordinator-maintained -->
-- TASK-005 define AI offer optimization contract review: `11_tasks/TASK-005-define-ai-offer-optimization-contract.md`
+- TASK-005 define AI offer optimization contract reviewed; awaiting explicit approval before coding: `11_tasks/TASK-005-define-ai-offer-optimization-contract.md`
 
 ## Completed
 <!-- Coordinator-append-only -->

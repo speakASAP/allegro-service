@@ -2,11 +2,11 @@
 
 ```yaml
 id: EP-TASK-005
-status: draft
+status: reviewed
 source_task: ../11_tasks/TASK-005-define-ai-offer-optimization-contract.md
 owner: Project Owner
 created: 2026-06-13
-last_updated: 2026-06-13
+last_updated: 2026-06-19
 completeness_level: complete
 vision: ../01_vision/VISION.md
 constitution: ../00_constitution/CONSTITUTION.md
@@ -17,7 +17,7 @@ goal_impact: ../22_goal_impact/GOAL-IMPACT-TASK-005.md
 ## Metadata
 
 - Source task: ../11_tasks/TASK-005-define-ai-offer-optimization-contract.md
-- Status: draft for owner review.
+- Status: reviewed by orchestrator on 2026-06-19; still awaiting explicit approval before any coding prompt or runtime change.
 - Lifecycle state: planned; not approved for coding until gate review passes.
 
 ## Upstream Traceability
@@ -108,6 +108,18 @@ Discover and define a redacted ai-microservice contract for draft-only listing r
 - Run npm run ips:pre-coding.
 - Run targeted unit or contract tests for the affected implementation.
 - Run npm run ips:readiness before deployment or closure.
+
+## Parallel Planning
+
+| Lane | Status | Owner role | Objective | Allowed scope | Forbidden scope | Expected evidence | Dependencies |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| TASK-005-A | Ready now | Contract discovery worker | Define the ai-microservice request/response envelope for draft-only offer suggestions, including snapshot hash, model metadata, and review status fields. | `16_operations/INTEGRATIONS.md`, `shared/clients/`, `services/allegro-service/src/allegro/`, TASK-005 docs. | No runtime route, queue, Prisma, or publish-lifecycle mutation changes. | Proposed contract table, request/response fixture set, explicit `[MISSING: ...]` markers for unknown fields. | None. |
+| TASK-005-B | Ready now | Data-safety worker | Define redaction, prompt-input minimization, and synthetic-fixture rules for AI suggestion inputs and outputs. | Sensitive-data policy, lifecycle/policy docs, TASK-005 docs, validation artifacts. | No production prompt capture, no secrets, no raw marketplace payloads, no customer/order data. | Redaction matrix, synthetic example set, sensitive-field allow/deny list. | None. |
+| TASK-005-C | Ready now | Review-state worker | Define local suggestion lifecycle states, approval path, rollback notes, and measurable metrics before any AI suggestion can influence publishable data. | Allegro lifecycle/policy docs, existing draft/publish state modules, TASK-005 docs. | No automatic approval path, no direct Allegro mutation, no autonomous price change policy. | Review-state diagram, approval checkpoints, metric list, rollback notes. | None. |
+| TASK-005-D | Dependency-gated | Validation owner | Merge A-C into final contract wording, add synthetic validation fixtures/tests if needed, and rerun IPS gates. | TASK-005 plan/report/docs plus task-scoped validation files. | Do not generate coding prompt or runtime code before explicit approval. | Updated execution plan, validation report, gate outputs. | Requires A-C handoffs or equivalent integrated review. |
+| TASK-005-E | Final integration | Coordinator | Update `TASKS.md`, `STATE.json`, and integration notes once TASK-005 contract wording is reviewed and approval status is explicit. | Coordinator-owned state/docs only. | Do not mark coding approved unless approval is explicit in repo state or owner instruction. | Clean state transition and next-focus wording. | After D. |
+
+Shared files/contracts: `16_operations/INTEGRATIONS.md`, `21_execution_plans/EP-TASK-005-define-ai-offer-optimization-contract.md`, `12_validation/VAL-TASK-005-validation-report.md`, `TASKS.md`, and `STATE.json` are single-owner integration artifacts. Runtime DTOs, Prisma schema, queue workers, publish lifecycle services, and ai-microservice clients remain untouched until approval exists.
 
 ## Validation Plan
 
