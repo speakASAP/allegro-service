@@ -5,83 +5,99 @@ import {
   createSyntheticAiOfferOptimizationResponse,
 } from './ai-offer-optimization.contract';
 
-function createOffer(overrides: Record<string, unknown> = {}) {
+function buildInput(overrides: Record<string, unknown> = {}) {
   return {
-    id: '11111111-1111-1111-1111-111111111111',
-    accountId: '22222222-2222-2222-2222-222222222222',
-    catalogProductId: '33333333-3333-3333-3333-333333333333',
-    title: 'Synthetic title',
-    description: 'Synthetic description',
-    categoryId: 'cat-123',
-    attributes: [{ name: 'color', value: 'blue' }],
-    price: 109,
-    currency: 'PLN',
-    stockQuantity: 5,
-    images: ['https://example.invalid/product.jpg'],
-    rawData: {
-      catalogSnapshot: {
-        id: '33333333-3333-3333-3333-333333333333',
-        sku: 'SKU-1',
-        title: 'Synthetic title',
+    requestedByUserId: 'user-1',
+    offer: {
+      offerId: 'offer-1',
+      catalogProductId: 'catalog-1',
+      accountId: 'account-1',
+      title: 'Synthetic title',
+      description: 'Synthetic offer description',
+      categoryId: 'cat-123',
+      price: 129.99,
+      currency: 'PLN',
+      quantity: 4,
+      attributes: [{ name: 'color', values: ['black'] }],
+      imageUrls: ['https://example.invalid/offer-1.jpg'],
+      rawData: {
+        buyerEmail: 'buyer@example.invalid',
+        authorizationHeader: 'Bearer secret-token',
       },
-      delivery: { method: 'locker' },
-      payments: { installments: false },
-      tokens: { accessToken: 'super-secret-token' },
-      customerEmail: 'buyer@example.com',
-      authorization: 'Bearer top-secret',
     },
+    catalog: {
+      sku: 'SKU-1',
+      brand: 'Synthetic',
+      categoryPath: ['Electronics', 'Audio'],
+      sellable: true,
+      rawData: {
+        clientSecret: 'super-secret',
+      },
+    },
+    metrics: {
+      views7d: 120,
+      clicks7d: 25,
+      conversions7d: 2,
+      addToCart7d: 4,
+      returnRate30d: 0.01,
+    },
+    blockedReasons: ['manual-price-review-required'],
     ...overrides,
   };
 }
 
 async function testRequestIsSuggestionOnlyAndRedacted() {
-  const request = buildAiOfferOptimizationRequest({
-    offer: createOffer(),
-    policyEvaluation: {
-      version: 'TASK-003.v1',
-      results: [
-        { gate: 'catalog-validation', status: 'PASS', ownerService: 'catalog-microservice', remediation: 'none' },
-      ],
-      summary: { blockers: 0, warnings: 0, recommendations: 0 },
-    },
-  });
-
-  assert.equal(request.contractVersion, 'TASK-005.v1');
-  assert.equal(request.mode, 'SUGGESTION_ONLY');
-  assert.equal(request.reviewState, 'DRAFT');
-  assert.equal(request.constraints.autonomousPublishAllowed, false);
-  assert.equal(request.constraints.requiresHumanApproval, true);
-
+  const request = buildAiOfferOptimizationRequest(buildInput());
   const serialized = JSON.stringify(request);
-  assert.equal(serialized.includes('super-secret-token'), false);
-  assert.equal(serialized.includes('buyer@example.com'), false);
-  assert.equal(serialized.includes('Bearer top-secret'), false);
-  assert.equal(serialized.includes('[REDACTED]'), true);
+
+  assert.equal(request.mode, 'suggestion_only');
+  assert.equal(request.redaction.classification, 'synthetic');
+  assert.ok(request.redaction.omittedFields.includes('authorizationHeader'));
+  assert.ok(!serialized.includes('buyer@example.invalid'));
+  assert.ok(!serialized.includes('secret-token'));
+  assert.ok(!serialized.includes('super-secret'));
 }
 
-async function testSuggestionRecordStaysDraftOnly() {
-  const request = buildAiOfferOptimizationRequest({ offer: createOffer() });
-  const response = createSyntheticAiOfferOptimizationResponse();
+async function testSuggestionRecordStaysReviewGated() {
+  const request = buildAiOfferOptimizationRequest(buildInput());
+  const response = createSyntheticAiOfferOptimizationResponse({
+    suggestions: [
+      {
+        suggestionId: 's-1',
+        kind: 'price-test',
+        summary: 'Test a narrow lower price band with no automatic publish.',
+        proposedValue: { price: 124.99, currency: 'PLN', mode: 'manual_experiment' },
+        confidence: 0.61,
+        expectedImpact: 'Can improve conversion if margin remains within limits.',
+        evidence: ['Synthetic pricing fixture keeps margin warning visible.'],
+        policyBlockers: ['requires-margin-review'],
+        rollbackNotes: 'Return to the prior price band if margin or conversion regresses.',
+      },
+    ],
+  });
   const record = buildAiSuggestionRecord(request, response);
 
-  assert.equal(record.reviewState, 'DRAFT');
-  assert.deepEqual(record.approvedChangeSet, []);
-  assert.equal(record.response.suggestions.every((entry) => entry.requiresApproval), true);
-  assert.equal(record.response.reviewChecklist.includes('Approve or reject each suggestion before lifecycle mutation.'), true);
+  assert.equal(record.reviewState, 'pending_review');
+  assert.equal(record.approvalPath.requiresHumanReview, true);
+  assert.equal(record.approvalPath.requiresPolicyConfirmation, true);
+  assert.equal(record.approvalPath.lifecycleAction, 'publish_lifecycle_required');
 }
 
 async function testSnapshotHashIsDeterministic() {
-  const first = buildAiOfferOptimizationRequest({ offer: createOffer() });
-  const second = buildAiOfferOptimizationRequest({ offer: createOffer() });
-  const changed = buildAiOfferOptimizationRequest({ offer: createOffer({ title: 'Changed synthetic title' }) });
+  const first = buildAiOfferOptimizationRequest(buildInput());
+  const second = buildAiOfferOptimizationRequest(buildInput());
+  const changed = buildAiOfferOptimizationRequest(buildInput({ offer: { ...buildInput().offer, title: 'Changed synthetic title' } }));
+  const firstRecord = buildAiSuggestionRecord(first, createSyntheticAiOfferOptimizationResponse());
+  const secondRecord = buildAiSuggestionRecord(second, createSyntheticAiOfferOptimizationResponse());
+  const changedRecord = buildAiSuggestionRecord(changed, createSyntheticAiOfferOptimizationResponse());
 
-  assert.equal(first.inputSnapshotHash, second.inputSnapshotHash);
-  assert.notEqual(first.inputSnapshotHash, changed.inputSnapshotHash);
+  assert.equal(firstRecord.inputSnapshotHash, secondRecord.inputSnapshotHash);
+  assert.notEqual(firstRecord.inputSnapshotHash, changedRecord.inputSnapshotHash);
 }
 
 export async function runAiOfferOptimizationContractSpec(): Promise<void> {
   await testRequestIsSuggestionOnlyAndRedacted();
-  await testSuggestionRecordStaysDraftOnly();
+  await testSuggestionRecordStaysReviewGated();
   await testSnapshotHashIsDeterministic();
 }
 

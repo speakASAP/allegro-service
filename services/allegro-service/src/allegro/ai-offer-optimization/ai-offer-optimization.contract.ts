@@ -1,192 +1,183 @@
 import { createHash } from 'crypto';
 
-export type AiSuggestionTarget = 'title' | 'description' | 'attributes' | 'category' | 'images' | 'price' | 'quality';
-export type AiSuggestionReviewState = 'DRAFT' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
+export const AI_OFFER_OPTIMIZATION_CONTRACT_VERSION = 'TASK-005.v1' as const;
+
+export type AiOfferOptimizationFocusArea =
+  | 'title'
+  | 'description'
+  | 'attributes'
+  | 'category'
+  | 'images'
+  | 'price'
+  | 'quality';
+
+export type AiOfferOptimizationReviewState =
+  | 'NEEDS_REVIEW'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'APPLIED'
+  | 'EXPIRED';
+
+export type AiSuggestionStatus = 'DRAFT' | 'APPROVED' | 'REJECTED';
+
+export type AiListingAttribute = {
+  name: string;
+  values: string[];
+};
+
+export type AiOfferListingSnapshot = {
+  catalogProductId: string;
+  offerId: string | null;
+  accountId: string | null;
+  title: string;
+  description: string | null;
+  categoryId: string | null;
+  images: string[];
+  price: {
+    amount: number;
+    currency: string;
+  };
+  quantity: number;
+  attributes: AiListingAttribute[];
+  publicationStatus: string | null;
+  product: {
+    sku: string | null;
+    brand: string | null;
+    isAiCoCreated: boolean;
+  };
+  policySummary: {
+    blockers: string[];
+    warnings: string[];
+    recommendations: string[];
+  };
+};
 
 export type AiOfferOptimizationRequest = {
-  contractVersion: 'TASK-005.v1';
-  mode: 'SUGGESTION_ONLY';
-  reviewState: 'DRAFT';
-  marketplace: 'allegro';
-  inputSnapshotHash: string;
-  offerSnapshot: Record<string, unknown>;
-  policySnapshot: Record<string, unknown>;
-  constraints: {
-    draftOnly: true;
-    requiresHumanApproval: true;
-    autonomousPublishAllowed: false;
-    redactSensitiveData: true;
+  contractVersion: typeof AI_OFFER_OPTIMIZATION_CONTRACT_VERSION;
+  sourceService: 'allegro-service';
+  correlationId: string;
+  advisoryOnly: true;
+  requiresHumanReview: true;
+  lifecycleActionOnApproval: 'UPDATE';
+  snapshotHash: string;
+  requestedAt: string;
+  listingSnapshot: AiOfferListingSnapshot;
+  redaction: {
+    strategy: 'TASK-005.v1';
+    maskedFields: string[];
   };
-  requestedOptimizations: AiSuggestionTarget[];
-  promptContext: {
-    objective: string;
-    locale: string;
-    accountId: string | null;
+  constraints: {
+    allowAutonomousPublish: false;
+    allowDirectMarketplaceMutation: false;
+    allowUnreviewedPriceChange: false;
   };
 };
 
 export type AiOfferOptimizationSuggestion = {
-  target: AiSuggestionTarget;
-  proposedValue: unknown;
-  reason: string;
+  id: string;
+  focusArea: AiOfferOptimizationFocusArea;
   confidence: number;
-  expectedImpact: 'low' | 'medium' | 'high';
-  rollbackNote: string;
-  evidence: string[];
-  requiresApproval: true;
+  summary: string;
+  rationale: string;
+  proposedValue: string | number | string[] | Record<string, unknown>;
+  policyBlockers: string[];
+  rollbackNotes: string;
 };
 
 export type AiOfferOptimizationResponse = {
-  contractVersion: 'TASK-005.v1';
-  mode: 'SUGGESTION_ONLY';
-  reviewState: 'DRAFT';
-  suggestions: AiOfferOptimizationSuggestion[];
-  policyBlockers: string[];
-  reviewChecklist: string[];
-  redactionReport: {
-    redactedKeys: string[];
-    syntheticOnly: true;
+  contractVersion: typeof AI_OFFER_OPTIMIZATION_CONTRACT_VERSION;
+  correlationId: string;
+  model: {
+    provider: string;
+    model: string;
+    modelVersion: string | null;
   };
+  suggestions: AiOfferOptimizationSuggestion[];
 };
 
 export type AiSuggestionRecord = {
-  contractVersion: 'TASK-005.v1';
-  inputSnapshotHash: string;
-  reviewState: 'DRAFT';
-  approvedChangeSet: [];
-  response: AiOfferOptimizationResponse;
+  recordVersion: typeof AI_OFFER_OPTIMIZATION_CONTRACT_VERSION;
+  correlationId: string;
+  snapshotHash: string;
+  reviewState: AiOfferOptimizationReviewState;
+  approvalRequired: true;
+  offerId: string | null;
+  catalogProductId: string;
+  accountId: string | null;
+  requestedAt: string;
+  model: AiOfferOptimizationResponse['model'];
+  suggestions: Array<AiOfferOptimizationSuggestion & { status: AiSuggestionStatus }>;
+  approvedSuggestionIds: string[];
+};
+
+export type ApprovedSuggestionPatch = {
+  lifecycleInput: {
+    action: 'UPDATE';
+    offerId: string;
+    accountId: string | null;
+    requiresConfirmation: true;
+    source: 'TASK-005';
+    suggestionRecordVersion: typeof AI_OFFER_OPTIMIZATION_CONTRACT_VERSION;
+    approvedSuggestionIds: string[];
+    changes: {
+      title?: string;
+      description?: string;
+      categoryId?: string;
+      price?: number;
+      images?: string[];
+      attributes?: AiListingAttribute[];
+    };
+  };
+  reviewState: 'APPROVED';
+  reviewedByUserId: string;
 };
 
 export type BuildAiOfferOptimizationRequestInput = {
-  offer: Record<string, any>;
-  policyEvaluation?: Record<string, any> | null;
-  requestedOptimizations?: AiSuggestionTarget[];
-  promptContext?: {
-    objective?: string;
-    locale?: string;
-  } | null;
+  correlationId: string;
+  requestedAt?: string;
+  listingSnapshot: Omit<AiOfferListingSnapshot, 'description' | 'title'> & {
+    title: string;
+    description: string | null;
+  };
 };
 
-const DEFAULT_TARGETS: AiSuggestionTarget[] = ['title', 'description', 'attributes', 'category', 'images', 'price', 'quality'];
-const REDACTED_KEYS = new Set([
-  'accesstoken',
-  'access_token',
-  'authorization',
-  'clientsecret',
-  'client_secret',
-  'cookie',
-  'customeremail',
-  'customer_email',
-  'email',
-  'jwt',
-  'password',
-  'paymentdetails',
-  'payment_details',
-  'phonenumber',
-  'phone_number',
-  'refreshtoken',
-  'refresh_token',
-  'secret',
-  'token',
-  'userid',
-  'user_id',
-]);
+const TOKEN_PATTERNS: Array<[RegExp, string]> = [
+  [/\bBearer\s+[A-Za-z0-9._\-]+/gi, 'Bearer [REDACTED_TOKEN]'],
+  [/\b(api[_-]?key|client[_-]?secret|password|token)\s*[:=]\s*([^\s,;]+)/gi, '$1=[REDACTED_SECRET]'],
+  [/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[REDACTED_EMAIL]'],
+];
 
 export function buildAiOfferOptimizationRequest(input: BuildAiOfferOptimizationRequestInput): AiOfferOptimizationRequest {
-  const requestedOptimizations = input.requestedOptimizations?.length ? input.requestedOptimizations : DEFAULT_TARGETS;
-  const offerSnapshot = sanitizeValue({
-    offerId: input.offer?.id ?? null,
-    catalogProductId: input.offer?.catalogProductId ?? null,
-    accountId: input.offer?.accountId ?? null,
-    title: input.offer?.title ?? null,
-    description: input.offer?.description ?? null,
-    categoryId: input.offer?.categoryId ?? null,
-    attributes: input.offer?.attributes ?? [],
-    price: input.offer?.price ?? null,
-    currency: input.offer?.currency ?? null,
-    stockQuantity: input.offer?.stockQuantity ?? input.offer?.quantity ?? null,
-    images: input.offer?.images ?? [],
-    rawData: {
-      catalogSnapshot: input.offer?.rawData?.catalogSnapshot ?? null,
-      delivery: input.offer?.rawData?.delivery ?? input.offer?.deliveryOptions ?? null,
-      payments: input.offer?.rawData?.payments ?? input.offer?.paymentOptions ?? null,
-      additionalContext: input.offer?.rawData?.additionalContext ?? null,
-      tokens: input.offer?.rawData?.tokens ?? null,
-      customerEmail: input.offer?.rawData?.customerEmail ?? null,
-      authorization: input.offer?.rawData?.authorization ?? null,
-    },
-  }) as Record<string, unknown>;
-  const policySnapshot = sanitizeValue(buildPolicySnapshot(input.policyEvaluation)) as Record<string, unknown>;
-  const promptContext = {
-    objective: input.promptContext?.objective || 'Improve Allegro listing quality without autonomous marketplace mutation.',
-    locale: input.promptContext?.locale || 'pl-PL',
-    accountId: typeof offerSnapshot.accountId === 'string' ? offerSnapshot.accountId : null,
+  const sanitizedSnapshot: AiOfferListingSnapshot = {
+    ...input.listingSnapshot,
+    title: redactFreeText(input.listingSnapshot.title),
+    description: redactNullableText(input.listingSnapshot.description),
+    attributes: input.listingSnapshot.attributes.map((attribute) => ({
+      name: redactFreeText(attribute.name),
+      values: attribute.values.map((value) => redactFreeText(value)),
+    })),
   };
+  const snapshotHash = hashValue(sanitizedSnapshot);
 
   return {
-    contractVersion: 'TASK-005.v1',
-    mode: 'SUGGESTION_ONLY',
-    reviewState: 'DRAFT',
-    marketplace: 'allegro',
-    inputSnapshotHash: hashCanonical({ offerSnapshot, policySnapshot, promptContext, requestedOptimizations }),
-    offerSnapshot,
-    policySnapshot,
+    contractVersion: AI_OFFER_OPTIMIZATION_CONTRACT_VERSION,
+    sourceService: 'allegro-service',
+    correlationId: input.correlationId,
+    advisoryOnly: true,
+    requiresHumanReview: true,
+    lifecycleActionOnApproval: 'UPDATE',
+    snapshotHash,
+    requestedAt: input.requestedAt || new Date().toISOString(),
+    listingSnapshot: sanitizedSnapshot,
+    redaction: {
+      strategy: AI_OFFER_OPTIMIZATION_CONTRACT_VERSION,
+      maskedFields: ['title', 'description', 'attributes[].name', 'attributes[].values[]'],
+    },
     constraints: {
-      draftOnly: true,
-      requiresHumanApproval: true,
-      autonomousPublishAllowed: false,
-      redactSensitiveData: true,
+      allowAutonomousPublish: false,
+      allowDirectMarketplaceMutation: false,
+      allowUnreviewedPriceChange: false,
     },
-    requestedOptimizations,
-    promptContext,
-  };
-}
-
-export function createSyntheticAiOfferOptimizationResponse(overrides: Partial<AiOfferOptimizationResponse> = {}): AiOfferOptimizationResponse {
-  const base: AiOfferOptimizationResponse = {
-    contractVersion: 'TASK-005.v1',
-    mode: 'SUGGESTION_ONLY',
-    reviewState: 'DRAFT',
-    suggestions: [
-      {
-        target: 'title',
-        proposedValue: 'Synthetic upgraded title with brand + core attribute',
-        reason: 'Improves clarity and search relevance while preserving catalog ownership.',
-        confidence: 0.84,
-        expectedImpact: 'medium',
-        rollbackNote: 'Restore the previous approved title from the local draft history.',
-        evidence: ['synthetic-keyword-gap', 'synthetic-attribute-coverage'],
-        requiresApproval: true,
-      },
-      {
-        target: 'description',
-        proposedValue: 'Synthetic operator-reviewed description with bullet benefits and safe disclaimers.',
-        reason: 'Adds structure and buyer reassurance without introducing unsupported claims.',
-        confidence: 0.79,
-        expectedImpact: 'medium',
-        rollbackNote: 'Restore the previous approved description from the local draft history.',
-        evidence: ['synthetic-formatting-check', 'synthetic-policy-check'],
-        requiresApproval: true,
-      },
-    ],
-    policyBlockers: [],
-    reviewChecklist: [
-      'Confirm every suggestion against catalog-backed facts.',
-      'Approve or reject each suggestion before lifecycle mutation.',
-      'Do not expose raw customer, payment, or token data to ai-microservice.',
-    ],
-    redactionReport: {
-      redactedKeys: ['authorization', 'customerEmail', 'tokens'],
-      syntheticOnly: true,
-    },
-  };
-
-  return {
-    ...base,
-    ...overrides,
-    suggestions: overrides.suggestions || base.suggestions,
-    reviewChecklist: overrides.reviewChecklist || base.reviewChecklist,
-    redactionReport: overrides.redactionReport || base.redactionReport,
   };
 }
 
@@ -195,82 +186,87 @@ export function buildAiSuggestionRecord(
   response: AiOfferOptimizationResponse,
 ): AiSuggestionRecord {
   return {
-    contractVersion: 'TASK-005.v1',
-    inputSnapshotHash: request.inputSnapshotHash,
-    reviewState: 'DRAFT',
-    approvedChangeSet: [],
-    response: {
-      ...response,
-      contractVersion: 'TASK-005.v1',
-      mode: 'SUGGESTION_ONLY',
-      reviewState: 'DRAFT',
-      suggestions: response.suggestions.map((suggestion) => ({
-        ...suggestion,
-        requiresApproval: true,
-      })),
-    },
-  };
-}
-
-function buildPolicySnapshot(policyEvaluation?: Record<string, any> | null): Record<string, unknown> {
-  const results = Array.isArray(policyEvaluation?.results) ? policyEvaluation.results : [];
-  return {
-    version: policyEvaluation?.version || null,
-    summary: policyEvaluation?.summary || {
-      blockers: results.filter((entry: any) => entry?.status === 'BLOCK').length,
-      warnings: results.filter((entry: any) => entry?.status === 'WARN').length,
-      recommendations: results.filter((entry: any) => entry?.status === 'RECOMMEND').length,
-    },
-    results: results.map((entry: any) => ({
-      gate: entry?.gate || null,
-      status: entry?.status || null,
-      ownerService: entry?.ownerService || null,
-      reason: entry?.reason || null,
-      remediation: entry?.remediation || null,
+    recordVersion: AI_OFFER_OPTIMIZATION_CONTRACT_VERSION,
+    correlationId: response.correlationId,
+    snapshotHash: request.snapshotHash,
+    reviewState: 'NEEDS_REVIEW',
+    approvalRequired: true,
+    offerId: request.listingSnapshot.offerId,
+    catalogProductId: request.listingSnapshot.catalogProductId,
+    accountId: request.listingSnapshot.accountId,
+    requestedAt: request.requestedAt,
+    model: response.model,
+    suggestions: response.suggestions.map((suggestion) => ({
+      ...suggestion,
+      status: 'DRAFT',
     })),
+    approvedSuggestionIds: [],
   };
 }
 
-function sanitizeValue(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map((entry) => sanitizeValue(entry));
+export function buildApprovedSuggestionPatch(
+  record: AiSuggestionRecord,
+  approvedSuggestionIds: string[],
+  reviewedByUserId: string,
+): ApprovedSuggestionPatch {
+  if (!record.offerId) {
+    throw new Error('offerId is required before approved AI suggestions can enter lifecycle-gated updates');
   }
 
-  if (!value || typeof value !== 'object') {
-    return value;
+  const approvedSuggestions = record.suggestions.filter((suggestion) => approvedSuggestionIds.includes(suggestion.id));
+  if (approvedSuggestions.length === 0) {
+    throw new Error('at least one approved suggestion is required');
   }
 
-  const next: Record<string, unknown> = {};
-  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-    const normalized = key.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-    if (REDACTED_KEYS.has(normalized)) {
-      next[key] = '[REDACTED]';
-      continue;
-    }
-
-    if (entry === undefined) {
-      continue;
-    }
-
-    next[key] = sanitizeValue(entry);
+  const changes: ApprovedSuggestionPatch['lifecycleInput']['changes'] = {};
+  for (const suggestion of approvedSuggestions) {
+    if (suggestion.focusArea === 'title' && typeof suggestion.proposedValue === 'string') changes.title = suggestion.proposedValue;
+    if (suggestion.focusArea === 'description' && typeof suggestion.proposedValue === 'string') changes.description = suggestion.proposedValue;
+    if (suggestion.focusArea === 'category' && typeof suggestion.proposedValue === 'string') changes.categoryId = suggestion.proposedValue;
+    if (suggestion.focusArea === 'price' && typeof suggestion.proposedValue === 'number') changes.price = suggestion.proposedValue;
+    if (suggestion.focusArea === 'images' && Array.isArray(suggestion.proposedValue)) changes.images = suggestion.proposedValue as string[];
+    if (suggestion.focusArea === 'attributes' && isAttributeArray(suggestion.proposedValue)) changes.attributes = suggestion.proposedValue;
   }
 
-  return next;
+  return {
+    lifecycleInput: {
+      action: 'UPDATE',
+      offerId: record.offerId,
+      accountId: record.accountId,
+      requiresConfirmation: true,
+      source: 'TASK-005',
+      suggestionRecordVersion: record.recordVersion,
+      approvedSuggestionIds,
+      changes,
+    },
+    reviewState: 'APPROVED',
+    reviewedByUserId,
+  };
 }
 
-function hashCanonical(value: unknown): string {
+function redactNullableText(value: string | null): string | null {
+  return value === null ? null : redactFreeText(value);
+}
+
+function redactFreeText(value: string): string {
+  return TOKEN_PATTERNS.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), value);
+}
+
+function hashValue(value: unknown): string {
   return createHash('sha256').update(stableStringify(value)).digest('hex');
 }
 
 function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== 'object') {
-    return JSON.stringify(value);
-  }
-
   if (Array.isArray(value)) {
     return `[${value.map((entry) => stableStringify(entry)).join(',')}]`;
   }
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([left], [right]) => left.localeCompare(right));
+    return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
 
-  const entries = Object.entries(value as Record<string, unknown>).sort(([left], [right]) => left.localeCompare(right));
-  return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`).join(',')}}`;
+function isAttributeArray(value: unknown): value is AiListingAttribute[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry?.name === 'string' && Array.isArray(entry?.values));
 }
