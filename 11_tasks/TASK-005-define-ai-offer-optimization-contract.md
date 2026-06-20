@@ -2,10 +2,10 @@
 
 ```yaml
 id: TASK-005
-status: draft
+status: validated
 owner: Project Owner
 created: 2026-06-13
-last_updated: 2026-06-13
+last_updated: 2026-06-20
 completeness_level: complete
 upstream:
   - ../10_features/FEAT-005-ai-assisted-offer-optimization.md
@@ -40,15 +40,15 @@ Classification: synthetic. Prompts and fixtures must avoid raw customer/order da
 
 ## Contract/Schema Impact
 
-Creates a proposed ai-microservice request/response contract and local suggestion record design.
+Creates a suggestion-only request/response contract and a local suggestion record design with review-state metadata. No Prisma schema or publish-lifecycle mutation path changed in TASK-005.
 
 ## Replay/Determinism Impact
 
-AI output is non-deterministic; persisted suggestions must include input snapshot hash, model/version metadata if provided by contract, and review status.
+AI output is non-deterministic; persisted suggestions must include input snapshot hash, model/version metadata when provided, and review status before any approved change can enter the publish lifecycle.
 
 ## Scope
 
-Suggestion contract, redaction rules, review states, approval path, rollback notes, expected metrics.
+Suggestion contract, redaction rules, review states, approval path, rollback notes, and expected metrics.
 
 ## Non-Goals
 
@@ -56,10 +56,10 @@ No autonomous publish, no production prompt with raw sensitive data, no unreview
 
 ## Acceptance Criteria
 
-- [ ] Contract distinguishes suggestions from approved offer changes.
-- [ ] Redaction and data-minimization rules are documented.
-- [ ] Suggestions flow into lifecycle only after explicit approval.
-- [ ] Validation uses synthetic examples.
+- [x] Contract distinguishes suggestions from approved offer changes.
+- [x] Redaction and data-minimization rules are documented.
+- [x] Suggestions flow into lifecycle only after explicit approval.
+- [x] Validation uses synthetic examples.
 
 ## Required Context
 
@@ -75,4 +75,4 @@ Pre-coding gate, contract validation, deployment-readiness gate before runtime u
 
 ## Execution Plan Requirement
 
-This task must not be converted into a coding prompt until an approved execution plan exists.
+This task was approved for implementation by owner instruction on 2026-06-20 and is now implemented and validated.

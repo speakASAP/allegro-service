@@ -76,6 +76,8 @@ The roadmap standardizes these business events for logging, analytics, notificat
 ## Approved Task Contracts
 
 - TASK-004 catalog sell action: `POST /allegro/catalog-sell/prepare`, `POST /allegro/catalog-sell/bulk-prepare`, `POST /allegro/catalog-sell/:attemptId/confirm`, and `GET /allegro/catalog-sell/:attemptId/status` compose catalog ownership, lifecycle queueing, and policy evaluation without direct publish side effects.
+- TASK-005 ai offer optimization contract: `services/allegro-service/src/allegro/ai-offer-optimization/ai-offer-optimization.contract.ts` and `ai-offer-optimization.service.ts` define a suggestion-only envelope, explicit redaction rules, review-state records, and approval-path metadata. AI output must re-enter the governed publish lifecycle before any offer mutation can occur.
+- TASK-005 AI offer optimization contract: `AiOptimizationSuggestionRequest`, `AiOptimizationSuggestionResponse`, and `AiOptimizationSuggestionRecordDesign` keep `ai-microservice` advisory-only, require redacted/versioned input snapshots, and allow lifecycle execution only after explicit review approval.
 
 ## Validation
 

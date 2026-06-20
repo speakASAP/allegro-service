@@ -2,13 +2,13 @@
 
 ```yaml
 id: CP-TASK-005
-status: reviewed
+status: validated
 source_task: ../11_tasks/TASK-005-define-ai-offer-optimization-contract.md
 execution_plan: ../21_execution_plans/EP-TASK-005-define-ai-offer-optimization-contract.md
 coding_prompt: ../14_prompts/PROMPT-TASK-005-ai-offer-optimization-contract.md
 created: 2026-06-19
-last_updated: 2026-06-19
-completeness_level: complete
+last_updated: 2026-06-20
+completeness_level: validated
 sensitive_data_classification: synthetic
 ```
 
@@ -24,7 +24,7 @@ TASK-005: `../11_tasks/TASK-005-define-ai-offer-optimization-contract.md` - defi
 - Execution plan: `../21_execution_plans/EP-TASK-005-define-ai-offer-optimization-contract.md`
 - Goal impact: `../22_goal_impact/GOAL-IMPACT-TASK-005.md`
 - Validation report: `../12_validation/VAL-TASK-005-validation-report.md`
-- Approval-blocked coding prompt: `../14_prompts/PROMPT-TASK-005-ai-offer-optimization-contract.md`
+- Coding prompt: `../14_prompts/PROMPT-TASK-005-ai-offer-optimization-contract.md`
 
 ## Included documents
 
@@ -38,12 +38,15 @@ TASK-005: `../11_tasks/TASK-005-define-ai-offer-optimization-contract.md` - defi
 - `../16_operations/INTEGRATIONS.md`
 - `../12_validation/VAL-TASK-005-validation-report.md`
 - `../14_prompts/PROMPT-TASK-005-ai-offer-optimization-contract.md`
+- `../services/allegro-service/src/allegro/ai-offer-optimization/`
+- `../services/allegro-service/src/allegro/publish-lifecycle/`
+- `../services/allegro-service/src/allegro/policy/`
 
 ## Excluded documents
 
 - Protected constitution and vision source text beyond traceability references.
 - Raw production marketplace payloads, OAuth tokens, secrets, customer data, order data, and production logs.
-- Runtime DTO, Prisma, queue-worker, and publish-execution implementation files until TASK-005 is explicitly approved for coding.
+- External AI client wiring, queue workers, deploy scripts, and Prisma schema changes.
 
 ## Constraints
 
@@ -51,12 +54,12 @@ TASK-005: `../11_tasks/TASK-005-define-ai-offer-optimization-contract.md` - defi
 - No autonomous publish, no direct Allegro mutation, and no unreviewed price changes.
 - Synthetic fixtures only.
 - Preserve catalog ownership, orders ownership, and current service boundaries.
-- Do not use the approval-blocked prompt for implementation until explicit approval is recorded.
+- Keep approval-path metadata explicit so later runtime tasks must re-enter the governed publish lifecycle.
 
 ## Agent prompt
 
-Use `../14_prompts/PROMPT-TASK-005-ai-offer-optimization-contract.md` only after explicit approval is recorded in repo state or owner instruction. Until then, the prompt is a blocked artifact for completeness and must not be used to start coding.
+Use `../14_prompts/PROMPT-TASK-005-ai-offer-optimization-contract.md` as the coding prompt. Implement only the smallest contract module that whitelists/redacts input, validates advisory responses, and materializes local review-state records.
 
 ## Validation instructions
 
-Run IPS audit, pre-coding gate, and deployment-readiness gate for the planning artifacts. Record evidence in `../12_validation/VAL-TASK-005-validation-report.md`.
+Run IPS audit, pre-coding gate, targeted ai-offer-optimization spec, service build, and deployment-readiness for TASK-005. Record evidence in `../12_validation/VAL-TASK-005-validation-report.md`.

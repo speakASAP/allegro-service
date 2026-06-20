@@ -14,8 +14,9 @@ upstream_links:
   - 10_features/FEAT-005-ai-assisted-offer-optimization.md
 downstream_links:
   - 21_execution_plans/EP-TASK-005-define-ai-offer-optimization-contract.md
-validation_method: Contract review, synthetic fixtures, and redaction scan.
-status: draft
+  - 12_validation/VAL-TASK-005-validation-report.md
+validation_method: Contract review, synthetic fixtures, redaction scan, and lifecycle-gate assertions.
+status: validated
 ```
 
 ## Explanation
@@ -24,8 +25,8 @@ AI should make operators faster and offers better, not become an unsafe mutation
 
 ## Evidence
 
-Roadmap Stage 3 requires AI suggestions to remain draft-only until policy-confirmed.
+Roadmap Stage 4 requires AI suggestions to remain draft-only until policy-confirmed. TASK-005 now implements the suggestion-only contract, redaction envelope, review-state record design, and synthetic validation coverage that preserve that boundary.
 
 ## Validation
 
-Validated when the AI contract is documented, redacted, synthetic-tested, and connected only to reviewed suggestions.
+Validated when the AI contract is documented, redacted, synthetic-tested, and connected only to reviewed suggestions that must still re-enter the governed publish lifecycle before any mutation can occur.
