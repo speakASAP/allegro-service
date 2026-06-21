@@ -131,6 +131,10 @@ nodes:
     type: coding_prompt
     path: 14_prompts/PROMPT-TASK-005-ai-offer-optimization-contract.md
     title: AI Offer Optimization Contract Prompt
+  - id: PROMPT-TASK-006-stock-order-profit-loop
+    type: coding_prompt
+    path: 14_prompts/PROMPT-TASK-006-stock-order-profit-loop.md
+    title: Stock Order Profit Loop Prompt
   - id: PROMPT-TASK-007-growth-analytics-and-demand-loops
     type: coding_prompt
     path: 14_prompts/PROMPT-TASK-007-growth-analytics-and-demand-loops.md
@@ -159,6 +163,10 @@ nodes:
     type: context_package
     path: 13_context_packages/CP-TASK-005-ai-offer-optimization-contract.md
     title: AI Offer Optimization Contract Context Package
+  - id: CP-TASK-006
+    type: context_package
+    path: 13_context_packages/CP-TASK-006-stock-order-profit-loop.md
+    title: Stock Order Profit Loop Context Package
   - id: CP-TASK-007-growth-analytics-and-demand-loops
     type: context_package
     path: 13_context_packages/CP-TASK-007-growth-analytics-and-demand-loops.md
@@ -369,6 +377,15 @@ edges:
   - from: EP-TASK-006
     type: derives_from
     to: TASK-006
+  - from: EP-TASK-006
+    type: generates
+    to: PROMPT-TASK-006-stock-order-profit-loop
+  - from: PROMPT-TASK-006-stock-order-profit-loop
+    type: derives_from
+    to: EP-TASK-006
+  - from: PROMPT-TASK-006-stock-order-profit-loop
+    type: included_in_context
+    to: CP-TASK-006
   - from: EP-TASK-006
     type: constrained_by
     to: ADR-001

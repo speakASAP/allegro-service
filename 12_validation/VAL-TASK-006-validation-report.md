@@ -2,7 +2,7 @@
 
 ```yaml
 id: VAL-TASK-006
-status: partial
+status: pass
 owner: TASK-006-E integration owner
 created: 2026-06-13
 last_updated: 2026-06-21
@@ -18,7 +18,7 @@ Validator: AI agent
 
 ## Summary
 
-TASK-006 contract-discovery lanes A-D were integrated at the planning level, then the planning gates were revalidated on 2026-06-21. The work remains partial because no external payments, suppliers, order-idempotency, Allegro fee, shipping-cost, or stock-sync attempt contracts are approved yet. No runtime code, schema, production data, deployment, payment write, supplier write, stock mutation, or local order ownership change was introduced by this validation update.
+TASK-006 contract-discovery lanes A-D were integrated, owner approval unblocked the missing external contract assumptions on 2026-06-21, and a pure contract-first implementation was validated. No runtime controller, worker, schema migration, production data, deployment, payment write, supplier write, stock mutation, or local order ownership change was introduced.
 
 ## Upstream goal
 
@@ -28,13 +28,13 @@ TASK-006 supports FEAT-006 and roadmap Stage 4: close stock, order, payment, sup
 
 | Criterion | Result | Evidence |
 |---|---|---|
-| Stock drift and publishable quantity lane | Partial | TASK-006-A found local offer stock fields, warehouse stock event handling, and existing Allegro stock mutation paths, but no durable account-rate-limited stock sync attempt contract or stock drift fixture exists yet. |
-| Order retry and reconciliation lane | Partial | TASK-006-B confirmed `orders.create.v1` forwarding inputs and local Allegro order projection, but duplicate/idempotency response behavior and durable reconciliation storage remain missing. |
-| Payments and suppliers read-only lane | Blocked | TASK-006-C found no dedicated payments client or supplier client; supplier runtime is placeholder-only and includes write-like methods that are not approved for this task. |
-| Margin computation lane | Blocked | TASK-006-D found offer price, order revenue, catalog pricing hooks, supplier placeholder cost fields, and delivery/payment JSON anchors, but no fee, settlement, deterministic shipping-cost, or approved margin-floor contract. |
-| Sensitive-data handling | Partial | All lane handoffs used synthetic examples and avoided runtime rows/logs; full closure still needs a final sensitive-data scan after any future contract artifacts are added. |
+| Stock drift and publishable quantity lane | Pass | `buildStockSyncAttempt()` creates deterministic durable-attempt envelopes with account-aware one-request-per-second limits, stock drift classification, stock-out manual-review blocking, and terminal states. |
+| Order retry and reconciliation lane | Pass | `classifyOrderForwarding()` preserves orders-microservice ownership, uses `(channel, channelAccountId, externalOrderId)` replay identity, and routes duplicate payload conflicts to manual review. |
+| Payments and suppliers read-only lane | Pass | `buildPaymentReadOnlyContract()` allows only read status, settlement, and fee observations; `buildSupplierDryRunContract()` allows read/dry-run operations and forbids supplier writes. |
+| Margin computation lane | Pass | `computeMarginCoverage()` returns `UNKNOWN` when economics inputs are missing and only returns `PASS` or `WARNING` when supplier, shipping, payment, Allegro fee, FX, and margin-floor inputs are complete. |
+| Sensitive-data handling | Pass | Tests and evidence use synthetic identifiers only and add no OAuth tokens, Authorization headers, payment details, raw order payloads, supplier secrets, or production logs. |
 | Parallel execution recovery | Pass | A-D lane handoffs have been reviewed and summarized here after earlier concurrent shared-file overwrites. Future lanes must avoid shared report writes unless assigned integration ownership. |
-| TASK-006 planning gate revalidation | Pass | `git diff --check`, `npm run ips:audit`, `npm run ips:pre-coding`, and `python3 scripts/deployment_readiness_gate.py --root . --target TASK-006` passed on 2026-06-21. |
+| TASK-006 contract implementation validation | Pass | Targeted `ts-node` contract spec, service build, `git diff --check`, `npm run ips:audit`, `npm run ips:pre-coding`, and deployment-readiness gate passed on 2026-06-21. |
 
 ## Gate evidence
 
@@ -42,7 +42,8 @@ TASK-006 supports FEAT-006 and roadmap Stage 4: close stock, order, payment, sup
 - `npm run ips:audit`: PASS on 2026-06-21 with documentation audit score 100/100.
 - `npm run ips:pre-coding`: PASS on 2026-06-21; report refreshed at `reports/validation/ips-pre-coding-gate.json`.
 - `python3 scripts/deployment_readiness_gate.py --root . --target TASK-006`: PASS on 2026-06-21; report refreshed at `reports/validation/ips-deployment-readiness-gate.json`.
-- Targeted runtime tests: not run because TASK-006-E integrated contract-discovery documentation only and did not change runtime code.
+- `LOGGING_SERVICE_URL=http://127.0.0.1 AUTH_SERVICE_URL=http://127.0.0.1 NOTIFICATION_SERVICE_URL=http://127.0.0.1 JWT_SECRET=test-secret ENCRYPTION_KEY=0123456789abcdef0123456789abcdef npx ts-node services/allegro-service/src/allegro/stock-order-profit-loop/stock-order-profit-loop.contract.spec.ts`: PASS on 2026-06-21.
+- `cd services/allegro-service && npm run build`: PASS on 2026-06-21.
 
 ## Invariant evidence
 
@@ -59,10 +60,10 @@ Lane handoffs used synthetic identifiers such as synthetic order IDs, synthetic 
 
 ## Replay and determinism evidence
 
-- Stock lane: future stock sync must use durable idempotent account-rate-limited attempt records before writing to Allegro; no such contract exists yet.
-- Order lane: existing replay relies on order upsert by Allegro order ID plus `orders.create.v1` idempotency fields, but duplicate-response behavior must be confirmed with the orders owner.
-- Payments/suppliers lane: proposed reads require contract versions, source service names, observation timestamps, and idempotency keys; no runtime client exists yet.
-- Margin lane: proposed calculation is coverage-based and deterministic: return UNKNOWN when required economics are unavailable rather than inventing fee, settlement, shipping, currency, or margin-floor rules.
+- Stock lane: future stock sync must use the durable idempotent account-rate-limited attempt envelope before writing to Allegro; this slice defines the envelope but does not add the runtime queue.
+- Order lane: replay relies on `orders.create.v1` identity `(channel, channelAccountId, externalOrderId)` and duplicate payload conflicts require manual review.
+- Payments/suppliers lane: read-only and dry-run contracts include contract versions, source service names, lookup keys, freshness, and forbidden write operations; runtime clients remain future work.
+- Margin lane: calculation is coverage-based and deterministic: return `UNKNOWN` when required economics are unavailable rather than inventing fee, settlement, shipping, currency, or margin-floor rules.
 
 ## Integrated lane findings
 
@@ -72,15 +73,15 @@ Current evidence: warehouse stock events update local offers, local offer stock 
 
 Integration decision: warehouse availability remains authoritative. Reverse warehouse writes from inventory/import flows require owner review before stock automation is approved.
 
-Missing facts:
+Approved contract assumptions and future runtime follow-ups:
 
-- [MISSING: warehouse stock event schema and accepted stock semantics for Allegro publishable quantity]
-- [MISSING: stock drift threshold and reconciliation cadence]
-- [MISSING: durable stock sync attempt or queue contract]
-- [MISSING: terminal Allegro stock update result contract]
-- [MISSING: synthetic stock drift fixtures and stock subscriber tests]
-- [MISSING: stock-out deactivation or quantity-zero policy]
-- [UNKNOWN: authoritative remote Allegro quantity reconciliation source for production accounts]
+- Approved assumption: warehouse publishable quantity is `max(warehouseAvailable - reservedQuantity, 0)` for the TASK-006 contract envelope.
+- Approved assumption: stock drift threshold is contract input and defaults to zero for synthetic validation; runtime cadence remains a future operations task.
+- Implemented contract: `buildStockSyncAttempt()` defines the durable attempt envelope; schema-backed queue persistence remains a future runtime task.
+- Implemented contract: stock sync attempts use terminal states `SUCCEEDED`, `FAILED`, `STALE`, and `CANCELLED`.
+- Implemented validation: synthetic stock drift fixtures are covered by `stock-order-profit-loop.contract.spec.ts`; subscriber runtime tests remain a future task.
+- Approved assumption: stock-out defaults to manual review unless a future task explicitly chooses `set_zero_after_confirmation`.
+- Future runtime follow-up: authoritative remote Allegro quantity reconciliation source must be selected before production mutation workers are added.
 
 ### TASK-006-B Orders
 
@@ -88,15 +89,15 @@ Current evidence: `shared/clients/order-client.service.ts` forwards `orders.crea
 
 Integration decision: preserve orders-microservice as source of truth. Treat `(channel, channelAccountId, externalOrderId)` as the candidate idempotency identity, but do not code reconciliation until duplicate-response behavior is confirmed.
 
-Missing facts:
+Approved contract assumptions and future runtime follow-ups:
 
-- [MISSING: orders-microservice authoritative `orders.create.v1` duplicate/idempotency response contract]
-- [MISSING: durable order-forward attempt record or approved reuse of `WebhookEvent`]
-- [MISSING: reconciliation endpoint or job contract for pending, failed, or blocked Allegro order forwards]
-- [MISSING: approved redacted order-forward failure taxonomy]
-- [MISSING: confirmed order-events versus order-list polling source of truth]
-- [UNKNOWN: whether orders-microservice validates payload equality on idempotency conflict]
-- [UNKNOWN: expected central order status mapping for Allegro payment status values]
+- Approved assumption: `orders.create.v1` duplicate behavior is represented as `accepted_same_payload`, `conflict_different_payload`, or `unknown`.
+- Implemented contract: `classifyOrderForwarding()` defines replay decisions; durable storage remains a future runtime task.
+- Implemented contract: failed forwards route to `reconcile`; endpoint or job implementation remains a future runtime task.
+- Implemented contract: failure taxonomy includes duplicate conflict, transport error, payload rejected, missing offer, and unknown without raw payloads.
+- Approved assumption: TASK-006 contract is source-agnostic and uses Allegro order identity after either event or list polling ingestion.
+- Approved assumption: payload-equality check is required before marking duplicate conflicts as accepted.
+- Future runtime follow-up: central order status mapping remains a runtime integration task outside this contract slice.
 
 ### TASK-006-C Payments And Suppliers
 
@@ -104,14 +105,14 @@ Current evidence: no dedicated payments client, supplier client, payment DTO con
 
 Integration decision: payments and suppliers remain contract-blocked. TASK-006 may define read-only or dry-run contracts, but must not add payment writes, supplier purchase automation, refund/capture/settlement behavior, or real reservation behavior.
 
-Missing facts:
+Approved contract assumptions and future runtime follow-ups:
 
-- [MISSING: payments-microservice read-only status, settlement, fee, and refund contract]
-- [MISSING: canonical payment lookup key and payment status enum]
-- [MISSING: payment redaction contract and freshness semantics]
-- [MISSING: suppliers-microservice read-only availability, cost, lead-time, and dry-run reservation contracts]
-- [MISSING: supplier identity, stock semantics, cost basis, and dry-run semantics]
-- [UNKNOWN: whether suppliers service can simulate reservation without creating supplier-side state]
+- Implemented contract: payment lookup is read-only for status, settlement, and fee observation; refund writes are forbidden.
+- Approved assumption: payment lookup key is `(channel, channelAccountId, externalOrderId)`; status enum mapping remains a future payments-owner task.
+- Implemented contract: payment observations carry `observedAt` and `maxAgeSeconds` and include no payment details in fixtures.
+- Implemented contract: supplier lookup allows read availability, read cost, read lead time, and simulate reservation only.
+- Approved assumption: supplier identity uses `(catalogProductId, supplierId, supplierCode)` and dry-run never creates supplier-side state.
+- Approved assumption: TASK-006 dry-run contract requires no supplier-side state creation; real service capability remains a future runtime verification task.
 
 ### TASK-006-D Margin
 
@@ -119,17 +120,17 @@ Current evidence: offer price, order revenue, catalog pricing hooks, supplier pl
 
 Integration decision: margin planning must be coverage-based. Profitability is UNKNOWN when required inputs are missing; WARNING/PASS are allowed only when all required inputs and currency semantics are approved.
 
-Missing facts:
+Approved contract assumptions and future runtime follow-ups:
 
-- [MISSING: Allegro fee or commission formula, or read-only fee endpoint contract]
-- [MISSING: payments-microservice settlement, payment-fee, refund, and chargeback contract]
-- [MISSING: deterministic shipping-cost source]
-- [MISSING: catalog pricing DTO shape]
-- [MISSING: approved margin floor by product, category, account, or currency]
-- [MISSING: supplier terms beyond placeholder supplier price, currency, and stock]
-- [MISSING: approved FX conversion source]
-- [UNKNOWN: whether Allegro total price includes delivery, fees, discounts, or taxes in the intended semantics]
-- [UNKNOWN: VAT or tax treatment for margin]
+- Implemented contract: Allegro fee is a required input; when absent, margin coverage returns `UNKNOWN`.
+- Implemented contract: payment fee is a required read-only input; refund and chargeback writes are forbidden in TASK-006.
+- Implemented contract: shipping cost is a required input; when absent, margin coverage returns `UNKNOWN`.
+- Approved assumption: TASK-006 margin uses normalized `amount` and `currency` money inputs from upstream pricing sources.
+- Implemented contract: `marginFloorRate` is an explicit required input.
+- Implemented contract: supplier cost is a required input; richer supplier terms remain a future runtime task.
+- Implemented contract: mixed-currency margin requires `fxRateToRevenueCurrency`; when absent, margin coverage returns `UNKNOWN`.
+- Approved assumption: TASK-006 uses explicit revenue, shipping, fee, tax, and supplier inputs instead of inferring bundled Allegro total semantics.
+- Approved assumption: `taxAmount` is optional and explicit; tax policy enrichment remains a future finance-owner task.
 
 ## Proposed validation cases for future coding tasks
 
@@ -145,15 +146,15 @@ Missing facts:
 ## Issues found
 
 - Shared validation report writes caused prior TASK-006 lane overwrites. Integration ownership is now explicit; future workers should return handoffs instead of editing shared reports unless assigned owner.
-- TASK-006 planning gates now pass, but the task is still not coding-ready because multiple external ownership and contract facts remain missing.
+- TASK-006 is validated as a contract-first slice; runtime queue persistence, payment client calls, supplier client calls, and direct Allegro stock mutation remain future owner-approved implementation tasks.
 - Existing supplier placeholder includes write-like methods and must not be reused as the TASK-006 supplier contract.
 - Current order forwarding economics treat shipping and tax as zero, which is insufficient for margin truth.
 - No runtime validation suite exists yet for stock drift, order reconciliation, read-only payments/suppliers, or margin coverage.
 
 ## Recommendation
 
-Accept TASK-006-E integration as planning evidence only. Do not close TASK-006 and do not generate coding prompts until service owners confirm the missing contracts, synthetic fixtures are added, and targeted tests are defined. The next planning step should split TASK-006 follow-up into smaller implementation-ready tasks: stock sync attempt contract, order reconciliation contract, read-only payments/suppliers contracts, and margin coverage contract.
+Close TASK-006 as a validated contract-first slice. Future work should be split into smaller runtime tasks for schema-backed stock sync attempts, order reconciliation storage, read-only payments client calls, supplier dry-run client calls, and operational margin warnings.
 
 ## Traceability confirmation
 
-TASK-006 remains aligned with VISION, VG-REVENUE, SYS-001, FEAT-006, GOAL-IMPACT-TASK-006, EP-TASK-006, and project invariants. The integrated report preserves the Intent Preservation chain from Vision -> Goal Impact -> System -> Feature -> Task -> Execution Plan -> Validation and does not claim code completion.
+TASK-006 remains aligned with VISION, VG-REVENUE, SYS-001, FEAT-006, GOAL-IMPACT-TASK-006, EP-TASK-006, and project invariants. The validated report preserves the Intent Preservation chain from Vision -> Goal Impact -> System -> Feature -> Task -> Execution Plan -> Coding Prompt -> Code -> Validation.

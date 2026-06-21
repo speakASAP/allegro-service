@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-06-21T01:04:14Z",
+  "created_at": "2026-06-21T01:12:08Z",
   "gate": "deployment_readiness",
   "next_step": "ready_for_deployment_review",
   "pre_coding_gate": {
@@ -21,151 +21,6 @@
   },
   "target": "TASK-006",
   "unresolved_markers": [
-    {
-      "line": 77,
-      "marker": "[MISSING: warehouse stock event schema and accepted stock semantics for Allegro publishable quantity]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 78,
-      "marker": "[MISSING: stock drift threshold and reconciliation cadence]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 79,
-      "marker": "[MISSING: durable stock sync attempt or queue contract]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 80,
-      "marker": "[MISSING: terminal Allegro stock update result contract]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 81,
-      "marker": "[MISSING: synthetic stock drift fixtures and stock subscriber tests]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 82,
-      "marker": "[MISSING: stock-out deactivation or quantity-zero policy]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 83,
-      "marker": "[UNKNOWN: authoritative remote Allegro quantity reconciliation source for production accounts]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 93,
-      "marker": "[MISSING: orders-microservice authoritative `orders.create.v1` duplicate/idempotency response contract]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 94,
-      "marker": "[MISSING: durable order-forward attempt record or approved reuse of `WebhookEvent`]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 95,
-      "marker": "[MISSING: reconciliation endpoint or job contract for pending, failed, or blocked Allegro order forwards]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 96,
-      "marker": "[MISSING: approved redacted order-forward failure taxonomy]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 97,
-      "marker": "[MISSING: confirmed order-events versus order-list polling source of truth]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 98,
-      "marker": "[UNKNOWN: whether orders-microservice validates payload equality on idempotency conflict]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 99,
-      "marker": "[UNKNOWN: expected central order status mapping for Allegro payment status values]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 109,
-      "marker": "[MISSING: payments-microservice read-only status, settlement, fee, and refund contract]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 110,
-      "marker": "[MISSING: canonical payment lookup key and payment status enum]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 111,
-      "marker": "[MISSING: payment redaction contract and freshness semantics]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 112,
-      "marker": "[MISSING: suppliers-microservice read-only availability, cost, lead-time, and dry-run reservation contracts]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 113,
-      "marker": "[MISSING: supplier identity, stock semantics, cost basis, and dry-run semantics]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 114,
-      "marker": "[UNKNOWN: whether suppliers service can simulate reservation without creating supplier-side state]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 124,
-      "marker": "[MISSING: Allegro fee or commission formula, or read-only fee endpoint contract]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 125,
-      "marker": "[MISSING: payments-microservice settlement, payment-fee, refund, and chargeback contract]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 126,
-      "marker": "[MISSING: deterministic shipping-cost source]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 127,
-      "marker": "[MISSING: catalog pricing DTO shape]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 128,
-      "marker": "[MISSING: approved margin floor by product, category, account, or currency]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 129,
-      "marker": "[MISSING: supplier terms beyond placeholder supplier price, currency, and stock]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 130,
-      "marker": "[MISSING: approved FX conversion source]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 131,
-      "marker": "[UNKNOWN: whether Allegro total price includes delivery, fees, discounts, or taxes in the intended semantics]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
-    {
-      "line": 132,
-      "marker": "[UNKNOWN: VAT or tax treatment for margin]",
-      "path": "12_validation/VAL-TASK-006-validation-report.md"
-    },
     {
       "line": 39,
       "marker": "[MISSING: ai-microservice owner-approved internal auth contract]",
@@ -197,7 +52,7 @@
       "path": "16_operations/AI_OFFER_OPTIMIZATION_CONTRACT.md"
     },
     {
-      "line": 82,
+      "line": 83,
       "marker": "[MISSING: ...]",
       "path": "16_operations/INTEGRATIONS.md"
     },

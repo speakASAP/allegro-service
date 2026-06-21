@@ -2,7 +2,7 @@
 
 ```yaml
 id: EP-TASK-006
-status: draft
+status: validated
 source_task: ../11_tasks/TASK-006-plan-stock-order-profit-loop.md
 owner: Project Owner
 created: 2026-06-13
@@ -18,7 +18,7 @@ goal_impact: ../22_goal_impact/GOAL-IMPACT-TASK-006.md
 
 - Source task: ../11_tasks/TASK-006-plan-stock-order-profit-loop.md
 - Status: draft for owner review.
-- Lifecycle state: contract-discovery integrated and planning gates revalidated on 2026-06-21; not approved for coding until missing external contracts are resolved.
+- Lifecycle state: owner approved missing external contract assumptions on 2026-06-21; contract-first implementation completed and validated without runtime writes.
 
 ## Upstream Traceability
 
@@ -104,7 +104,7 @@ Plan stock-to-Allegro sync, order reconciliation, payment read-only status, supp
 
 ## Parallel Execution
 
-TASK-006 ran four independent contract-discovery lanes, then one integration lane merged the lane evidence into the validation report. Planning gates passed on 2026-06-21. The task is still not coding-ready because external ownership and contract facts remain missing.
+TASK-006 ran four independent contract-discovery lanes, then one integration lane merged the lane evidence into the validation report. Planning gates passed on 2026-06-21. Owner approval unblocked a pure contract-first implementation; runtime mutation tasks remain separate follow-ups.
 
 - Integration owner: Agent TASK-006-E integration owner.
 - Validation owner: Agent TASK-006-E validation owner.
@@ -121,7 +121,7 @@ TASK-006 ran four independent contract-discovery lanes, then one integration lan
 
 ### Agent-Ready Handoff Notes
 
-TASK-006-A through TASK-006-D have completed handoffs and TASK-006-E has integrated planning evidence into `12_validation/VAL-TASK-006-validation-report.md`. Do not generate coding prompts yet. Split future implementation into smaller tasks only after missing stock, order, payment, supplier, and margin contracts are resolved or explicitly marked blocked by their owners.
+TASK-006-A through TASK-006-D completed handoffs, TASK-006-E integrated planning evidence, and owner approval on 2026-06-21 allowed a pure contract-first implementation. Runtime stock mutation, payment writes, supplier writes, and schema-backed durable queues remain separate future tasks.
 ## Test Plan
 
 - Run npm run ips:audit.
@@ -151,11 +151,11 @@ Revert task-scoped code and schema changes. Disable new routes, workers, or even
 
 ## Agent Handoff Prompt
 
-TASK-006-A through TASK-006-D have completed handoffs and TASK-006-E has integrated planning evidence into `12_validation/VAL-TASK-006-validation-report.md`. Do not generate coding prompts yet. Split future implementation into smaller tasks only after missing stock, order, payment, supplier, and margin contracts are resolved or explicitly marked blocked by their owners.
+TASK-006-A through TASK-006-D completed handoffs, TASK-006-E integrated planning evidence, and owner approval on 2026-06-21 allowed a pure contract-first implementation. Runtime stock mutation, payment writes, supplier writes, and schema-backed durable queues remain separate future tasks.
 ## Completion Checklist
 
-- [ ] Implementation complete
-- [ ] Tests complete
-- [ ] Validation evidence collected
-- [ ] Documentation updated
-- [ ] Deviations documented
+- [x] Implementation complete
+- [x] Tests complete
+- [x] Validation evidence collected
+- [x] Documentation updated
+- [x] Deviations documented

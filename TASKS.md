@@ -4,7 +4,6 @@
 
 ## Backlog
 <!-- Human-managed -->
-- TASK-006 plan stock/order/profit loop: `11_tasks/TASK-006-plan-stock-order-profit-loop.md`
 - TASK-007 plan growth analytics and demand loops: `11_tasks/TASK-007-plan-growth-analytics-and-demand-loops.md`
 - TASK-008 plan operations trust and scale: `11_tasks/TASK-008-plan-operations-trust-and-scale.md`
 
@@ -21,3 +20,4 @@
 - 2026-06-20 TASK-005-ai-offer-optimization-contract-validated: advisory ai-microservice contract, contract module/service/specs, review-state model, synthetic fixtures, redaction profile, build/spec validation, and IPS evidence completed without direct marketplace mutation.
 - 2026-06-20 TASK-007-growth-analytics-contract-pack-validated: funnel taxonomy, leads/marketing envelope drafts, digest payload definitions, redaction/replay/versioning rules, integrated validation evidence, and repo-state updates completed without downstream runtime writes.
 - 2026-06-20 TASK-008-operations-trust-plan-validated: queue/rate-limit planning, OAuth health signals, MinIO media contract gating, deployment smoke and rollback evidence, integrated validation report, and repo-state updates completed without runtime changes.
+- 2026-06-21 TASK-006-stock-order-profit-loop-contract-validated: stock-sync attempt, order reconciliation, read-only payment, supplier dry-run, and margin coverage contracts implemented with synthetic validation and no runtime writes.

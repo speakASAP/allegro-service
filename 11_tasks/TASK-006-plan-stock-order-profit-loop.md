@@ -2,10 +2,10 @@
 
 ```yaml
 id: TASK-006
-status: draft
+status: validated
 owner: Project Owner
 created: 2026-06-13
-last_updated: 2026-06-13
+last_updated: 2026-06-21
 completeness_level: complete
 upstream:
   - ../10_features/FEAT-006-stock-order-profit-loop.md
@@ -56,10 +56,10 @@ No local order ownership, no payment writes before approved contract, no supplie
 
 ## Acceptance Criteria
 
-- [ ] Stock drift detection is designed.
-- [ ] Order-forward retry and reconciliation is designed.
-- [ ] Payments and suppliers start as read-only/dry-run contracts.
-- [ ] Margin computation sources are documented.
+- [x] Stock drift detection is designed.
+- [x] Order-forward retry and reconciliation is designed.
+- [x] Payments and suppliers start as read-only/dry-run contracts.
+- [x] Margin computation sources are documented.
 
 ## Required Context
 

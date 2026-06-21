@@ -3,21 +3,14 @@
   "project": "allegro-service",
   "stage": "production",
   "health": "ok",
-  "cycle": 4,
+  "cycle": 5,
   "last_cycle_at": "2026-06-21T01:02:21Z",
   "tasks_active": 0,
   "tasks_failed_last_cycle": 0,
-  "open_task_ids": [
-    "TASK-006"
-  ],
-  "last_milestone": "task-006-planning-gates-revalidated",
-  "next_focus": "TASK-006 planning gates passed on 2026-06-21, but implementation remains blocked by missing stock-sync, order-forward failure, payments and suppliers ownership, and approved economics contracts; no coding prompt is allowed yet",
-  "blockers": [
-    "TASK-006 remains blocked by [MISSING: durable stock sync attempt contract]",
-    "TASK-006 remains blocked by [MISSING: approved redacted order-forward failure taxonomy]",
-    "TASK-006 remains blocked by [MISSING: payments and suppliers read-only contract owners]",
-    "TASK-006 remains blocked by [MISSING: approved margin floor and FX source]"
-  ],
+  "open_task_ids": [],
+  "last_milestone": "task-006-stock-order-profit-loop-contract-validated",
+  "next_focus": "TASK-006 contract-first slice validated; no open revenue task remains until a new owner-approved runtime implementation task is created",
+  "blockers": [],
   "budget_units_used": 0,
   "metrics": {
     "custom": {
@@ -30,7 +23,8 @@
         "TASK-004",
         "TASK-005",
         "TASK-007",
-        "TASK-008"
+        "TASK-008",
+        "TASK-006"
       ]
     }
   }
