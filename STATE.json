@@ -9,7 +9,7 @@
   "tasks_failed_last_cycle": 0,
   "open_task_ids": [],
   "last_milestone": "task-006-stock-order-profit-loop-contract-validated",
-  "next_focus": "TASK-006 contract-first slice validated; no open revenue task remains until a new owner-approved runtime implementation task is created",
+  "next_focus": "Project completed/frozen: TASK-006 contract-first slice validated, no open goals, plans, tasks, blockers, or human/AI actions pending as of 2026-06-21.",
   "blockers": [],
   "budget_units_used": 0,
   "metrics": {
@@ -27,5 +27,9 @@
         "TASK-006"
       ]
     }
-  }
+  },
+  "project_status": "completed_frozen",
+  "completed_at": "2026-06-21",
+  "frozen_at": "2026-06-21",
+  "updated_at": "2026-06-21"
 }
