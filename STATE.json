@@ -4,15 +4,14 @@
   "stage": "production",
   "health": "ok",
   "cycle": 3,
-  "last_cycle_at": "2026-06-20T10:54:21Z",
-  "tasks_active": 1,
+  "last_cycle_at": "2026-06-21T00:31:59Z",
+  "tasks_active": 0,
   "tasks_failed_last_cycle": 0,
   "open_task_ids": [
-    "TASK-006",
-    "TASK-008"
+    "TASK-006"
   ],
-  "last_milestone": "task-007-growth-analytics-contract-pack-validated",
-  "next_focus": "review TASK-008 operations trust and scale execution plan; TASK-006 remains blocked by missing external contract owners, click/digest runtime facts, and approved economics sources",
+  "last_milestone": "task-008-operations-trust-plan-validated",
+  "next_focus": "TASK-006 remains blocked by missing external contract owners, click/digest runtime facts, and approved economics sources; no additional executable lane is open in repo state",
   "blockers": [
     "TASK-006 remains blocked by [MISSING: durable stock sync attempt contract]",
     "TASK-006 remains blocked by [MISSING: approved redacted order-forward failure taxonomy]",
@@ -24,13 +23,14 @@
     "custom": {
       "planned_milestones": 7,
       "planned_revenue_tasks": 7,
-      "active_revenue_task": "TASK-008",
+      "active_revenue_task": "TASK-006",
       "completed_revenue_tasks": [
         "TASK-002",
         "TASK-003",
         "TASK-004",
         "TASK-005",
-        "TASK-007"
+        "TASK-007",
+        "TASK-008"
       ]
     }
   }

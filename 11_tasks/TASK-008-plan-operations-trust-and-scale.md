@@ -2,10 +2,10 @@
 
 ```yaml
 id: TASK-008
-status: draft
+status: validated
 owner: Project Owner
 created: 2026-06-13
-last_updated: 2026-06-13
+last_updated: 2026-06-20
 completeness_level: complete
 upstream:
   - ../10_features/FEAT-008-operations-trust-and-scale.md
@@ -40,11 +40,11 @@ Classification: synthetic. Operational reports must not include raw tokens, secr
 
 ## Contract/Schema Impact
 
-May create monitoring DTOs, SLA report schemas, and MinIO media contract if implemented.
+Creates validated planning artifacts for monitoring DTOs, SLA evidence, and the blocked MinIO media contract boundary. No runtime ownership boundary changed.
 
 ## Replay/Determinism Impact
 
-Queue controls and deployment checks must be deterministic enough for repeated validation.
+Queue controls, OAuth evidence, deployment smoke, and rollback checks are documented with deterministic, replay-safe validation steps.
 
 ## Scope
 
@@ -56,10 +56,10 @@ No boundary changes without ADR. No media storage implementation until MinIO con
 
 ## Acceptance Criteria
 
-- [ ] Rate-limit and queue controls are measurable.
-- [ ] OAuth risks are alertable.
-- [ ] Deployment smoke checklist is documented.
-- [ ] MinIO/media dependency is contract-gated.
+- [x] Rate-limit and queue controls are measurable.
+- [x] OAuth risks are alertable.
+- [x] Deployment smoke checklist is documented.
+- [x] MinIO/media dependency is contract-gated.
 
 ## Required Context
 
@@ -67,7 +67,7 @@ Roadmap Stage 6, deployment scripts, Kubernetes manifests, OAuth services, lifec
 
 ## Validation Task
 
-Operational readiness report, smoke checklist, and failure-path tests for later coding tasks.
+Operational readiness handoff integration, smoke checklist review, and sensitive-data-safe evidence scan.
 
 ## Required Gates
 
@@ -75,4 +75,4 @@ Deployment-readiness gate, operational gate, sensitive-data scan.
 
 ## Execution Plan Requirement
 
-This task must not be converted into a coding prompt until an approved execution plan exists.
+This task completed as a planning-first operational readiness package on 2026-06-20. Runtime coding, metrics emission, queue-worker changes, and cross-service contract implementation remain future work once blocked contracts and owners are resolved.

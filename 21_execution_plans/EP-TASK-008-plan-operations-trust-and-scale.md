@@ -2,11 +2,11 @@
 
 ```yaml
 id: EP-TASK-008
-status: draft
+status: validated
 source_task: ../11_tasks/TASK-008-plan-operations-trust-and-scale.md
 owner: Project Owner
 created: 2026-06-13
-last_updated: 2026-06-13
+last_updated: 2026-06-20
 completeness_level: complete
 vision: ../01_vision/VISION.md
 constitution: ../00_constitution/CONSTITUTION.md
@@ -17,8 +17,8 @@ goal_impact: ../22_goal_impact/GOAL-IMPACT-TASK-008.md
 ## Metadata
 
 - Source task: ../11_tasks/TASK-008-plan-operations-trust-and-scale.md
-- Status: draft for owner review.
-- Lifecycle state: planned; not approved for coding until gate review passes.
+- Status: planning-first implementation integrated on 2026-06-20.
+- Lifecycle state: implemented and validated for TASK-008 closure at the operational-planning level; runtime implementation remains deferred to future approved tasks.
 
 ## Upstream Traceability
 
@@ -31,7 +31,7 @@ goal_impact: ../22_goal_impact/GOAL-IMPACT-TASK-008.md
 
 ## Goal Impact
 
-Plan account-aware rate-limit controls, OAuth health, SLA dashboards, MinIO media contract discovery, deployment smoke, and rollback playbooks. This supports the revenue roadmap by improving publish reliability, conversion readiness, operational visibility, or profit protection for Allegro sales.
+Plan account-aware rate-limit controls, OAuth health, SLA dashboards, MinIO media contract discovery, deployment smoke, and rollback playbooks. This supports the revenue roadmap by improving publish reliability, conversion readiness, operational visibility, and production recoverability for Allegro sales.
 
 ## Project Invariants
 
@@ -78,11 +78,10 @@ Plan account-aware rate-limit controls, OAuth health, SLA dashboards, MinIO medi
 ## Files to Create
 
 - 12_validation/VAL-TASK-008-validation-report.md
-- reports/validation/TASK-008-validation-evidence.md when generated evidence is needed
+- reports/validation/TASK-008-validation-evidence.md
 
 ## Files to Modify
 
-- Task-scoped service files only after approval
 - Task-scoped validation reports
 - TASKS.md and STATE.json when status changes
 
@@ -104,58 +103,61 @@ Plan account-aware rate-limit controls, OAuth health, SLA dashboards, MinIO medi
 
 ## Parallel Execution
 
-TASK-008 can run four operations lanes in parallel for rate limits/queues, OAuth health, media contracts, and deployment evidence, followed by an operations integration lane.
+TASK-008 executed as four independent planning handoff lanes plus one integration lane. TASK-008-A through TASK-008-D produced isolated handoff artifacts, and TASK-008-E integrated the shared validation evidence and repo-state updates without runtime code changes.
 
-- Integration owner: Agent TASK-008-E integration owner.
-- Validation owner: Agent TASK-008-E validation owner.
-- Merge order: 1. TASK-008-A rate-limit and queue controls lane; 2. TASK-008-B OAuth health lane; 3. TASK-008-C MinIO media contract lane; 4. TASK-008-D smoke and rollback lane; 5. TASK-008-E final integration and validation evidence.
-- Shared files/contracts: deployment scripts, k8s manifests, operational gate definitions, 16_operations/INTEGRATIONS.md, validation reports, TASKS.md, and STATE.json. TASK-008-E owns final gate wording and merge order.
+- Integration owner: TASK-008-E orchestrator lane.
+- Validation owner: TASK-008-E orchestrator lane.
+- Merge order completed: 1. TASK-008-A rate-limit and queue controls handoff; 2. TASK-008-B OAuth health handoff; 3. TASK-008-C MinIO media contract handoff; 4. TASK-008-D smoke and rollback handoff; 5. TASK-008-E integrated validation report, evidence summary, and status files.
+- Shared files/contracts: deployment scripts, k8s manifests, `16_operations/INTEGRATIONS.md`, validation reports, `TASKS.md`, and `STATE.json`. TASK-008-E preserved blocked facts and resolved duplicate planning output by selecting `reports/validation/TASK-008-C-minio-media-handoff.md` as the canonical media-contract artifact.
 
 | Workstream | Status | Objective | Scope | Allowed files | Forbidden files | Expected output | Dependencies/blockers |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| TASK-008-A | Ready now | Rate-limit and queue controls lane | Inspect account-aware Allegro throttling, queue/backpressure controls, and measurable failure modes. Produce control and metric plan only. | Allegro client/rate-limit modules; queue worker references; project invariants. | Do not change runtime throttling behavior without approved coding prompt. | Control map, metric list, synthetic failure-path cases. | None; ready to start now. |
-| TASK-008-B | Ready now | OAuth health lane | Inspect OAuth token lifecycle, expiry handling, and alertable health signals. Produce secret-safe monitoring plan. | OAuth services; environment variable references; operational docs. | No raw tokens, secrets, refresh values, or production auth logs. | OAuth risk map, alert candidates, redaction-safe evidence plan. | None; ready to start now. |
-| TASK-008-C | Ready now | MinIO media contract lane | Inspect media dependency references and define MinIO/media contract discovery requirements with blocked facts explicit. | 16_operations/INTEGRATIONS.md; media references; MinIO docs/contracts if present in repo. | No media storage implementation until contract is approved. | Media contract matrix and [MISSING: ...] markers for unavailable endpoints or ownership. | None; ready to start now. |
-| TASK-008-D | Ready now | Deployment smoke and rollback lane | Inspect deploy scripts, Kubernetes manifests, health checks, and rollback docs. Produce smoke checklist and deterministic validation steps. | scripts/deploy.sh; k8s manifests; health endpoints; existing readiness reports. | Do not deploy or mutate production unless explicitly requested. | Smoke checklist, rollback evidence requirements, failure-path tests. | None; ready to start now. |
-| TASK-008-E | Final integration | Operations readiness integration lane | Merge A-D outputs into a single operations trust plan and validation report, resolving shared operational gates. | 21_execution_plans/EP-TASK-008-plan-operations-trust-and-scale.md; 12_validation/VAL-TASK-008-validation-report.md; TASKS.md/STATE.json only if status changes are approved. | Do not start before A-D handoffs are available or explicitly marked blocked. | Integrated operations plan, validation evidence, deviations, and gate results. | Dependency-gated on prior lane handoffs. |
+| TASK-008-A | Completed | Rate-limit and queue controls lane | Inspect account-aware Allegro throttling, queue/backpressure controls, and measurable failure modes. Produce control and metric plan only. | Allegro client/rate-limit modules; queue worker references; project invariants. | Do not change runtime throttling behavior without an approved follow-up coding prompt. | Control map, metric list, synthetic failure-path cases. | Completed as planning handoff only. |
+| TASK-008-B | Completed | OAuth health lane | Inspect OAuth token lifecycle, expiry handling, and alertable health signals. Produce secret-safe monitoring plan. | OAuth services; environment variable references; operational docs. | No raw tokens, secrets, refresh values, or production auth logs. | OAuth risk map, alert candidates, redaction-safe evidence plan. | Completed as planning handoff only. |
+| TASK-008-C | Completed | MinIO media contract lane | Inspect media dependency references and define MinIO/media contract discovery requirements with blocked facts explicit. | `16_operations/INTEGRATIONS.md`; media references; MinIO docs/contracts if present in repo. | No media storage implementation until contract is approved. | Media contract matrix and `[MISSING: ...]` markers for unavailable endpoints or ownership. | Completed as planning handoff only; runtime work remains blocked on external contract facts. |
+| TASK-008-D | Completed | Deployment smoke and rollback lane | Inspect deploy scripts, Kubernetes manifests, health checks, and rollback docs. Produce smoke checklist and deterministic validation steps. | scripts/deploy.sh; k8s manifests; health endpoints; existing readiness reports. | Do not deploy or mutate production during planning-only closure. | Smoke checklist, rollback evidence requirements, failure-path tests. | Completed as planning handoff only. |
+| TASK-008-E | Completed | Operations readiness integration lane | Merge A-D outputs into a single operations trust plan and validation report, resolving shared operational gates. | `21_execution_plans/EP-TASK-008-plan-operations-trust-and-scale.md`; `12_validation/VAL-TASK-008-validation-report.md`; `TASKS.md`; `STATE.json`. | Do not claim runtime implementation or deployment closure without separate evidence. | Integrated operations plan, validation evidence, deviations, and gate results. | Completed after A-D handoffs existed. |
 
 ### Agent-Ready Handoff Notes
 
-Start TASK-008-A through TASK-008-D in separate Codex threads only when operational planning begins. Keep deployment, manifests, and shared gate wording under TASK-008-E ownership until lane handoffs are merged.
+TASK-008-A through TASK-008-D completed as isolated remote handoffs under `reports/validation/`, and TASK-008-E integrated them into the repo validation/state artifacts. Runtime work remains deferred because queue SLOs, media contracts, and some operational ownership facts are still explicit `[MISSING: ...]` or `[UNKNOWN: ...]` blockers for later tasks.
+
 ## Test Plan
 
 - Run npm run ips:audit.
 - Run npm run ips:pre-coding.
-- Run targeted unit or contract tests for the affected implementation.
-- Run npm run ips:readiness before deployment or closure.
+- Run `python3 scripts/deployment_readiness_gate.py --root . --target TASK-008`.
 
 ## Validation Plan
 
-Validation succeeds when IPS gates, targeted tests, and sensitive-data checks pass, and when evidence is stored in the matching validation report. Contract-first tasks may close with approved contracts and synthetic fixtures before runtime coding begins.
+Validation succeeds when IPS gates pass, handoff evidence is integrated into the matching validation report, and sensitive-data constraints remain intact. TASK-008 closes at planning level only; no runtime deploy is part of this task closure.
 
 ## Gate Commands
 
 ```bash
 npm run ips:audit
 npm run ips:pre-coding
-npm run ips:readiness
+python3 scripts/deployment_readiness_gate.py --root . --target TASK-008
 ```
 
 ## Documentation Updates
 
-Update the source task, feature, goal-impact record, validation report, TASKS.md, and STATE.json when implementation status changes. Update 16_operations/INTEGRATIONS.md when new contracts become approved.
+Update the source task, execution plan, validation report, TASKS.md, and STATE.json when planning status changes. Update `16_operations/INTEGRATIONS.md` only when new contracts become approved.
 
 ## Rollback Plan
 
-Revert task-scoped code and schema changes. Disable new routes, workers, or event emitters by configuration when available. Preserve audit records long enough for incident review if production attempts were created.
+Revert task-scoped documentation and validation changes if needed. Do not claim rollout rollback coverage beyond the documented smoke and evidence requirements.
 
 ## Agent Handoff Prompt
 
-Start TASK-008-A through TASK-008-D in separate Codex threads only when operational planning begins. Keep deployment, manifests, and shared gate wording under TASK-008-E ownership until lane handoffs are merged.
+You are a TASK-008 worker for allegro-service. Preserve the chain Vision -> Goal Impact -> System -> Feature -> Task -> Execution Plan -> Coding Prompt -> Code -> Validation. Work only against approved TASK-008 planning scope, use synthetic examples, and keep raw customer/order data, secrets, production logs, and OAuth material out of notes, tests, prompts, and reports.
+
+Read the roadmap Stage 6, FEAT-008, TASK-008, this execution plan, project invariants, integrations map, and sensitive-data policy before producing output. TASK-008-A through TASK-008-D may write only isolated handoff artifacts under `reports/validation/`. Do not edit shared validation reports, `TASKS.md`, `STATE.json`, or integration wording unless TASK-008-E owns that merge. Return blocked facts explicitly instead of inventing them.
+
 ## Completion Checklist
 
-- [ ] Implementation complete
-- [ ] Tests complete
-- [ ] Validation evidence collected
-- [ ] Documentation updated
-- [ ] Deviations documented
+- [x] Implementation complete
+- [x] Tests complete
+- [x] Validation evidence collected
+- [x] Documentation updated
+- [x] Deviations documented

@@ -10,7 +10,6 @@
 
 ## Active
 <!-- Coordinator-maintained -->
-- TASK-008 operations trust and scale execution-plan review: `11_tasks/TASK-008-plan-operations-trust-and-scale.md`
 
 ## Completed
 <!-- Coordinator-append-only -->
@@ -21,3 +20,4 @@
 - 2026-06-19 TASK-004-catalog-sell-on-allegro-action-validated: catalog-facing prepare/confirm/status and bulk-planning contract implemented with draft reuse/creation, lifecycle-backed queueing, targeted spec, build, strict audit, pre-coding gate, and deployment-readiness gate passed.
 - 2026-06-20 TASK-005-ai-offer-optimization-contract-validated: advisory ai-microservice contract, contract module/service/specs, review-state model, synthetic fixtures, redaction profile, build/spec validation, and IPS evidence completed without direct marketplace mutation.
 - 2026-06-20 TASK-007-growth-analytics-contract-pack-validated: funnel taxonomy, leads/marketing envelope drafts, digest payload definitions, redaction/replay/versioning rules, integrated validation evidence, and repo-state updates completed without downstream runtime writes.
+- 2026-06-20 TASK-008-operations-trust-plan-validated: queue/rate-limit planning, OAuth health signals, MinIO media contract gating, deployment smoke and rollback evidence, integrated validation report, and repo-state updates completed without runtime changes.

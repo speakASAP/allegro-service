@@ -135,6 +135,10 @@ nodes:
     type: coding_prompt
     path: 14_prompts/PROMPT-TASK-007-growth-analytics-and-demand-loops.md
     title: Growth Analytics And Demand Loops Prompt
+  - id: PROMPT-TASK-008-operations-trust-and-scale
+    type: coding_prompt
+    path: 14_prompts/PROMPT-TASK-008-operations-trust-and-scale.md
+    title: Operations Trust And Scale Prompt
   - id: PROMPT-TASK-005-ai-offer-optimization-contract
     type: coding_prompt
     path: 14_prompts/PROMPT-TASK-005-ai-offer-optimization-contract.md
@@ -167,6 +171,10 @@ nodes:
     type: context_package
     path: 13_context_packages/CP-TASK-007-growth-analytics-and-demand-loops.md
     title: Growth Analytics And Demand Loops Context Package
+  - id: CP-TASK-008-operations-trust-and-scale
+    type: context_package
+    path: 13_context_packages/CP-TASK-008-operations-trust-and-scale.md
+    title: Operations Trust And Scale Context Package
   - id: CP-TASK-005
     type: context_package
     path: 13_context_packages/CP-TASK-005-ai-offer-optimization-contract.md
@@ -207,6 +215,14 @@ nodes:
     type: validation_report
     path: 12_validation/VAL-TASK-007-validation-report.md
     title: Growth Analytics And Demand Loops Validation
+  - id: VAL-TASK-008-validation-report
+    type: validation_report
+    path: 12_validation/VAL-TASK-008-validation-report.md
+    title: Operations Trust And Scale Validation
+  - id: VAL-TASK-008-validation-report
+    type: validation_report
+    path: 12_validation/VAL-TASK-008-validation-report.md
+    title: Operations Trust And Scale Validation
   - id: VAL-TASK-005-validation-report
     type: validation_report
     path: 12_validation/VAL-TASK-005-validation-report.md
@@ -416,6 +432,18 @@ edges:
     to: FEAT-008
   - from: EP-TASK-008
     type: derives_from
+    to: TASK-008
+  - from: EP-TASK-008
+    type: generates
+    to: PROMPT-TASK-008-operations-trust-and-scale
+  - from: PROMPT-TASK-008-operations-trust-and-scale
+    type: derives_from
+    to: EP-TASK-008
+  - from: PROMPT-TASK-008-operations-trust-and-scale
+    type: included_in_context
+    to: CP-TASK-008-operations-trust-and-scale
+  - from: VAL-TASK-008-validation-report
+    type: validates
     to: TASK-008
   - from: EP-TASK-008
     type: constrained_by
