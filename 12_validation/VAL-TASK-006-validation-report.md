@@ -5,7 +5,7 @@ id: VAL-TASK-006
 status: partial
 owner: TASK-006-E integration owner
 created: 2026-06-13
-last_updated: 2026-06-15
+last_updated: 2026-06-21
 source_task: ../11_tasks/TASK-006-plan-stock-order-profit-loop.md
 execution_plan: ../21_execution_plans/EP-TASK-006-plan-stock-order-profit-loop.md
 classification: synthetic
@@ -13,12 +13,12 @@ classification: synthetic
 
 Validation id: VAL-TASK-006  
 Target: TASK-006  
-Date: 2026-06-15  
+Date: 2026-06-21
 Validator: AI agent
 
 ## Summary
 
-TASK-006 contract-discovery lanes A-D were integrated at the planning level. The work remains partial because no external payments, suppliers, order-idempotency, Allegro fee, shipping-cost, or stock-sync attempt contracts are approved yet. No runtime code, schema, production data, deployment, payment write, supplier write, stock mutation, or local order ownership change was introduced by this validation update.
+TASK-006 contract-discovery lanes A-D were integrated at the planning level, then the planning gates were revalidated on 2026-06-21. The work remains partial because no external payments, suppliers, order-idempotency, Allegro fee, shipping-cost, or stock-sync attempt contracts are approved yet. No runtime code, schema, production data, deployment, payment write, supplier write, stock mutation, or local order ownership change was introduced by this validation update.
 
 ## Upstream goal
 
@@ -34,12 +34,14 @@ TASK-006 supports FEAT-006 and roadmap Stage 4: close stock, order, payment, sup
 | Margin computation lane | Blocked | TASK-006-D found offer price, order revenue, catalog pricing hooks, supplier placeholder cost fields, and delivery/payment JSON anchors, but no fee, settlement, deterministic shipping-cost, or approved margin-floor contract. |
 | Sensitive-data handling | Partial | All lane handoffs used synthetic examples and avoided runtime rows/logs; full closure still needs a final sensitive-data scan after any future contract artifacts are added. |
 | Parallel execution recovery | Pass | A-D lane handoffs have been reviewed and summarized here after earlier concurrent shared-file overwrites. Future lanes must avoid shared report writes unless assigned integration ownership. |
+| TASK-006 planning gate revalidation | Pass | `git diff --check`, `npm run ips:audit`, `npm run ips:pre-coding`, and `python3 scripts/deployment_readiness_gate.py --root . --target TASK-006` passed on 2026-06-21. |
 
 ## Gate evidence
 
-- `npm run ips:audit`: pending rerun after this TASK-006-E integration update.
-- `npm run ips:pre-coding`: pending rerun after this TASK-006-E integration update.
-- `python3 scripts/deployment_readiness_gate.py --root . --target TASK-002`: pending rerun after this TASK-006-E integration update.
+- `git diff --check`: PASS on 2026-06-21.
+- `npm run ips:audit`: PASS on 2026-06-21 with documentation audit score 100/100.
+- `npm run ips:pre-coding`: PASS on 2026-06-21; report refreshed at `reports/validation/ips-pre-coding-gate.json`.
+- `python3 scripts/deployment_readiness_gate.py --root . --target TASK-006`: PASS on 2026-06-21; report refreshed at `reports/validation/ips-deployment-readiness-gate.json`.
 - Targeted runtime tests: not run because TASK-006-E integrated contract-discovery documentation only and did not change runtime code.
 
 ## Invariant evidence
@@ -143,7 +145,7 @@ Missing facts:
 ## Issues found
 
 - Shared validation report writes caused prior TASK-006 lane overwrites. Integration ownership is now explicit; future workers should return handoffs instead of editing shared reports unless assigned owner.
-- TASK-006 is not coding-ready because multiple external ownership and contract facts remain missing.
+- TASK-006 planning gates now pass, but the task is still not coding-ready because multiple external ownership and contract facts remain missing.
 - Existing supplier placeholder includes write-like methods and must not be reused as the TASK-006 supplier contract.
 - Current order forwarding economics treat shipping and tax as zero, which is insufficient for margin truth.
 - No runtime validation suite exists yet for stock drift, order reconciliation, read-only payments/suppliers, or margin coverage.

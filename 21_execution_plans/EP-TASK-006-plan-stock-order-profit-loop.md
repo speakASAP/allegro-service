@@ -6,7 +6,7 @@ status: draft
 source_task: ../11_tasks/TASK-006-plan-stock-order-profit-loop.md
 owner: Project Owner
 created: 2026-06-13
-last_updated: 2026-06-13
+last_updated: 2026-06-21
 completeness_level: complete
 vision: ../01_vision/VISION.md
 constitution: ../00_constitution/CONSTITUTION.md
@@ -18,7 +18,7 @@ goal_impact: ../22_goal_impact/GOAL-IMPACT-TASK-006.md
 
 - Source task: ../11_tasks/TASK-006-plan-stock-order-profit-loop.md
 - Status: draft for owner review.
-- Lifecycle state: contract-discovery integrated; not approved for coding until missing external contracts are resolved.
+- Lifecycle state: contract-discovery integrated and planning gates revalidated on 2026-06-21; not approved for coding until missing external contracts are resolved.
 
 ## Upstream Traceability
 
@@ -104,7 +104,7 @@ Plan stock-to-Allegro sync, order reconciliation, payment read-only status, supp
 
 ## Parallel Execution
 
-TASK-006 ran four independent contract-discovery lanes, then one integration lane merged the lane evidence into the validation report. The task is still not coding-ready because external ownership and contract facts remain missing.
+TASK-006 ran four independent contract-discovery lanes, then one integration lane merged the lane evidence into the validation report. Planning gates passed on 2026-06-21. The task is still not coding-ready because external ownership and contract facts remain missing.
 
 - Integration owner: Agent TASK-006-E integration owner.
 - Validation owner: Agent TASK-006-E validation owner.
