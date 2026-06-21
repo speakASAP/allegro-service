@@ -25,8 +25,8 @@ A revenue engine has to be trustworthy in production; otherwise scale amplifies 
 
 ## Evidence
 
-Roadmap Stage 6 now has integrated planning evidence for queue controls, OAuth health, MinIO/media contract discovery, and smoke/rollback readiness under `reports/validation/TASK-008-*.md`, `reports/validation/TASK-008-validation-evidence.md`, and `12_validation/VAL-TASK-008-validation-report.md`.
+Roadmap Stage 6 now has an integrated operational control pack for rate-limit and queue metrics, OAuth risk visibility, media and MinIO contract gating, and deployment smoke and rollback evidence recorded under `reports/validation/TASK-008-*.md` and the TASK-008 validation report.
 
 ## Validation
 
-Validated on 2026-06-21 when the four TASK-008 lane handoffs, sensitive-data-safe planning evidence, and TASK-008 IPS gate evidence were integrated without runtime or deployment mutation.
+Validated on 2026-06-20 when the operational control pack, synthetic evidence, blocker ledger, and task-scoped gate results were integrated without enabling runtime scaling, media storage, or production alert delivery.

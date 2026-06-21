@@ -1,29 +1,39 @@
-# TASK-008 Validation Evidence Summary
+# TASK-008 Validation Evidence
 
-## Scope
+## Summary
 
-Integration summary for the planning-only TASK-008 handoff wave. This file records which remote handoffs were accepted into the canonical validation package, how duplicate planning output was resolved, and which blocked facts remain after integration.
+TASK-008 closed as a planning-only operational readiness task on 2026-06-20. The integrated evidence comes from four isolated handoff lanes plus one supplemental MinIO note and the repo gate results. No runtime deploy, manifest edit, media implementation, alert-delivery integration, or secret-bearing evidence was introduced.
 
-## Accepted Handoffs
+## Evidence artifacts
 
-- `reports/validation/TASK-008-A-rate-limit-queue-handoff.md`
-- `reports/validation/TASK-008-B-oauth-health-handoff.md`
-- `reports/validation/TASK-008-C-minio-media-handoff.md`
-- `reports/validation/TASK-008-D-smoke-rollback-handoff.md`
+- `reports/validation/TASK-008-A-rate-limit-queue-handoff.md`: governed publish queue, stock-consumer, event-polling, and legacy bypass control map with metric and alert candidates.
+- `reports/validation/TASK-008-B-oauth-health-handoff.md`: source-backed OAuth lifecycle, risk map, alert candidates, and explicit logging and routing blockers.
+- `reports/validation/TASK-008-C-minio-media-handoff.md`: media and MinIO contract boundary, ownership and auth gaps, retention/fallback requirements, unresolved storage mode, Allegro image-update behavior, and downstream observability ownership.
+- `reports/validation/TASK-008-D-smoke-rollback-handoff.md`: deploy smoke checklist, rollback evidence requirements, and deterministic failure-path classification steps.
 
-## Duplicate Planning Output Resolution
+## Integrated operational outcome
 
-- Two TASK-008-C draft handoffs briefly covered the same MinIO/media lane during worker return.
-- The canonical file is `reports/validation/TASK-008-C-minio-media-handoff.md` because it is the tighter Stage 6 MinIO boundary summary and carries the stronger blocked-fact matrix.
-- The redundant duplicate draft was removed before commit so repo state and validation references stay single-owned.
+- Current rate-limit invariant remains `1 request per second per account` until a newer approved policy exists.
+- Canonical queue and backpressure surfaces are the governed publish lifecycle, stock RabbitMQ consumer, and event-polling cursors.
+- OAuth visibility outcome is planning-ready, but end-to-end alertability remains blocked on approved routing and remediation ownership.
+- Media dependency outcome is contract-gated only: no MinIO runtime dependency should be implemented until ownership, auth, schema, retention, and stable Allegro-facing URL rules are approved.
+- Deployment-readiness outcome is planning-ready, but runtime closure still requires a task-scoped rollback command and deeper readiness evidence if future coding changes are introduced.
 
-## Integrated Findings
+## Shared-file conflict resolution
 
-- Queue/rate-limit planning is strong enough for closure at the documentation level, but approved queue depth budgets, stale-age SLOs, and account-partition ownership remain `[MISSING: ...]`.
-- OAuth lifecycle coverage is source-backed and alertable at the planning level, but runtime preview-style token logging debt still needs a separate implementation task.
-- Media/MinIO boundaries are contract-gated, not implementation-ready. Endpoint, auth, schema owner, retention, and Allegro-compatible update workflow remain blocked facts.
-- Smoke and rollback coverage is documented well enough for planning closure, but deeper readiness signals and a concrete rollback playbook are still `[MISSING: ...]` for any future runtime/deploy task.
+- `TASK-008-C-minio-media-handoff.md` is the surviving TASK-008-C handoff in the repo and is treated as the authoritative media-contract evidence for this closure step.
+- No merge was attempted into shared operational files such as `16_operations/INTEGRATIONS.md`, deploy scripts, manifests, or gate definitions in this closure step.
 
-## Closure Judgment
+## Remaining blocked runtime facts
 
-TASK-008 can close as a planning-first operational readiness package. It should not be treated as runtime-complete, deploy-complete, or a replacement for the blocked TASK-006 dependency set.
+- `[MISSING: approved per-account queue depth budget, queue-age SLO, and retry budget thresholds]`
+- `[MISSING: approved destination and schema for OAuth operational metrics and alert routing]`
+- `[MISSING: owner-approved remediation plan for preview-style token and secret logging in OAuth paths]`
+- `[MISSING: approved MinIO ownership boundary, auth model, object schema, retention policy, and fallback contract]`
+- `[MISSING: task-scoped rollback command or repo-local rollback playbook for allegro-service deployments]`
+- `[MISSING: deeper readiness signal covering dependencies beyond shallow /health]`
+- `[MISSING: TASK-006-approved stock, order-forward, payments, suppliers, and economics contracts]`
+
+## Safety evidence
+
+All examples and metric names remain synthetic. The artifacts explicitly exclude OAuth tokens, Authorization headers, client secrets, queue credentials, customer identifiers, payment details, raw order payloads, raw media, and raw production logs.

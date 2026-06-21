@@ -5,7 +5,7 @@ id: TASK-008
 status: validated
 owner: Project Owner
 created: 2026-06-13
-last_updated: 2026-06-21
+last_updated: 2026-06-20
 completeness_level: complete
 upstream:
   - ../10_features/FEAT-008-operations-trust-and-scale.md
@@ -36,30 +36,30 @@ Applies ALG-INV-002, ALG-INV-004, ALG-INV-005, ALG-INV-006, and ALG-INV-007.
 
 ## Sensitive-Data Classification
 
-Classification: synthetic. Operational reports must not include raw tokens, secrets, or unmasked customer/order details.
+Classification: synthetic. Operational reports must not include raw tokens, secrets, or unmasked customer or order details.
 
 ## Contract/Schema Impact
 
-Creates validated planning artifacts for monitoring DTOs, SLA evidence, and the blocked MinIO media contract boundary. No runtime ownership boundary changed.
+Creates planning-level monitoring DTO candidates, operational evidence requirements, and a MinIO media contract gate without enabling runtime media storage.
 
 ## Replay/Determinism Impact
 
-Queue controls, OAuth evidence, deployment smoke, and rollback checks are documented with deterministic, replay-safe validation steps.
+Queue controls and deployment checks must be deterministic enough for repeated validation.
 
 ## Scope
 
-Rate-limit backpressure, OAuth expiry monitoring, MinIO/media contract discovery, SLA dashboards, production smoke, rollback playbooks.
+Rate-limit backpressure, OAuth expiry monitoring, MinIO and media contract discovery, SLA dashboards, production smoke, rollback playbooks.
 
 ## Non-Goals
 
-No boundary changes without ADR. No media storage implementation until MinIO contract is approved.
+No boundary changes without ADR. No media storage implementation until MinIO contract is approved. No runtime deployment, manifest edits, or alert-routing integration in this task closure.
 
 ## Acceptance Criteria
 
 - [x] Rate-limit and queue controls are measurable.
-- [x] OAuth risks are alertable.
+- [x] OAuth risks are alertable at the planning level.
 - [x] Deployment smoke checklist is documented.
-- [x] MinIO/media dependency is contract-gated.
+- [x] MinIO and media dependency is contract-gated.
 
 ## Required Context
 
@@ -67,7 +67,7 @@ Roadmap Stage 6, deployment scripts, Kubernetes manifests, OAuth services, lifec
 
 ## Validation Task
 
-Operational readiness handoff integration, smoke checklist review, and sensitive-data-safe evidence scan.
+Operational readiness report, smoke checklist, and failure-path tests for later coding tasks.
 
 ## Required Gates
 
@@ -75,4 +75,4 @@ Deployment-readiness gate, operational gate, sensitive-data scan.
 
 ## Execution Plan Requirement
 
-This task completed as a planning-first operational readiness package on 2026-06-21. Runtime coding, metrics emission, queue-worker changes, and cross-service contract implementation remain future work once blocked contracts and owners are resolved.
+This task is now implemented and validated as a planning-only operations control pack. Future coding prompts for runtime scaling, alert routing, or media storage still require separate approved tasks and source-backed external contracts.
