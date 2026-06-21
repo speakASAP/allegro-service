@@ -139,14 +139,6 @@ nodes:
     type: coding_prompt
     path: 14_prompts/PROMPT-TASK-008-operations-trust-and-scale.md
     title: Operations Trust And Scale Prompt
-  - id: PROMPT-TASK-005-ai-offer-optimization-contract
-    type: coding_prompt
-    path: 14_prompts/PROMPT-TASK-005-ai-offer-optimization-contract.md
-    title: AI Offer Optimization Contract Prompt
-  - id: PROMPT-TASK-007-growth-analytics-and-demand-loops
-    type: coding_prompt
-    path: 14_prompts/PROMPT-TASK-007-growth-analytics-and-demand-loops.md
-    title: Growth Analytics And Demand Loops Prompt
   - id: CP-TASK-001
     type: context_package
     path: 13_context_packages/CP-TASK-001-ips-baseline.md
@@ -175,14 +167,6 @@ nodes:
     type: context_package
     path: 13_context_packages/CP-TASK-008-operations-trust-and-scale.md
     title: Operations Trust And Scale Context Package
-  - id: CP-TASK-005
-    type: context_package
-    path: 13_context_packages/CP-TASK-005-ai-offer-optimization-contract.md
-    title: AI Offer Optimization Contract Context Package
-  - id: CP-TASK-007-growth-analytics-and-demand-loops
-    type: context_package
-    path: 13_context_packages/CP-TASK-007-growth-analytics-and-demand-loops.md
-    title: Growth Analytics And Demand Loops Context Package
   - id: ADR-001
     type: adr
     path: 07_decisions/ADR-001-preserve-existing-nestjs-prisma-service-boundary.md
@@ -219,18 +203,6 @@ nodes:
     type: validation_report
     path: 12_validation/VAL-TASK-008-validation-report.md
     title: Operations Trust And Scale Validation
-  - id: VAL-TASK-008-validation-report
-    type: validation_report
-    path: 12_validation/VAL-TASK-008-validation-report.md
-    title: Operations Trust And Scale Validation
-  - id: VAL-TASK-005-validation-report
-    type: validation_report
-    path: 12_validation/VAL-TASK-005-validation-report.md
-    title: AI Offer Optimization Contract Validation
-  - id: VAL-TASK-007-validation-report
-    type: validation_report
-    path: 12_validation/VAL-TASK-007-validation-report.md
-    title: Growth Analytics And Demand Loops Validation
 edges:
   - from: VISION-ALLEGRO-SERVICE
     type: defines

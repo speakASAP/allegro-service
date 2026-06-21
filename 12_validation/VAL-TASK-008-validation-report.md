@@ -6,14 +6,14 @@ status: pass
 source_task: ../11_tasks/TASK-008-plan-operations-trust-and-scale.md
 execution_plan: ../21_execution_plans/EP-TASK-008-plan-operations-trust-and-scale.md
 created: 2026-06-20
-last_updated: 2026-06-20
+last_updated: 2026-06-21
 completeness_level: validated
 sensitive_data_classification: synthetic
 ```
 
 Validation id: VAL-TASK-008
 Target: TASK-008
-Date: 2026-06-20
+Date: 2026-06-21
 Validator: AI agent
 
 ## Summary
@@ -38,9 +38,9 @@ The criteria below were verified against the canonical TASK-008 handoff artifact
 
 ## Gate evidence
 
-- `npm run ips:audit`: PASS on 2026-06-20.
-- `npm run ips:pre-coding`: PASS on 2026-06-20.
-- `python3 scripts/deployment_readiness_gate.py --root . --target TASK-008`: PASS on 2026-06-20.
+- `npm run ips:audit`: PASS on 2026-06-21.
+- `npm run ips:pre-coding`: PASS on 2026-06-21.
+- `python3 scripts/deployment_readiness_gate.py --root . --target TASK-008`: PASS on 2026-06-21.
 
 ## Invariant evidence
 
