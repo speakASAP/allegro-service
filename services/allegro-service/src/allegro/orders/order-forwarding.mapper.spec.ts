@@ -58,7 +58,7 @@ async function testMissingLineOfferMappingBlocksForwarding() {
   );
 
   assert.equal(result.orderData, null);
-  assert.ok(result.blockedReasons.includes("line_1_missing_offer_mapping"));
+  assert.ok(result.blockedReasons.includes("missing_offer:line_1_missing_offer_mapping"));
   assert.deepEqual(result.missingOfferIds, ["allegro-offer-2"]);
 }
 
@@ -73,7 +73,7 @@ async function testMissingCatalogProductIdBlocksForwarding() {
   );
 
   assert.equal(result.orderData, null);
-  assert.ok(result.blockedReasons.includes("line_0_missing_catalog_product_id"));
+  assert.ok(result.blockedReasons.includes("missing_catalog_product:line_0_missing_catalog_product_id"));
   assert.deepEqual(result.missingCatalogOfferIds, ["allegro-offer-1"]);
 }
 

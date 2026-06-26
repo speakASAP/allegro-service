@@ -69,19 +69,19 @@ export function buildOrderForwardingPayload(
     const allegroOfferId = String(item?.offer?.id || "").trim();
 
     if (!allegroOfferId) {
-      blockedReasons.push(`line_${index}_missing_offer_id`);
+      blockedReasons.push(`missing_offer:line_${index}_missing_offer_id`);
       continue;
     }
 
     const offer = offersByAllegroOfferId.get(allegroOfferId);
     if (!offer) {
-      blockedReasons.push(`line_${index}_missing_offer_mapping`);
+      blockedReasons.push(`missing_offer:line_${index}_missing_offer_mapping`);
       missingOfferIds.push(allegroOfferId);
       continue;
     }
 
     if (!offer.catalogProductId) {
-      blockedReasons.push(`line_${index}_missing_catalog_product_id`);
+      blockedReasons.push(`missing_catalog_product:line_${index}_missing_catalog_product_id`);
       missingCatalogOfferIds.push(allegroOfferId);
       continue;
     }
