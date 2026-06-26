@@ -6,6 +6,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService, LoggerService, OrderClientService } from '@allegro/shared';
 import { AllegroApiService } from '../allegro-api.service';
+import { AllegroForwardingOffer, buildOrderForwardingPayload, getAllegroLineOfferIds } from './order-forwarding.mapper';
 
 @Injectable()
 export class OrdersService {
@@ -147,10 +148,32 @@ export class OrdersService {
         
         for (const allegroOrder of orders) {
           try {
-            // Find related offer
-            const offer = await this.prisma.allegroOffer.findFirst({
-              where: { allegroOfferId: allegroOrder.lineItems?.[0]?.offer?.id || '' },
-            });
+            const lineOfferIds = getAllegroLineOfferIds(allegroOrder.lineItems || []);
+            const offers: AllegroForwardingOffer[] = lineOfferIds.length > 0
+              ? await this.prisma.allegroOffer.findMany({
+                where: { allegroOfferId: { in: lineOfferIds } },
+                select: {
+                  id: true,
+                  allegroOfferId: true,
+                  catalogProductId: true,
+                  accountId: true,
+                  title: true,
+                },
+              })
+              : [];
+            const offersByAllegroOfferId = new Map<string, AllegroForwardingOffer>(
+              offers.map((mappedOffer) => [mappedOffer.allegroOfferId, mappedOffer]),
+            );
+            const primaryOfferId = lineOfferIds[0] || '';
+            const offer = primaryOfferId ? offersByAllegroOfferId.get(primaryOfferId) : null;
+
+            if (!offer) {
+              this.logger.warn('Skipping Allegro order sync because first line item offer is not mapped', {
+                allegroOrderId: allegroOrder.id,
+                lineOfferIds,
+              });
+              continue;
+            }
 
             const savedOrder = await this.prisma.allegroOrder.upsert({
               where: { allegroOrderId: allegroOrder.id },
@@ -168,8 +191,8 @@ export class OrdersService {
               },
               create: {
                 allegroOrderId: allegroOrder.id,
-                allegroOfferId: offer?.id || '',
-                catalogProductId: offer?.catalogProductId || null,
+                allegroOfferId: offer.id,
+                catalogProductId: offer.catalogProductId || null,
                 quantity: allegroOrder.lineItems?.[0]?.quantity || 1,
                 price: parseFloat(allegroOrder.lineItems?.[0]?.price?.amount || '0'),
                 totalPrice: parseFloat(allegroOrder.totalPrice?.amount || '0'),
@@ -183,39 +206,29 @@ export class OrdersService {
               },
             });
 
-            // Forward order to orders-microservice
-            if (savedOrder && offer) {
+            // Forward order to orders-microservice only when every line has its own catalog product mapping.
+            if (savedOrder) {
               try {
-                const orderData = {
-                  externalOrderId: allegroOrder.id,
-                  channel: 'allegro',
-                  channelAccountId: offer.accountId || undefined,
-                  customer: {
-                    email: allegroOrder.buyer?.email,
-                    login: allegroOrder.buyer?.login,
-                  },
-                  items: allegroOrder.lineItems?.map((item: any) => ({
-                    productId: offer?.catalogProductId || null,
-                    sku: null, // SKU not available on AllegroOffer - would need catalog client
-                    title: item.offer?.name || offer?.title || 'Product',
-                    quantity: item.quantity || 1,
-                    unitPrice: parseFloat(item.price?.amount || '0'),
-                    totalPrice: parseFloat(item.price?.amount || '0') * (item.quantity || 1),
-                  })) || [],
-                  subtotal: parseFloat(allegroOrder.totalPrice?.amount || '0'),
-                  shippingCost: 0,
-                  taxAmount: 0,
-                  total: parseFloat(allegroOrder.totalPrice?.amount || '0'),
-                  currency: allegroOrder.totalPrice?.currency || 'PLN',
-                  paymentStatus: allegroOrder.payment?.status,
-                  orderedAt: new Date(allegroOrder.createdAt || Date.now()),
-                };
+                const forwarding = buildOrderForwardingPayload(allegroOrder, offersByAllegroOfferId);
 
-                await this.orderClient.createOrder(orderData);
-                this.logger.log('Order forwarded to orders-microservice', {
-                  allegroOrderId: allegroOrder.id,
-                  localOrderId: savedOrder.id,
-                });
+                if (!forwarding.orderData) {
+                  this.logger.warn('Skipped forwarding Allegro order to orders-microservice because catalog mapping is incomplete', {
+                    allegroOrderId: allegroOrder.id,
+                    localOrderId: savedOrder.id,
+                    blockedReasons: forwarding.blockedReasons,
+                    missingOfferIds: forwarding.missingOfferIds,
+                    missingCatalogOfferIds: forwarding.missingCatalogOfferIds,
+                    lineOfferIds: forwarding.lineOfferIds,
+                  });
+                } else {
+                  await this.orderClient.createOrder(forwarding.orderData);
+                  this.logger.log('Order forwarded to orders-microservice', {
+                    allegroOrderId: allegroOrder.id,
+                    localOrderId: savedOrder.id,
+                    lineOfferIds: forwarding.lineOfferIds,
+                    itemCount: forwarding.orderData.items.length,
+                  });
+                }
               } catch (error: any) {
                 // Log error but don't fail the sync
                 this.logger.error('Failed to forward order to orders-microservice', {
@@ -248,4 +261,3 @@ export class OrdersService {
     return { totalSynced };
   }
 }
-
