@@ -8,7 +8,6 @@ Owner created TASK-009 runtime/UI implementation goal on 2026-06-27.
 
 ## Active
 <!-- Coordinator-maintained -->
-- 2026-06-27 TASK-009-public-client-landing-dashboard-active: owner-approved goal to create Allegro landing and registered-client dashboard using Bazos UI as reference, with Catalog product selection and governed Allegro publish flow.
 
 ## Completed
 <!-- Coordinator-append-only -->
@@ -21,8 +20,9 @@ Owner created TASK-009 runtime/UI implementation goal on 2026-06-27.
 - 2026-06-20 TASK-007-growth-analytics-contract-pack-validated: funnel taxonomy, leads/marketing envelope drafts, digest payload definitions, redaction/replay/versioning rules, integrated validation evidence, and repo-state updates completed without downstream runtime writes.
 - 2026-06-20 TASK-008-operations-trust-plan-validated: queue/rate-limit planning, OAuth health signals, MinIO media contract gating, deployment smoke and rollback evidence, integrated validation report, and repo-state updates completed without runtime changes.
 - 2026-06-21 TASK-006-stock-order-profit-loop-contract-validated: stock-sync attempt, order reconciliation, read-only payment, supplier dry-run, and margin coverage contracts implemented with synthetic validation and no runtime writes.
+- 2026-06-27 TASK 009 live validated: Allegro landing, registration/login SPA routes, dashboard/products, API gateway, backend health route, Catalog product selection endpoint wiring, and governed publish-flow backend routes deployed and smoke validated on allegro.alfares.cz.
 
 ## Project Completion Marker
 
 - 2026-06-21: Project marked completed/frozen after TASK-006 validation.
-- 2026-06-27: Owner explicitly created TASK-009 to add public Allegro landing and registered-client dashboard; project is active again until TASK-009 validation closes.
+- 2026-06-27: TASK-009 live validated and project returned to completed state after deploying the public Allegro landing and registered-client dashboard.
