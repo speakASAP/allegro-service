@@ -42,6 +42,8 @@ spec:
               value: "http://allegro-settings:3408"
             - name: CORS_ORIGIN
               value: "https://allegro.alfares.cz"
+            - name: LOGGING_SERVICE_URL
+              value: "http://logging-microservice:3367"
             - name: ALLEGRO_FRONTEND_SERVICE_PORT
               value: "3410"
             - name: JWT_SECRET

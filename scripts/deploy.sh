@@ -71,7 +71,7 @@ fi
 deploy_timing_run_phase "Preflight" preflight_service_health
 
 deploy_timing_phase_start "Build images"
-docker build -t "$SERVICE_IMAGE" -t "$SERVICE_IMAGE_LATEST" "$PROJECT_ROOT"
+docker build -f "$PROJECT_ROOT/services/allegro-service/Dockerfile" -t "$SERVICE_IMAGE" -t "$SERVICE_IMAGE_LATEST" "$PROJECT_ROOT"
 docker build -f "$PROJECT_ROOT/services/api-gateway/Dockerfile" -t "$API_GATEWAY_IMAGE" -t "$API_GATEWAY_IMAGE_LATEST" "$PROJECT_ROOT"
 docker build -f "$PROJECT_ROOT/services/frontend/Dockerfile" --build-arg FRONTEND_API_URL="$FRONTEND_API_URL" -t "$FRONTEND_IMAGE" -t "$FRONTEND_IMAGE_LATEST" "$PROJECT_ROOT"
 deploy_timing_phase_end "Build images"
