@@ -2,12 +2,12 @@
 
 ```yaml
 id: VAL-TASK-009
-status: source_validated
+status: deployment_blocked
 source_task: ../11_tasks/TASK-009-public-client-landing-dashboard.md
 execution_plan: ../21_execution_plans/EP-TASK-009-public-client-landing-dashboard.md
 created: 2026-06-27
 last_updated: 2026-06-27
-completeness_level: source_validated
+completeness_level: source_validated_deployment_blocked
 sensitive_data_classification: synthetic
 ```
 
@@ -18,7 +18,7 @@ Validator: integration owner
 
 ## Summary
 
-Landing, dashboard, API gateway, frontend runtime manifests, and deploy integration have source-level validation. Initial live evidence showed `https://allegro.alfares.cz/` returned backend `404 Cannot GET /`, while `https://allegro.alfares.cz/health` returned healthy service JSON. This task must not close until deployment and public route smoke prove the domain serves the frontend.
+Landing, dashboard, API gateway, frontend runtime manifests, and deploy integration have source-level validation. Live deployment was attempted on 2026-06-27, but Kubernetes/container runtime on node `alfares` repeatedly left new pods in `ContainerCreating` or delayed termination. Public ingress was restored to the previous backend route, so `https://allegro.alfares.cz/` currently returns the old backend 404 instead of the new landing, while `https://allegro.alfares.cz/health` remains healthy. This task must not close until the cluster rollout succeeds and public route smoke proves the domain serves the frontend.
 
 ## Upstream Goal
 
@@ -28,9 +28,9 @@ TASK-009 supports FEAT-009 by making the Allegro service visible and usable for 
 
 | Criterion | Result | Evidence |
 |---|---|---|
-| Public landing served at `/` | Pending deploy | Source implemented in `services/frontend/src/pages/LandingPage.tsx`; [MISSING: post-deploy route smoke] |
-| Registration/sign-in routes available | Source pass | React routes exist and frontend build passed; [MISSING: post-deploy route smoke] |
-| Dashboard route available | Source pass | React dashboard shell updated and frontend build passed; [MISSING: post-deploy route smoke] |
+| Public landing served at `/` | Blocked by deploy | Source implemented in `services/frontend/src/pages/LandingPage.tsx`; live `/` restored to backend 404 after failed rollout attempts. |
+| Registration/sign-in routes available | Source pass, live blocked | React routes exist and frontend build passed; live route smoke blocked until frontend deployment is ready. |
+| Dashboard route available | Source pass, live blocked | React dashboard shell updated and frontend build passed; live route smoke blocked until frontend deployment is ready. |
 | Catalog product selection flow present | Source pass | `ProductsPage.tsx` uses `/api/allegro/products`, which Allegro backend maps through `CatalogClientService.searchProducts()`. |
 | Guarded prepare/confirm semantics preserved | Source pass | UI separates prepare, draft edit, status, and explicit confirm; targeted `catalog-sell-action.spec.ts` passed. |
 | Frontend build passes | Pass | `cd services/frontend && npm run build` passed on 2026-06-27. |
@@ -46,8 +46,13 @@ TASK-009 supports FEAT-009 by making the Allegro service visible and usable for 
 - `docker build -f services/frontend/Dockerfile --build-arg FRONTEND_API_URL=https://allegro.alfares.cz/api -t localhost:5000/allegro-frontend:task009-validate .`: PASS on 2026-06-27.
 - `cd services/allegro-service && npm run build`: PASS on 2026-06-27.
 - `npx ts-node services/allegro-service/src/allegro/catalog-sell-action/catalog-sell-action.spec.ts`: PASS on 2026-06-27 with `.env` loaded; shell emitted non-fatal warnings from non-shell-compatible `.env` lines before the spec PASS.
-- `curl -I https://allegro.alfares.cz/`: [MISSING: post-deploy result].
-- `curl -fsS https://allegro.alfares.cz/health`: [MISSING: post-deploy result].
+- `./scripts/deploy.sh`: BLOCKED on 2026-06-27 during rollout; new Allegro pods stayed in `ContainerCreating` and rollout timed out.
+- `kubectl -n statex-apps get pods -l app=allegro-service -o wide`: old backend remained `1/1 Running`; new backend pod stayed `ContainerCreating` then `Terminating` after rollback.
+- `kubectl -n statex-apps get pods -l app=allegro-api-gateway -o wide`: new API gateway pod stayed `ContainerCreating` and was scaled back to 0 after rollback.
+- `kubectl -n statex-apps get pods -l app=allegro-frontend -o wide`: new frontend pod stayed `ContainerCreating` and was scaled back to 0 after rollback.
+- `kubectl -n statex-apps get events --sort-by=.lastTimestamp`: broader node/runtime symptoms included delayed pulls, `FailedCreatePodSandBox`, `context deadline exceeded`, and `failed to reserve sandbox name` events across unrelated workloads.
+- `curl -I https://allegro.alfares.cz/`: RESTORED FALLBACK on 2026-06-27; returns backend `404` after rollback instead of ingress `503`.
+- `curl -fsS https://allegro.alfares.cz/health`: PASS on 2026-06-27; backend health remains OK.
 
 ## Invariant Evidence
 
@@ -59,8 +64,10 @@ TASK-009 supports FEAT-009 by making the Allegro service visible and usable for 
 
 ## Issues Found
 
-- Initial live state: root, login, and dashboard routes on `allegro.alfares.cz` returned backend 404 because ingress points directly to the backend service.
-- Existing backend `catalog-sell-action` files were already dirty before TASK-009 integration and must be treated as pre-existing or concurrently owned changes unless the integration owner classifies them as required completion work.
+- Initial live state: root, login, and dashboard routes on `allegro.alfares.cz` returned backend 404 because ingress pointed directly to the backend service.
+- TASK-009 deployment attempts temporarily produced public `/` 503 while ingress pointed to frontend without ready endpoints; integration owner restored ingress to the previous backend route after failed rollouts.
+- Kubernetes/container runtime on node `alfares` blocked rollout by leaving new pods in `ContainerCreating` and delaying termination/pull operations across unrelated workloads.
+- Existing backend `catalog-sell-action` files were already dirty before TASK-009 integration; integration owner classified them as required completion work because the dashboard depends on product-scoped status, draft update, and confirm routes.
 
 ## Recommendation
 
@@ -75,4 +82,4 @@ Keep TASK-009 active until worker outputs are integrated, frontend serving is fi
 
 ## Deployment Status
 
-Pending. Source is ready for commit/deploy, but live route evidence must be appended after deployment.
+Blocked by infrastructure. Source and deploy scripts are committed, images build and push, and manifests apply, but rollout cannot complete while new pods on node `alfares` remain stuck in `ContainerCreating` or delayed termination. The public ingress was restored to the previous backend route, so clients still cannot see the new landing/dashboard on `https://allegro.alfares.cz/` yet.
