@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: allegro-frontend
+  namespace: statex-apps
+  labels:
+    app: allegro-frontend
+    managed-by: k8s-migration
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: allegro-frontend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: allegro-frontend
+    spec:
+      containers:
+        - name: app
+          image: localhost:5000/allegro-frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3410
+          startupProbe:
+            httpGet:
+              path: /
+              port: 3410
+            failureThreshold: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3410
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3410
+            periodSeconds: 30
+            failureThreshold: 3
+            timeoutSeconds: 5
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "25m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"

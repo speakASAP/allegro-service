@@ -111,6 +111,69 @@ export class CatalogSellActionService {
     };
   }
 
+  async getProductStatus(catalogProductId: string, requestedByUserId: string): Promise<any> {
+    const accountChoices = await this.listAccountChoices(requestedByUserId);
+    const accountIds = accountChoices.map((account) => account.id).filter(Boolean);
+    const prismaAny = this.prisma as any;
+    const draft = await prismaAny.allegroOffer.findFirst({
+      where: {
+        catalogProductId,
+        ...(accountIds.length ? { accountId: { in: accountIds } } : { accountId: null }),
+      },
+      orderBy: [{ updatedAt: 'desc' }],
+    });
+    const attempt = await prismaAny.allegroPublishAttempt.findFirst({
+      where: {
+        catalogProductId,
+        requestedByUserId,
+      },
+      orderBy: [{ updatedAt: 'desc' }],
+    });
+
+    return {
+      status: attempt?.status || draft?.publicationStatus || null,
+      nextAction: attempt ? this.deriveNextAction(attempt) : draft ? 'confirm_publish' : 'prepare_draft',
+      draft: this.toDraftSummary(draft),
+      attempt: attempt || null,
+      accountChoices,
+      listingUrl: this.toListingUrl(draft),
+      canEditDraft: Boolean(draft && !['ACTIVE'].includes(String(draft.publicationStatus || '').toUpperCase())),
+      canConfirmPublish: Boolean(attempt && attempt.status === 'PREPARED'),
+    };
+  }
+
+  async updateProductDraft(catalogProductId: string, dto: PrepareCatalogSellActionDto, requestedByUserId: string): Promise<any> {
+    const current = await this.getProductStatus(catalogProductId, requestedByUserId);
+    const draftId = dto.offerId || current.draft?.id;
+    if (!draftId) {
+      throw new HttpException('Prepare an Allegro draft before editing the product presentation', HttpStatus.CONFLICT);
+    }
+
+    const updatePayload = this.toDraftUpdatePayload(dto);
+    if (Object.keys(updatePayload).length > 0) {
+      await this.offersService.updateOffer(draftId, { ...updatePayload, syncToAllegro: false }, requestedByUserId);
+    }
+
+    const draft = await (this.prisma as any).allegroOffer.findUnique({ where: { id: draftId } });
+    return {
+      status: current.attempt?.status || draft?.publicationStatus || null,
+      nextAction: current.attempt ? this.deriveNextAction(current.attempt) : 'confirm_publish',
+      draft: this.toDraftSummary(draft),
+      attempt: current.attempt || null,
+      listingUrl: this.toListingUrl(draft),
+      canEditDraft: Boolean(draft && !['ACTIVE'].includes(String(draft.publicationStatus || '').toUpperCase())),
+      canConfirmPublish: Boolean(current.attempt && current.attempt.status === 'PREPARED'),
+    };
+  }
+
+  async confirmProductPublish(catalogProductId: string, requestedByUserId: string): Promise<any> {
+    const current = await this.getProductStatus(catalogProductId, requestedByUserId);
+    if (!current.attempt?.id) {
+      throw new HttpException('Prepare an Allegro publish attempt before confirmation', HttpStatus.CONFLICT);
+    }
+    return this.confirm(current.attempt.id, requestedByUserId);
+  }
+
   private async loadCatalogProduct(catalogProductId: string): Promise<any> {
     try {
       return await this.catalogClient.getProductById(catalogProductId);
@@ -280,15 +343,37 @@ export class CatalogSellActionService {
       id: draft.id,
       accountId: draft.accountId || null,
       catalogProductId: draft.catalogProductId || null,
+      allegroOfferId: draft.allegroOfferId || null,
       title: draft.title,
+      description: draft.description || null,
       categoryId: draft.categoryId,
       price: draft.price,
       currency: draft.currency,
       quantity: draft.quantity,
+      stockQuantity: draft.stockQuantity,
       publicationStatus: draft.publicationStatus,
       status: draft.status,
       updatedAt: draft.updatedAt,
     };
+  }
+
+  private toDraftUpdatePayload(dto: PrepareCatalogSellActionDto): Record<string, unknown> {
+    const payload: Record<string, unknown> = {};
+    for (const field of ['title', 'description', 'categoryId', 'price', 'quantity'] as const) {
+      if (dto[field] !== undefined) {
+        payload[field] = dto[field];
+      }
+    }
+    if (dto.quantity !== undefined) {
+      payload.stockQuantity = dto.quantity;
+    }
+    return payload;
+  }
+
+  private toListingUrl(draft: any): string | null {
+    const offerId = draft?.allegroOfferId || draft?.allegroListingId;
+    if (!offerId) return null;
+    return `https://allegro.cz/nabidka/${offerId}`;
   }
 
   private toCatalogSummary(catalogProduct: any): any {
