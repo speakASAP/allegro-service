@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Request, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '@allegro/shared';
 import { BulkPrepareCatalogSellActionDto, PrepareCatalogSellActionDto } from './catalog-sell-action.dto';
 import { CatalogSellActionService } from './catalog-sell-action.service';
@@ -19,6 +19,37 @@ export class CatalogSellActionController {
   async bulkPrepare(@Body() dto: BulkPrepareCatalogSellActionDto, @Request() req: any): Promise<{ success: boolean; data: any }> {
     const userId = String(req.user?.id || req.user?.sub || 'unknown');
     const data = await this.catalogSellActionService.bulkPrepare(dto, userId);
+    return { success: true, data };
+  }
+
+  @Get('products/:catalogProductId/status')
+  async getProductStatus(
+    @Param('catalogProductId') catalogProductId: string,
+    @Request() req: any,
+  ): Promise<{ success: boolean; data: any }> {
+    const userId = String(req.user?.id || req.user?.sub || 'unknown');
+    const data = await this.catalogSellActionService.getProductStatus(catalogProductId, userId);
+    return { success: true, data };
+  }
+
+  @Put('products/:catalogProductId/draft')
+  async updateProductDraft(
+    @Param('catalogProductId') catalogProductId: string,
+    @Body() dto: PrepareCatalogSellActionDto,
+    @Request() req: any,
+  ): Promise<{ success: boolean; data: any }> {
+    const userId = String(req.user?.id || req.user?.sub || 'unknown');
+    const data = await this.catalogSellActionService.updateProductDraft(catalogProductId, dto, userId);
+    return { success: true, data };
+  }
+
+  @Post('products/:catalogProductId/confirm')
+  async confirmProductPublish(
+    @Param('catalogProductId') catalogProductId: string,
+    @Request() req: any,
+  ): Promise<{ success: boolean; data: any }> {
+    const userId = String(req.user?.id || req.user?.sub || 'unknown');
+    const data = await this.catalogSellActionService.confirmProductPublish(catalogProductId, userId);
     return { success: true, data };
   }
 

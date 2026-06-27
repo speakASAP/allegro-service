@@ -5,6 +5,7 @@ import { strict as assert } from 'assert';
           const createdOffers: any[] = [];
           const existingDraft = overrides.existingDraft || null;
           const updatedOffers = new Map<string, any>();
+          const attempts = overrides.attempts || [];
           const accounts = overrides.accounts || [
             { id: '22222222-2222-2222-2222-222222222222', name: 'Primary', isActive: true, tokenExpiresAt: null },
           ];
@@ -13,10 +14,13 @@ import { strict as assert } from 'assert';
             allegroAccount: {
               findMany: async () => accounts,
             },
+            allegroPublishAttempt: {
+              findFirst: async ({ where }: any) => attempts.find((attempt: any) => attempt.catalogProductId === where.catalogProductId && attempt.requestedByUserId === where.requestedByUserId) || null,
+            },
             allegroOffer: {
               findFirst: async ({ where }: any) => {
                 if (where.id && existingDraft && existingDraft.id === where.id) return existingDraft;
-                if (existingDraft && where.catalogProductId === existingDraft.catalogProductId) return existingDraft;
+                if (existingDraft && where.catalogProductId === existingDraft.catalogProductId) return updatedOffers.get(existingDraft.id) || existingDraft;
                 return null;
               },
               findUnique: async ({ where }: any) => updatedOffers.get(where.id) || (existingDraft && existingDraft.id === where.id ? existingDraft : null),
@@ -44,6 +48,12 @@ import { strict as assert } from 'assert';
           };
 
           const offersService = {
+            updateOffer: async (id: string, dto: any) => {
+              const base = updatedOffers.get(id) || existingDraft || { id };
+              const next = { ...base, ...dto, updatedAt: '2026-06-19T00:01:00Z' };
+              updatedOffers.set(id, next);
+              return next;
+            },
             createOffer: async (dto: any) => {
               createdOffers.push(dto);
               return {
@@ -159,11 +169,99 @@ import { strict as assert } from 'assert';
           assert.equal(result.nextAction, 'monitor_publish_queue');
         }
 
+        async function testProductStatusFindsLatestDraftAndAttempt() {
+          const existingDraft = {
+            id: 'existing-offer',
+            accountId: '22222222-2222-2222-2222-222222222222',
+            catalogProductId: '33333333-3333-3333-3333-333333333333',
+            allegroOfferId: 'offer-123',
+            title: 'Existing draft',
+            categoryId: 'cat-123',
+            price: 109,
+            currency: 'PLN',
+            quantity: 5,
+            publicationStatus: 'INACTIVE',
+            status: 'DRAFT',
+            updatedAt: '2026-06-19T00:00:00Z',
+          };
+          const { service } = createHarness({
+            existingDraft,
+            attempts: [{
+              id: 'attempt-1',
+              status: 'PREPARED',
+              catalogProductId: existingDraft.catalogProductId,
+              requestedByUserId: 'user-1',
+            }],
+          });
+
+          const result = await service.getProductStatus(existingDraft.catalogProductId, 'user-1');
+
+          assert.equal(result.draft.id, 'existing-offer');
+          assert.equal(result.attempt.id, 'attempt-1');
+          assert.equal(result.canConfirmPublish, true);
+          assert.equal(result.listingUrl, 'https://allegro.cz/nabidka/offer-123');
+        }
+
+        async function testProductDraftEditStaysLocal() {
+          const existingDraft = {
+            id: 'existing-offer',
+            accountId: '22222222-2222-2222-2222-222222222222',
+            catalogProductId: '33333333-3333-3333-3333-333333333333',
+            title: 'Existing draft',
+            categoryId: 'cat-123',
+            price: 109,
+            currency: 'PLN',
+            quantity: 5,
+            publicationStatus: 'INACTIVE',
+            status: 'DRAFT',
+            updatedAt: '2026-06-19T00:00:00Z',
+          };
+          const { service } = createHarness({ existingDraft });
+
+          const result = await service.updateProductDraft(existingDraft.catalogProductId, { catalogProductId: existingDraft.catalogProductId, title: 'Edited title', price: 199 }, 'user-1');
+
+          assert.equal(result.draft.title, 'Edited title');
+          assert.equal(Number(result.draft.price), 199);
+        }
+
+        async function testConfirmProductPublishUsesLatestAttempt() {
+          const existingDraft = {
+            id: 'existing-offer',
+            accountId: '22222222-2222-2222-2222-222222222222',
+            catalogProductId: '33333333-3333-3333-3333-333333333333',
+            title: 'Existing draft',
+            categoryId: 'cat-123',
+            price: 109,
+            currency: 'PLN',
+            quantity: 5,
+            publicationStatus: 'INACTIVE',
+            status: 'DRAFT',
+            updatedAt: '2026-06-19T00:00:00Z',
+          };
+          const { service } = createHarness({
+            existingDraft,
+            attempts: [{
+              id: 'attempt-1',
+              status: 'PREPARED',
+              catalogProductId: existingDraft.catalogProductId,
+              requestedByUserId: 'user-1',
+            }],
+          });
+
+          const result = await service.confirmProductPublish(existingDraft.catalogProductId, 'user-1');
+
+          assert.equal(result.status, 'QUEUED');
+          assert.equal(result.nextAction, 'monitor_publish_queue');
+        }
+
         export async function runCatalogSellActionSpec(): Promise<void> {
           await testPrepareCreatesNewDraftAndReturnsConfirmAction();
           await testPrepareReusesExistingDraft();
           await testBulkPrepareAssignsSequentialRateLimitSlots();
           await testConfirmQueuesWithoutExecuting();
+          await testProductStatusFindsLatestDraftAndAttempt();
+          await testProductDraftEditStaysLocal();
+          await testConfirmProductPublishUsesLatestAttempt();
         }
 
         if (require.main === module) {
