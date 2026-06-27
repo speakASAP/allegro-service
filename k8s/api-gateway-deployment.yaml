@@ -27,7 +27,15 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 3411
+          envFrom:
+            - configMapRef:
+                name: allegro-config
           env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: database-credentials
+                  key: DB_PASSWORD
             - name: NODE_ENV
               value: "production"
             - name: API_GATEWAY_PORT
