@@ -87,11 +87,35 @@ deploy_timing_phase_end "Push images"
 
 deploy_timing_phase_start "Apply Kubernetes manifests"
 echo -e "${YELLOW}Applying Kubernetes manifests...${NC}"
-for manifest in configmap.yaml external-secret.yaml deployment.yaml service.yaml api-gateway-deployment.yaml api-gateway-service.yaml frontend-deployment.yaml frontend-service.yaml ingress.yaml; do
+
+apply_static_manifest() {
+  local manifest="$1"
   if [ -f "$K8S_DIR/$manifest" ]; then
     kubectl apply -f "$K8S_DIR/$manifest" -n "$NAMESPACE"
   fi
-done
+}
+
+apply_deployment_manifest() {
+  local manifest="$1"
+  local image_name="$2"
+  local image="$3"
+  local rendered
+  rendered="$(mktemp)"
+  sed "s|image: ${REGISTRY}/${image_name}:latest|image: ${image}|" "$K8S_DIR/$manifest" > "$rendered"
+  kubectl apply -f "$rendered" -n "$NAMESPACE"
+  rm -f "$rendered"
+}
+
+apply_static_manifest configmap.yaml
+apply_static_manifest external-secret.yaml
+apply_deployment_manifest deployment.yaml "$SERVICE_NAME" "$SERVICE_IMAGE"
+apply_static_manifest service.yaml
+apply_deployment_manifest api-gateway-deployment.yaml "$API_GATEWAY_NAME" "$API_GATEWAY_IMAGE"
+apply_static_manifest api-gateway-service.yaml
+apply_deployment_manifest frontend-deployment.yaml "$FRONTEND_NAME" "$FRONTEND_IMAGE"
+apply_static_manifest frontend-service.yaml
+apply_static_manifest ingress.yaml
+
 echo -e "${GREEN}OK Kubernetes manifests applied${NC}"
 deploy_timing_phase_end "Apply Kubernetes manifests"
 
