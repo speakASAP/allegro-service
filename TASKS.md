@@ -4,10 +4,11 @@
 
 ## Backlog
 <!-- Human-managed -->
-None - all listed revenue roadmap tasks are completed or frozen until the owner explicitly creates a new runtime implementation task.
+Owner created TASK-009 runtime/UI implementation goal on 2026-06-27.
 
 ## Active
 <!-- Coordinator-maintained -->
+- 2026-06-27 TASK-009-public-client-landing-dashboard-active: owner-approved goal to create Allegro landing and registered-client dashboard using Bazos UI as reference, with Catalog product selection and governed Allegro publish flow.
 
 ## Completed
 <!-- Coordinator-append-only -->
@@ -23,4 +24,5 @@ None - all listed revenue roadmap tasks are completed or frozen until the owner 
 
 ## Project Completion Marker
 
-- 2026-06-21: Project marked completed/frozen after TASK-006 validation. There are no active goals, active plans, open tasks, blockers, or pending human/AI actions. Do not ask for a new goal during routine status checks unless the owner explicitly creates one.
+- 2026-06-21: Project marked completed/frozen after TASK-006 validation.
+- 2026-06-27: Owner explicitly created TASK-009 to add public Allegro landing and registered-client dashboard; project is active again until TASK-009 validation closes.

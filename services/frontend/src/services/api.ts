@@ -455,5 +455,62 @@ export const allegroAccountApi = {
   },
 };
 
+
+export interface CatalogProductsQuery {
+  page?: number;
+  limit?: number;
+  search?: string;
+  includeRaw?: boolean;
+}
+
+export interface PrepareCatalogSellActionPayload {
+  catalogProductId: string;
+  offerId?: string;
+  accountId?: string;
+  categoryId?: string;
+  title?: string;
+  description?: string;
+  price?: number;
+  quantity?: number;
+  idempotencyKey?: string;
+  forceNewDraft?: boolean;
+}
+
+export const catalogProductsApi = {
+  getProducts: (query: CatalogProductsQuery = {}) => {
+    return api.get('/allegro/products', { params: query });
+  },
+
+  getProduct: (id: string) => {
+    return api.get(`/allegro/products/${id}`);
+  },
+};
+
+export const catalogSellActionApi = {
+  prepare: (payload: PrepareCatalogSellActionPayload) => {
+    return api.post('/allegro/catalog-sell/prepare', payload);
+  },
+
+  getProductStatus: (catalogProductId: string) => {
+    return api.get(`/allegro/catalog-sell/products/${catalogProductId}/status`);
+  },
+
+  updateProductDraft: (catalogProductId: string, payload: PrepareCatalogSellActionPayload) => {
+    return api.put(`/allegro/catalog-sell/products/${catalogProductId}/draft`, payload);
+  },
+
+  confirmProductPublish: (catalogProductId: string) => {
+    return api.post(`/allegro/catalog-sell/products/${catalogProductId}/confirm`);
+  },
+
+  getAttemptStatus: (attemptId: string) => {
+    return api.get(`/allegro/catalog-sell/${attemptId}/status`);
+  },
+
+  confirmAttempt: (attemptId: string) => {
+    return api.post(`/allegro/catalog-sell/${attemptId}/confirm`);
+  },
+};
+
 export default api;
 

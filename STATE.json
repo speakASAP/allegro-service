@@ -5,18 +5,20 @@
   "health": "ok",
   "cycle": 5,
   "last_cycle_at": "2026-06-21T01:02:21Z",
-  "tasks_active": 0,
+  "tasks_active": 1,
   "tasks_failed_last_cycle": 0,
-  "open_task_ids": [],
+  "open_task_ids": [
+    "TASK-009"
+  ],
   "last_milestone": "task-006-stock-order-profit-loop-contract-validated",
-  "next_focus": "Project completed/frozen: TASK-006 contract-first slice validated, no open goals, plans, tasks, blockers, or human/AI actions pending as of 2026-06-21.",
+  "next_focus": "TASK-009 active: create public Allegro landing and registered-client dashboard on allegro.alfares.cz using Bazos as reference, connected to Catalog product selection and governed Allegro publish flow.",
   "blockers": [],
   "budget_units_used": 0,
   "metrics": {
     "custom": {
       "planned_milestones": 7,
-      "planned_revenue_tasks": 7,
-      "active_revenue_task": null,
+      "planned_revenue_tasks": 8,
+      "active_revenue_task": "TASK-009",
       "completed_revenue_tasks": [
         "TASK-002",
         "TASK-003",
@@ -28,8 +30,6 @@
       ]
     }
   },
-  "project_status": "completed_frozen",
-  "completed_at": "2026-06-21",
-  "frozen_at": "2026-06-21",
-  "updated_at": "2026-06-21"
+  "project_status": "active",
+  "updated_at": "2026-06-27"
 }

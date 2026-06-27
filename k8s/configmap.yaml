@@ -21,4 +21,5 @@ data:
   DB_NAME: "allegro"
   DB_SYNC: "false"
   DB_AUTO_CREATE: "true"
+  LOGGING_SERVICE_URL: "http://logging-microservice:3367"
   # TIMEOUT_MS: "30000"

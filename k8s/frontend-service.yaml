@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: allegro-frontend
+  namespace: statex-apps
+  labels:
+    app: allegro-frontend
+    managed-by: k8s-migration
+spec:
+  type: ClusterIP
+  selector:
+    app: allegro-frontend
+  ports:
+    - protocol: TCP
+      port: 3410
+      targetPort: 3410
+      name: app

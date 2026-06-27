@@ -1,52 +1,45 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import api from '../services/api';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { AxiosError } from 'axios';
+import {
+  catalogProductsApi,
+  catalogSellActionApi,
+  PrepareCatalogSellActionPayload,
+} from '../services/api';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
-import { Modal } from '../components/Modal';
-import { AxiosError } from 'axios';
 
-interface ProductParameter {
-  parameterId: string;
-  name?: string;
-  values?: unknown[] | string | null;
-  valuesIds?: unknown[] | null;
-  rangeValue?: unknown | null;
-}
-
-type RawProductParam = {
-  id?: string | number;
-  name?: string;
-  values?: Array<string | { name?: string }> | string[];
-  valuesIds?: Array<string | number> | null;
-  rangeValue?: unknown | null;
-};
-
-type RawProduct = {
-  id?: string;
-  name?: string;
-  brand?: string;
-  manufacturerCode?: string;
-  ean?: string;
-  publication?: { status?: string };
-  isAiCoCreated?: boolean;
-  parameters?: RawProductParam[];
-};
-
-interface Product {
+interface CatalogProduct {
   id: string;
-  allegroProductId: string;
-  name?: string;
-  brand?: string;
-  manufacturerCode?: string;
-  ean?: string;
-  publicationStatus?: string;
-  isAiCoCreated?: boolean;
-  marketedBeforeGPSR?: boolean | null;
-  rawData?: { product?: RawProduct; marketedBeforeGPSRObligation?: boolean; [key: string]: unknown };
-  parameters?: ProductParameter[];
-  createdAt?: string;
-  updatedAt?: string;
+  allegroProductId?: string;
+  name?: string | null;
+  title?: string | null;
+  brand?: string | null;
+  manufacturerCode?: string | null;
+  ean?: string | null;
+  publicationStatus?: string | null;
+  parameters?: unknown[];
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  catalogProduct?: {
+    id?: string;
+    sku?: string;
+    title?: string;
+    name?: string;
+    description?: string;
+    shortDescription?: string;
+    brand?: string;
+    ean?: string;
+    categoryId?: string;
+    allegroCategoryId?: string;
+    price?: { gross?: number; currency?: string } | number;
+    salePrice?: number;
+    quantity?: number;
+    stock?: number;
+    stockQuantity?: number;
+    images?: Array<string | { url?: string; src?: string }>;
+    media?: Array<string | { url?: string; src?: string }>;
+  } | null;
 }
 
 interface Pagination {
@@ -56,527 +49,531 @@ interface Pagination {
   totalPages: number;
 }
 
+interface DraftSummary {
+  id?: string;
+  accountId?: string | null;
+  catalogProductId?: string | null;
+  allegroOfferId?: string | null;
+  title?: string | null;
+  description?: string | null;
+  categoryId?: string | null;
+  price?: number | string | null;
+  currency?: string | null;
+  quantity?: number | string | null;
+  stockQuantity?: number | string | null;
+  publicationStatus?: string | null;
+  status?: string | null;
+  updatedAt?: string | null;
+}
+
+interface AccountChoice {
+  id: string;
+  name?: string;
+  isActive?: boolean;
+  tokenExpiresAt?: string | null;
+}
+
+interface CatalogSellStatus {
+  status?: string | null;
+  nextAction?: string | null;
+  draft?: DraftSummary | null;
+  attempt?: { id?: string; status?: string; blockedReasons?: string[] } | null;
+  accountChoices?: AccountChoice[];
+  categoryChoice?: { selectedCategoryId?: string | null; source?: string | null };
+  catalogProduct?: { id?: string; sku?: string; title?: string; brand?: string; ean?: string } | null;
+  listingUrl?: string | null;
+  canEditDraft?: boolean;
+  canConfirmPublish?: boolean;
+}
+
+interface DraftForm {
+  title: string;
+  description: string;
+  categoryId: string;
+  price: string;
+  quantity: string;
+  accountId: string;
+  forceNewDraft: boolean;
+}
+
 const defaultPagination: Pagination = { page: 1, limit: 20, total: 0, totalPages: 1 };
 
+const unwrapData = <T,>(body: unknown): T => {
+  const response = body as { data?: T };
+  return (response?.data ?? body) as T;
+};
+
+const getErrorMessage = (err: unknown, fallback: string) => {
+  const axiosErr = err as AxiosError & { serviceErrorMessage?: string };
+  const responseMessage = (axiosErr.response?.data as { error?: { message?: string }; message?: string } | undefined)?.error?.message
+    || (axiosErr.response?.data as { message?: string } | undefined)?.message;
+  return axiosErr.serviceErrorMessage || responseMessage || axiosErr.message || fallback;
+};
+
+const productTitle = (product: CatalogProduct | null) => (
+  product?.name
+  || product?.title
+  || product?.catalogProduct?.title
+  || product?.catalogProduct?.name
+  || product?.allegroProductId
+  || product?.id
+  || ''
+);
+
+const productSku = (product: CatalogProduct | null) => product?.catalogProduct?.sku || product?.allegroProductId || product?.id || '';
+
+const productPrice = (product: CatalogProduct | null) => {
+  const price = product?.catalogProduct?.price;
+  if (typeof price === 'number') return String(price);
+  if (price && typeof price === 'object' && price.gross !== undefined) return String(price.gross);
+  if (product?.catalogProduct?.salePrice !== undefined) return String(product.catalogProduct.salePrice);
+  return '';
+};
+
+const productQuantity = (product: CatalogProduct | null) => {
+  const value = product?.catalogProduct?.stockQuantity
+    ?? product?.catalogProduct?.quantity
+    ?? product?.catalogProduct?.stock;
+  return value !== undefined && value !== null ? String(value) : '';
+};
+
+const productCategory = (product: CatalogProduct | null) => (
+  product?.catalogProduct?.allegroCategoryId
+  || product?.catalogProduct?.categoryId
+  || ''
+);
+
+const productDescription = (product: CatalogProduct | null) => (
+  product?.catalogProduct?.description
+  || product?.catalogProduct?.shortDescription
+  || ''
+);
+
+const formatDate = (value?: string | null) => value ? new Date(value).toLocaleString() : '-';
+
+const buildInitialForm = (product: CatalogProduct | null, status?: CatalogSellStatus | null): DraftForm => {
+  const draft = status?.draft;
+  return {
+    title: String(draft?.title || productTitle(product)),
+    description: String(draft?.description || productDescription(product)),
+    categoryId: String(draft?.categoryId || status?.categoryChoice?.selectedCategoryId || productCategory(product)),
+    price: draft?.price !== undefined && draft?.price !== null ? String(draft.price) : productPrice(product),
+    quantity: draft?.quantity !== undefined && draft?.quantity !== null ? String(draft.quantity) : productQuantity(product),
+    accountId: String(draft?.accountId || status?.accountChoices?.[0]?.id || ''),
+    forceNewDraft: false,
+  };
+};
+
 const ProductsPage: React.FC = () => {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [pagination, setPagination] = useState<Pagination>(defaultPagination);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [statusByProduct, setStatusByProduct] = useState<Record<string, CatalogSellStatus>>({});
+  const [statusErrors, setStatusErrors] = useState<Record<string, string>>({});
+  const [draftForm, setDraftForm] = useState<DraftForm>(buildInitialForm(null));
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [deletingAll, setDeletingAll] = useState(false);
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [modalOpen, setModalOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [selected, setSelected] = useState<Product | null>(null);
-  const [form, setForm] = useState({
-    allegroProductId: '',
-    name: '',
-    brand: '',
-    manufacturerCode: '',
-    ean: '',
-    publicationStatus: '',
-    isAiCoCreated: false,
-    marketedBeforeGPSR: false,
-    rawDataText: '',
-    parametersText: '',
-  });
+
+  const selectedProduct = useMemo(
+    () => products.find((product) => product.id === selectedId) || products[0] || null,
+    [products, selectedId],
+  );
+  const selectedStatus = selectedProduct ? statusByProduct[selectedProduct.id] : null;
+  const selectedStatusError = selectedProduct ? statusErrors[selectedProduct.id] : null;
+  const accountChoices = selectedStatus?.accountChoices || [];
+  const sellActionUnavailable = Boolean(selectedStatusError);
+  const hasPreparedDraft = Boolean(selectedStatus?.draft?.id);
+  const canEditDraft = Boolean(selectedStatus?.canEditDraft && hasPreparedDraft && !sellActionUnavailable);
+  const canConfirmPublish = Boolean(selectedStatus?.canConfirmPublish && !sellActionUnavailable);
+
+  const loadStatus = useCallback(async (catalogProductId: string) => {
+    try {
+      const res = await catalogSellActionApi.getProductStatus(catalogProductId);
+      const status = unwrapData<CatalogSellStatus>(res.data);
+      setStatusByProduct((prev) => ({ ...prev, [catalogProductId]: status }));
+      setStatusErrors((prev) => {
+        const next = { ...prev };
+        delete next[catalogProductId];
+        return next;
+      });
+      return status;
+    } catch (err) {
+      const message = getErrorMessage(err, 'Catalog sell-action status endpoint is not reachable');
+      setStatusErrors((prev) => ({ ...prev, [catalogProductId]: message }));
+      return null;
+    }
+  }, []);
 
   const loadProducts = useCallback(async (page = 1) => {
     setLoading(true);
+    setError(null);
+    setSuccess(null);
     try {
-      const res = await api.get('/allegro/products', {
-        params: { page, limit: pagination.limit, search },
+      const res = await catalogProductsApi.getProducts({
+        page,
+        limit: pagination.limit,
+        search: search || undefined,
+        includeRaw: true,
       });
-      const data = res.data?.data;
-      setProducts(data?.items || []);
-      setPagination(data?.pagination || defaultPagination);
-      setError(null);
+      const data = unwrapData<{ items?: CatalogProduct[]; pagination?: Pagination }>(res.data);
+      const nextProducts = data.items || [];
+      setProducts(nextProducts);
+      setPagination(data.pagination || defaultPagination);
+      setSelectedId((current) => current && nextProducts.some((product) => product.id === current)
+        ? current
+        : nextProducts[0]?.id || null);
+      await Promise.all(nextProducts.slice(0, 8).map((product) => loadStatus(product.id)));
     } catch (err) {
-      console.error('Failed to load products', err);
-      const axiosErr = err as AxiosError & { serviceErrorMessage?: string };
-      setError(axiosErr.serviceErrorMessage || axiosErr.message || 'Failed to load products');
+      setError(getErrorMessage(err, 'Failed to load catalog products'));
     } finally {
       setLoading(false);
     }
-  }, [pagination.limit, search]);
+  }, [loadStatus, pagination.limit, search]);
 
   useEffect(() => {
     loadProducts(1);
   }, [loadProducts]);
 
-  const openCreate = () => {
-    setSelected(null);
-    setForm({
-      allegroProductId: '',
-      name: '',
-      brand: '',
-      manufacturerCode: '',
-      ean: '',
-      publicationStatus: '',
-      isAiCoCreated: false,
-      marketedBeforeGPSR: false,
-      rawDataText: JSON.stringify({}, null, 2),
-      parametersText: '',
-    });
-    setModalOpen(true);
-  };
+  useEffect(() => {
+    setDraftForm(buildInitialForm(selectedProduct, selectedStatus));
+  }, [selectedProduct, selectedStatus]);
 
-  const applyRawToForm = (raw: { product?: RawProduct; marketedBeforeGPSRObligation?: boolean; [key: string]: unknown }) => {
-    if (!raw || !raw.product) return;
-    const product = raw.product;
-    const params = Array.isArray(product.parameters) ? product.parameters : [];
-    const findParamVal = (id: string, name?: string) => {
-      const p = params.find((param: RawProductParam) => param.id?.toString() === id || param.name === name);
-      if (!p?.values || p.values.length === 0) return undefined;
-      const v = p.values[0] as string | { name?: string };
-      return typeof v === 'string' ? v : v?.name;
-    };
-
-    setForm((prev) => ({
-      ...prev,
-      allegroProductId: product.id || prev.allegroProductId,
-      name: product.name || prev.name,
-      brand: findParamVal('248811', 'Značka') || product.brand || prev.brand,
-      manufacturerCode: findParamVal('224017', 'Kód výrobce') || product.manufacturerCode || prev.manufacturerCode,
-      ean: findParamVal('225693', 'EAN (GTIN)') || product.ean || prev.ean,
-      publicationStatus: product.publication?.status || prev.publicationStatus,
-      isAiCoCreated: product.isAiCoCreated ?? prev.isAiCoCreated,
-      marketedBeforeGPSR: raw.marketedBeforeGPSRObligation ?? prev.marketedBeforeGPSR,
-      rawDataText: JSON.stringify(raw, null, 2),
-      parametersText: params.length > 0 ? JSON.stringify(params, null, 2) : '',
-    }));
-  };
-
-  const openEdit = async (product: Product) => {
-    setError(null);
-    setDetailLoading(true);
-    setModalOpen(true);
+  const refreshSelectedStatus = async () => {
+    if (!selectedProduct) return;
+    setStatusLoading(true);
     try {
-      const res = await api.get(`/allegro/products/${product.id}`);
-      const body = res.data as any;
-      const full: Product = (body && body.data) || body || product;
-      setSelected(full);
-      setForm({
-        allegroProductId: full.allegroProductId || product.allegroProductId || '',
-        name: full.name || product.name || '',
-        brand: full.brand || product.brand || '',
-        manufacturerCode: full.manufacturerCode || product.manufacturerCode || '',
-        ean: full.ean || product.ean || '',
-        publicationStatus: full.publicationStatus || product.publicationStatus || '',
-        isAiCoCreated: !!(full.isAiCoCreated ?? product.isAiCoCreated),
-        marketedBeforeGPSR: full.marketedBeforeGPSR ?? product.marketedBeforeGPSR ?? false,
-        rawDataText: JSON.stringify(full.rawData || product.rawData || {}, null, 2),
-        parametersText:
-          (full.parameters && full.parameters.length > 0
-            ? JSON.stringify(full.parameters, null, 2)
-            : product.parameters && product.parameters.length > 0
-              ? JSON.stringify(product.parameters, null, 2)
-              : ''),
-      });
-      if (full.rawData) {
-        applyRawToForm(full.rawData as any);
-      }
-    } catch (err) {
-      console.error('Failed to load product detail', err);
-      const axiosErr = err as AxiosError & { serviceErrorMessage?: string };
-      setError(axiosErr.serviceErrorMessage || axiosErr.message || 'Failed to load product details');
+      await loadStatus(selectedProduct.id);
     } finally {
-      setDetailLoading(false);
+      setStatusLoading(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this product?')) return;
-    try {
-      await api.delete(`/allegro/products/${id}`);
-      await loadProducts(pagination.page);
-    } catch (err) {
-      console.error('Failed to delete product', err);
-      const axiosErr = err as AxiosError & { serviceErrorMessage?: string };
-      setError(axiosErr.serviceErrorMessage || axiosErr.message || 'Failed to delete product');
-    }
+  const preparePayload = (): PrepareCatalogSellActionPayload | null => {
+    if (!selectedProduct) return null;
+    return {
+      catalogProductId: selectedProduct.id,
+      accountId: draftForm.accountId || undefined,
+      offerId: selectedStatus?.draft?.id || undefined,
+      categoryId: draftForm.categoryId || undefined,
+      title: draftForm.title || undefined,
+      description: draftForm.description || undefined,
+      price: draftForm.price ? Number(draftForm.price) : undefined,
+      quantity: draftForm.quantity ? Number(draftForm.quantity) : undefined,
+      forceNewDraft: draftForm.forceNewDraft || undefined,
+    };
   };
 
-  const handleSyncProducts = async () => {
-    if (!window.confirm('Sync all AllegroProducts to catalog? This will create catalog products for products that don\'t exist yet.')) return;
-    
-    setSyncing(true);
+  const handlePrepareDraft = async () => {
+    const payload = preparePayload();
+    if (!selectedProduct || !payload) return;
+    setPreparing(true);
     setError(null);
     setSuccess(null);
-    
     try {
-      // ⚠️ CRITICAL: If this timeout triggers, check logs - this is a code issue, not a timing issue!
-      // We have max 30 items, Docker network is fast. Don't increase timeout - fix the hanging code!
-      const res = await api.post('/allegro/products/sync', {}, {
-        timeout: 300000, // 5 minutes timeout for sync operation
+      const res = await catalogSellActionApi.prepare(payload);
+      const status = unwrapData<CatalogSellStatus>(res.data);
+      setStatusByProduct((prev) => ({ ...prev, [selectedProduct.id]: status }));
+      setStatusErrors((prev) => {
+        const next = { ...prev };
+        delete next[selectedProduct.id];
+        return next;
       });
-      const data = res.data?.data;
-      
-      if (data) {
-        const message = `Sync completed: ${data.created} created, ${data.updated} updated, ${data.errors} errors (${data.total} total)`;
-        setSuccess(message);
-        // Refresh products list after sync
-        await loadProducts(1);
-      } else {
-        setSuccess('Sync completed successfully');
-        await loadProducts(1);
-      }
+      setSuccess('Allegro draft prepared locally. Review the draft before confirmation.');
     } catch (err) {
-      console.error('Failed to sync products', err);
-      const axiosErr = err as AxiosError & { serviceErrorMessage?: string };
-      setError(axiosErr.serviceErrorMessage || axiosErr.message || 'Failed to sync products');
+      setError(getErrorMessage(err, 'Failed to prepare Allegro draft from catalog product'));
     } finally {
-      setSyncing(false);
+      setPreparing(false);
     }
   };
 
-  const handleSave = async () => {
-    setSaving(true);
+  const handleSaveDraft = async () => {
+    const payload = preparePayload();
+    if (!selectedProduct || !payload) return;
+    setSavingDraft(true);
+    setError(null);
+    setSuccess(null);
     try {
-      let rawDataParsed: Record<string, unknown> | { product?: RawProduct } = {};
-      let parametersParsed: ProductParameter[] | undefined;
-
-      if (form.rawDataText) {
-        rawDataParsed = JSON.parse(form.rawDataText);
-      }
-      if (form.parametersText.trim()) {
-        const parsed = JSON.parse(form.parametersText);
-        parametersParsed = Array.isArray(parsed) ? (parsed as ProductParameter[]) : [];
-      }
-
-      const payload: {
-        allegroProductId?: string;
-        name?: string;
-        brand?: string;
-        manufacturerCode?: string;
-        ean?: string;
-        publicationStatus?: string;
-        isAiCoCreated?: boolean;
-        marketedBeforeGPSR?: boolean;
-        rawData?: Record<string, unknown> | { product?: RawProduct };
-        parameters?: ProductParameter[];
-      } = {
-        allegroProductId: form.allegroProductId || undefined,
-        name: form.name || undefined,
-        brand: form.brand || undefined,
-        manufacturerCode: form.manufacturerCode || undefined,
-        ean: form.ean || undefined,
-        publicationStatus: form.publicationStatus || undefined,
-        isAiCoCreated: !!form.isAiCoCreated,
-        marketedBeforeGPSR: form.marketedBeforeGPSR,
-        rawData: rawDataParsed,
-        parameters: parametersParsed,
-      };
-
-      if (selected) {
-        await api.put(`/allegro/products/${selected.id}`, payload);
-      } else {
-        await api.post('/allegro/products', payload);
-      }
-
-      setModalOpen(false);
-      await loadProducts(pagination.page);
+      const res = await catalogSellActionApi.updateProductDraft(selectedProduct.id, payload);
+      const status = unwrapData<CatalogSellStatus>(res.data);
+      setStatusByProduct((prev) => ({ ...prev, [selectedProduct.id]: status }));
+      setSuccess('Draft fields saved locally. This did not publish to Allegro.');
     } catch (err) {
-      console.error('Failed to save product', err);
-      if (err instanceof SyntaxError) {
-        setError('Invalid JSON in raw data or parameters');
-      } else {
-        const axiosErr = err as AxiosError & { serviceErrorMessage?: string };
-        setError(axiosErr.serviceErrorMessage || axiosErr.message || 'Failed to save product');
-      }
+      setError(getErrorMessage(err, 'Failed to update draft fields'));
     } finally {
-      setSaving(false);
+      setSavingDraft(false);
+    }
+  };
+
+  const handleConfirmPublish = async () => {
+    if (!selectedProduct || !canConfirmPublish) return;
+    const confirmed = window.confirm('Confirm publishing this prepared draft to the guarded Allegro queue? This is the explicit approval step.');
+    if (!confirmed) return;
+    setConfirming(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await catalogSellActionApi.confirmProductPublish(selectedProduct.id);
+      const status = unwrapData<CatalogSellStatus>(res.data);
+      setStatusByProduct((prev) => ({ ...prev, [selectedProduct.id]: status }));
+      setSuccess('Publish confirmation accepted. The guarded Allegro queue will process the prepared draft.');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to confirm Allegro publish'));
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const selectProduct = async (product: CatalogProduct) => {
+    setSelectedId(product.id);
+    if (!statusByProduct[product.id] && !statusErrors[product.id]) {
+      setStatusLoading(true);
+      try {
+        await loadStatus(product.id);
+      } finally {
+        setStatusLoading(false);
+      }
     }
   };
 
   return (
-    <div className="space-y-4">
-        <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold">Products</h2>
-            <p className="text-gray-600">Manage Allegro products extracted from offers</p>
+          <p className="text-sm font-medium uppercase tracking-wide text-blue-700">Catalog publishing</p>
+          <h2 className="text-2xl font-semibold text-gray-900">Sell catalog products on Allegro</h2>
+          <p className="mt-1 max-w-3xl text-sm text-gray-600">
+            Select a Catalog product, prepare a local Allegro draft, review editable fields, then confirm explicitly. No autonomous publish happens from this screen.
+          </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => loadProducts(pagination.page)} disabled={loading}>
-            {loading ? 'Refreshing...' : 'Refresh'}
-          </Button>
-          <Button variant="secondary" onClick={handleSyncProducts} disabled={syncing || loading}>
-            {syncing ? 'Syncing...' : 'Sync Products'}
-          </Button>
-          <Button onClick={openCreate}>Add Product</Button>
-          <Button
-            onClick={async () => {
-              const total = pagination.total;
-              if (!window.confirm(`⚠️ WARNING: This will delete ALL ${total} products from the database. This action cannot be undone!\n\nAre you sure you want to continue?`)) {
-                return;
-              }
-              if (!window.confirm(`⚠️ FINAL CONFIRMATION: You are about to permanently delete ALL ${total} products.\n\nType "DELETE ALL" to confirm (case sensitive):`)) {
-                return;
-              }
-              const confirmation = window.prompt('Type "DELETE ALL" to confirm:');
-              if (confirmation !== 'DELETE ALL') {
-                setError('Deletion cancelled. Confirmation text did not match.');
-                return;
-              }
-              setDeletingAll(true);
-              setError(null);
-              setSuccess(null);
-              try {
-                const response = await api.delete('/allegro/products/all');
-                if (response.data.success) {
-                  const deleted = response.data.data?.deleted || 0;
-                  setSuccess(`Successfully deleted ${deleted} products`);
-                  await loadProducts(1);
-                }
-              } catch (err) {
-                console.error('Failed to delete all products', err);
-                const axiosErr = err as AxiosError & { serviceErrorMessage?: string };
-                setError(axiosErr.serviceErrorMessage || axiosErr.message || 'Failed to delete all products');
-              } finally {
-                setDeletingAll(false);
-              }
-            }}
-            disabled={deletingAll || loading || pagination.total === 0}
-            style={{ backgroundColor: '#dc2626', color: 'white', borderColor: '#dc2626' }}
-            onMouseEnter={(e) => {
-              if (!deletingAll && !loading && pagination.total > 0) {
-                e.currentTarget.style.backgroundColor = '#b91c1c';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!deletingAll && !loading && pagination.total > 0) {
-                e.currentTarget.style.backgroundColor = '#dc2626';
-              }
-            }}
-          >
-            {deletingAll ? 'Deleting...' : `🗑️ Delete All (${pagination.total})`}
-          </Button>
-        </div>
+        <Button variant="secondary" onClick={() => loadProducts(pagination.page)} disabled={loading}>
+          {loading ? 'Refreshing...' : 'Refresh catalog'}
+        </Button>
       </div>
 
-      <Card>
-        <div className="flex items-center gap-3 mb-4">
-          <Input
-            label="Search"
-            placeholder="Name, brand, EAN, Allegro product ID"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <Button variant="secondary" onClick={() => loadProducts(1)} disabled={loading}>
-            Apply
-          </Button>
-        </div>
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        OAuth/account readiness is required before publish confirmation. Prepare draft is safe: it creates or reuses a local inactive draft and policy attempt, then waits for user confirmation.
+      </div>
 
-        {error && <div className="text-red-600 text-sm mb-3">{error}</div>}
-        {success && <div className="text-green-600 text-sm mb-3">{success}</div>}
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+      {success && <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{success}</div>}
 
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Allegro Product ID</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Name</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Brand</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Manufacturer Code</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">EAN</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Status</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Updated</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Params</th>
-                <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
-              {products.map((product) => (
-                <tr key={product.id}>
-                  <td className="px-4 py-2 text-sm">{product.allegroProductId}</td>
-                  <td className="px-4 py-2 text-sm">{product.name || '—'}</td>
-                  <td className="px-4 py-2 text-sm">{product.brand || '—'}</td>
-                  <td className="px-4 py-2 text-sm">{product.manufacturerCode || '—'}</td>
-                  <td className="px-4 py-2 text-sm">{product.ean || '—'}</td>
-                  <td className="px-4 py-2 text-sm">{product.publicationStatus || '—'}</td>
-                  <td className="px-4 py-2 text-sm">
-                    {product.updatedAt ? new Date(product.updatedAt).toLocaleString() : '—'}
-                  </td>
-                  <td className="px-4 py-2 text-sm">
-                    {product.parameters && product.parameters.length > 0 ? product.parameters.length : '0'}
-                  </td>
-                  <td className="px-4 py-2 text-right space-x-2">
-                    <Button variant="secondary" size="small" onClick={() => openEdit(product)}>
-                      Edit
-                    </Button>
-                    <Button variant="secondary" size="small" onClick={() => handleDelete(product.id)}>
-                      Delete
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-              {products.length === 0 && (
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <Card className="overflow-hidden">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end">
+            <div className="flex-1">
+              <Input
+                label="Search Catalog"
+                placeholder="Product name, SKU, brand, EAN"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </div>
+            <Button variant="secondary" onClick={() => loadProducts(1)} disabled={loading}>
+              Apply
+            </Button>
+          </div>
+
+          <div className="mt-2 overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
                 <tr>
-                  <td className="px-4 py-4 text-center text-sm text-gray-500" colSpan={7}>
-                    {loading ? 'Loading products...' : 'No products found'}
-                  </td>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Catalog product</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Brand / EAN</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Draft status</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Next action</th>
+                  <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Action</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="flex items-center justify-between mt-4">
-          <div className="text-sm text-gray-600">
-            Page {pagination.page} of {pagination.totalPages} ({pagination.total} total)
-          </div>
-          <div className="space-x-2">
-            <Button
-              variant="secondary"
-              size="small"
-              disabled={pagination.page <= 1 || loading}
-              onClick={() => loadProducts(pagination.page - 1)}
-            >
-              Prev
-            </Button>
-            <Button
-              variant="secondary"
-              size="small"
-              disabled={pagination.page >= pagination.totalPages || loading}
-              onClick={() => loadProducts(pagination.page + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={selected ? 'Edit Product' : 'Add Product'}>
-        <div className="space-y-3">
-          {detailLoading && selected && (
-            <div className="text-sm text-gray-600">Loading product details...</div>
-          )}
-          {selected && !detailLoading && (
-            <div className="p-2 bg-gray-50 rounded border text-sm grid grid-cols-2 gap-2">
-              <div><span className="font-medium">Allegro Product ID:</span> {selected.allegroProductId || '—'}</div>
-              <div><span className="font-medium">Publication:</span> {selected.publicationStatus || '—'}</div>
-              <div><span className="font-medium">Brand:</span> {selected.brand || '—'}</div>
-              <div><span className="font-medium">Manufacturer Code:</span> {selected.manufacturerCode || '—'}</div>
-              <div><span className="font-medium">EAN:</span> {selected.ean || '—'}</div>
-              <div><span className="font-medium">AI Co-Created:</span> {selected.isAiCoCreated ? 'Yes' : 'No'}</div>
-              <div><span className="font-medium">Marketed before GPSR:</span> {selected.marketedBeforeGPSR ? 'Yes' : 'No'}</div>
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="Allegro Product ID"
-              value={form.allegroProductId}
-              onChange={(e) => setForm({ ...form, allegroProductId: e.target.value })}
-            />
-            <Input
-              label="Name"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-            <Input
-              label="Brand"
-              value={form.brand}
-              onChange={(e) => setForm({ ...form, brand: e.target.value })}
-            />
-            <Input
-              label="Manufacturer Code"
-              value={form.manufacturerCode}
-              onChange={(e) => setForm({ ...form, manufacturerCode: e.target.value })}
-            />
-            <Input label="EAN" value={form.ean} onChange={(e) => setForm({ ...form, ean: e.target.value })} />
-            <Input
-              label="Publication Status"
-              value={form.publicationStatus}
-              onChange={(e) => setForm({ ...form, publicationStatus: e.target.value })}
-            />
+              </thead>
+              <tbody className="divide-y divide-gray-200 bg-white">
+                {products.map((product) => {
+                  const status = statusByProduct[product.id];
+                  const statusError = statusErrors[product.id];
+                  const active = selectedProduct?.id === product.id;
+                  return (
+                    <tr key={product.id} className={active ? 'bg-blue-50' : ''}>
+                      <td className="px-4 py-3 text-sm">
+                        <div className="font-medium text-gray-900">{productTitle(product)}</div>
+                        <div className="text-xs text-gray-500">{productSku(product)}</div>
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <div>{product.brand || product.catalogProduct?.brand || '-'}</div>
+                        <div className="text-xs text-gray-500">{product.ean || product.catalogProduct?.ean || '-'}</div>
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        {statusError ? (
+                          <span className="text-red-600">Unavailable</span>
+                        ) : (
+                          status?.status || status?.draft?.publicationStatus || 'Not prepared'
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm">{statusError || status?.nextAction || 'prepare_draft'}</td>
+                      <td className="px-4 py-3 text-right">
+                        <Button size="small" variant={active ? 'primary' : 'secondary'} onClick={() => selectProduct(product)}>
+                          {active ? 'Selected' : 'Select'}
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {products.length === 0 && (
+                  <tr>
+                    <td className="px-4 py-8 text-center text-sm text-gray-500" colSpan={5}>
+                      {loading ? 'Loading catalog products...' : 'No catalog products found'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
 
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.isAiCoCreated}
-                onChange={(e) => setForm({ ...form, isAiCoCreated: e.target.checked })}
-              />
-              AI Co-Created
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={!!form.marketedBeforeGPSR}
-                onChange={(e) => setForm({ ...form, marketedBeforeGPSR: e.target.checked })}
-              />
-              Marketed before GPSR
-            </label>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-gray-700">Raw Data (JSON)</label>
-            <textarea
-              className="mt-1 w-full border rounded p-2 font-mono text-sm"
-              rows={8}
-              value={form.rawDataText}
-              onChange={(e) => setForm({ ...form, rawDataText: e.target.value })}
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-gray-700">Parameters (JSON array, optional)</label>
-            <textarea
-              className="mt-1 w-full border rounded p-2 font-mono text-sm"
-              rows={6}
-              placeholder='[{"parameterId":"225693","name":"EAN (GTIN)","values":["4650097695809"]}]'
-              value={form.parametersText}
-              onChange={(e) => setForm({ ...form, parametersText: e.target.value })}
-            />
-          </div>
-
-          {selected && selected.parameters && selected.parameters.length > 0 && (
-            <div className="border rounded p-2 max-h-48 overflow-auto text-sm space-y-1 bg-gray-50">
-              <div className="font-semibold">Existing parameters</div>
-              {selected.parameters.map((param) => {
-                const renderValues = () => {
-                  if (!param.values) return '—';
-                  if (Array.isArray(param.values)) {
-                    return (param.values as unknown[]).map((v) => (typeof v === 'string' ? v : JSON.stringify(v))).join(', ');
-                  }
-                  return typeof param.values === 'string' ? param.values : JSON.stringify(param.values);
-                };
-                return (
-                  <div key={`${param.parameterId}-${param.name || ''}`}>
-                    <span className="font-medium">{param.name || param.parameterId}:</span>{' '}
-                    <span>{renderValues()}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          <div className="flex justify-end gap-2">
-            {selected?.rawData && !detailLoading && (
-              <Button
-                variant="secondary"
-                onClick={() => selected.rawData && applyRawToForm(selected.rawData)}
-                disabled={saving}
-              >
-                Refresh from raw
+          <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
+            <div>Page {pagination.page} of {pagination.totalPages} ({pagination.total} total)</div>
+            <div className="space-x-2">
+              <Button variant="secondary" size="small" disabled={pagination.page <= 1 || loading} onClick={() => loadProducts(pagination.page - 1)}>
+                Prev
               </Button>
-            )}
-            <Button variant="secondary" onClick={() => setModalOpen(false)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? 'Saving...' : 'Save'}
-            </Button>
+              <Button variant="secondary" size="small" disabled={pagination.page >= pagination.totalPages || loading} onClick={() => loadProducts(pagination.page + 1)}>
+                Next
+              </Button>
+            </div>
           </div>
+        </Card>
+
+        <div className="space-y-4">
+          <Card title="Selected product">
+            {selectedProduct ? (
+              <div className="space-y-3 text-sm">
+                <div>
+                  <div className="text-lg font-semibold text-gray-900">{productTitle(selectedProduct)}</div>
+                  <div className="text-gray-500">{productSku(selectedProduct)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><span className="font-medium">Brand:</span> {selectedProduct.brand || selectedProduct.catalogProduct?.brand || '-'}</div>
+                  <div><span className="font-medium">EAN:</span> {selectedProduct.ean || selectedProduct.catalogProduct?.ean || '-'}</div>
+                  <div><span className="font-medium">Catalog category:</span> {productCategory(selectedProduct) || '[MISSING: catalog category]'}</div>
+                  <div><span className="font-medium">Updated:</span> {formatDate(selectedProduct.updatedAt)}</div>
+                </div>
+                <Button variant="secondary" size="small" onClick={refreshSelectedStatus} disabled={statusLoading}>
+                  {statusLoading ? 'Checking...' : 'Refresh publish status'}
+                </Button>
+                {selectedStatusError && (
+                  <div className="rounded border border-red-200 bg-red-50 p-2 text-red-700">
+                    Draft controls are disabled because the product-scoped Allegro sell-action endpoint is not reachable: {selectedStatusError}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-500">Select a Catalog product to prepare an Allegro draft.</div>
+            )}
+          </Card>
+
+          <Card title="Prepare Allegro draft">
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input label="Title" value={draftForm.title} onChange={(event) => setDraftForm({ ...draftForm, title: event.target.value })} disabled={!selectedProduct || sellActionUnavailable} />
+                <Input label="Category ID" value={draftForm.categoryId} onChange={(event) => setDraftForm({ ...draftForm, categoryId: event.target.value })} disabled={!selectedProduct || sellActionUnavailable} />
+                <Input label="Price" type="number" min="0" step="0.01" value={draftForm.price} onChange={(event) => setDraftForm({ ...draftForm, price: event.target.value })} disabled={!selectedProduct || sellActionUnavailable} />
+                <Input label="Quantity" type="number" min="0" step="1" value={draftForm.quantity} onChange={(event) => setDraftForm({ ...draftForm, quantity: event.target.value })} disabled={!selectedProduct || sellActionUnavailable} />
+              </div>
+
+              {accountChoices.length > 0 && (
+                <label className="block text-sm font-medium text-gray-700">
+                  Allegro account
+                  <select
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={draftForm.accountId}
+                    onChange={(event) => setDraftForm({ ...draftForm, accountId: event.target.value })}
+                    disabled={!selectedProduct || sellActionUnavailable}
+                  >
+                    {accountChoices.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name || account.id}{account.isActive ? ' (active)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              <label className="block text-sm font-medium text-gray-700">
+                Description
+                <textarea
+                  className="mt-1 min-h-28 w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={draftForm.description}
+                  onChange={(event) => setDraftForm({ ...draftForm, description: event.target.value })}
+                  disabled={!selectedProduct || sellActionUnavailable}
+                />
+              </label>
+
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={draftForm.forceNewDraft}
+                  onChange={(event) => setDraftForm({ ...draftForm, forceNewDraft: event.target.checked })}
+                  disabled={!selectedProduct || sellActionUnavailable}
+                />
+                Prepare a new draft instead of reusing an inactive draft
+              </label>
+
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={handlePrepareDraft} disabled={!selectedProduct || sellActionUnavailable || preparing}>
+                  {preparing ? 'Preparing...' : hasPreparedDraft ? 'Prepare again' : 'Prepare draft'}
+                </Button>
+                <Button variant="secondary" onClick={handleSaveDraft} disabled={!canEditDraft || savingDraft}>
+                  {savingDraft ? 'Saving...' : 'Save draft fields'}
+                </Button>
+                <Button onClick={handleConfirmPublish} disabled={!canConfirmPublish || confirming}>
+                  {confirming ? 'Confirming...' : 'Confirm publish'}
+                </Button>
+              </div>
+
+              {!canConfirmPublish && (
+                <p className="text-sm text-gray-500">
+                  Confirm publish unlocks only after a prepared attempt exists and the backend returns `canConfirmPublish`.
+                </p>
+              )}
+            </div>
+          </Card>
+
+          <Card title="Draft preview">
+            {selectedStatus?.draft ? (
+              <div className="space-y-3 text-sm">
+                <div>
+                  <div className="font-semibold text-gray-900">{selectedStatus.draft.title || '-'}</div>
+                  <div className="text-gray-500">{selectedStatus.draft.id}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><span className="font-medium">Status:</span> {selectedStatus.status || selectedStatus.draft.publicationStatus || '-'}</div>
+                  <div><span className="font-medium">Next:</span> {selectedStatus.nextAction || '-'}</div>
+                  <div><span className="font-medium">Price:</span> {selectedStatus.draft.price ?? '-'} {selectedStatus.draft.currency || 'PLN'}</div>
+                  <div><span className="font-medium">Quantity:</span> {selectedStatus.draft.quantity ?? '-'}</div>
+                  <div><span className="font-medium">Category:</span> {selectedStatus.draft.categoryId || '-'}</div>
+                  <div><span className="font-medium">Attempt:</span> {selectedStatus.attempt?.id || '-'}</div>
+                </div>
+                {selectedStatus.attempt?.blockedReasons && selectedStatus.attempt.blockedReasons.length > 0 && (
+                  <div className="rounded border border-red-200 bg-red-50 p-2 text-red-700">
+                    {selectedStatus.attempt.blockedReasons.join(', ')}
+                  </div>
+                )}
+                {selectedStatus.listingUrl && (
+                  <a className="text-blue-700 hover:underline" href={selectedStatus.listingUrl} target="_blank" rel="noreferrer">
+                    Open Allegro listing
+                  </a>
+                )}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-500">No draft has been prepared for this Catalog product yet.</div>
+            )}
+          </Card>
         </div>
-      </Modal>
+      </div>
     </div>
   );
 };
 
 export default ProductsPage;
-
