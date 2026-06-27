@@ -114,7 +114,6 @@ apply_deployment_manifest api-gateway-deployment.yaml "$API_GATEWAY_NAME" "$API_
 apply_static_manifest api-gateway-service.yaml
 apply_deployment_manifest frontend-deployment.yaml "$FRONTEND_NAME" "$FRONTEND_IMAGE"
 apply_static_manifest frontend-service.yaml
-apply_static_manifest ingress.yaml
 
 echo -e "${GREEN}OK Kubernetes manifests applied${NC}"
 deploy_timing_phase_end "Apply Kubernetes manifests"
@@ -130,6 +129,10 @@ rollout_wait "$SERVICE_NAME"
 rollout_wait "$API_GATEWAY_NAME"
 rollout_wait "$FRONTEND_NAME"
 deploy_timing_phase_end "Wait for rollouts"
+
+deploy_timing_phase_start "Switch ingress"
+apply_static_manifest ingress.yaml
+deploy_timing_phase_end "Switch ingress"
 
 deploy_timing_phase_start "Post-deploy status"
 kubectl get pods -n "$NAMESPACE" -l app="$SERVICE_NAME"
