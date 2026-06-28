@@ -187,7 +187,7 @@ export class SettingsService {
       if (account.clientSecret) {
         try {
           accountData.clientId = account.clientId;
-          accountData.clientSecret = this.decrypt(account.clientSecret);
+          accountData.hasClientSecret = true;
         } catch (error: any) {
           this.logger.error('Failed to decrypt account client secret', {
             userId,
@@ -195,7 +195,7 @@ export class SettingsService {
             error: error.message,
           });
           accountData.clientId = account.clientId;
-          accountData.clientSecret = null;
+          accountData.hasClientSecret = true;
           accountData._clientSecretDecryptionError = {
             exists: true,
             error: error.message || 'Unknown decryption error',
@@ -205,6 +205,7 @@ export class SettingsService {
         }
       } else {
         accountData.clientId = account.clientId;
+        accountData.hasClientSecret = false;
       }
 
       // Add OAuth status
@@ -524,7 +525,7 @@ export class SettingsService {
         if (account.clientSecret) {
           try {
             accountData.clientId = account.clientId;
-            accountData.clientSecret = this.decrypt(account.clientSecret);
+          accountData.hasClientSecret = true;
           } catch (error: any) {
             this.logger.error('Failed to decrypt account client secret', {
               userId,
@@ -532,11 +533,12 @@ export class SettingsService {
               error: error.message,
             });
             accountData.clientId = account.clientId;
-            accountData.clientSecret = null;
+          accountData.hasClientSecret = true;
           }
         } else {
-          accountData.clientId = account.clientId;
-        }
+        accountData.clientId = account.clientId;
+        accountData.hasClientSecret = false;
+      }
 
         // Add OAuth status
         if (account.accessToken) {
@@ -588,7 +590,7 @@ export class SettingsService {
     if (account.clientSecret) {
       try {
         accountData.clientId = account.clientId;
-        accountData.clientSecret = this.decrypt(account.clientSecret);
+          accountData.hasClientSecret = true;
       } catch (error: any) {
         this.logger.error('Failed to decrypt account client secret', {
           userId,
@@ -596,11 +598,12 @@ export class SettingsService {
           error: error.message,
         });
         accountData.clientId = account.clientId;
-        accountData.clientSecret = null;
+          accountData.hasClientSecret = true;
       }
     } else {
-      accountData.clientId = account.clientId;
-    }
+        accountData.clientId = account.clientId;
+        accountData.hasClientSecret = false;
+      }
 
     // Add OAuth status
     if (account.accessToken) {
@@ -652,6 +655,7 @@ export class SettingsService {
       id: account.id,
       name: account.name,
       clientId: account.clientId,
+      hasClientSecret: !!account.clientSecret,
       isActive: account.isActive,
       oauthStatus: {
         authorized: false,
@@ -713,23 +717,8 @@ export class SettingsService {
       updatedAt: updated.updatedAt,
     };
 
-    // Decrypt client secret if present
-    if (updated.clientSecret) {
-      try {
-        accountData.clientId = updated.clientId;
-        accountData.clientSecret = this.decrypt(updated.clientSecret);
-      } catch (error: any) {
-        this.logger.error('Failed to decrypt account client secret', {
-          userId,
-          accountId: updated.id,
-          error: error.message,
-        });
-        accountData.clientId = updated.clientId;
-        accountData.clientSecret = null;
-      }
-    } else {
-      accountData.clientId = updated.clientId;
-    }
+    accountData.clientId = updated.clientId;
+    accountData.hasClientSecret = !!updated.clientSecret;
 
     // Add OAuth status
     if (updated.accessToken) {
@@ -929,7 +918,7 @@ export class SettingsService {
     if (account.clientSecret) {
       try {
         accountData.clientId = account.clientId;
-        accountData.clientSecret = this.decrypt(account.clientSecret);
+          accountData.hasClientSecret = true;
       } catch (error: any) {
         this.logger.error('Failed to decrypt account client secret', {
           userId,
@@ -937,11 +926,12 @@ export class SettingsService {
           error: error.message,
         });
         accountData.clientId = account.clientId;
-        accountData.clientSecret = null;
+          accountData.hasClientSecret = true;
       }
     } else {
-      accountData.clientId = account.clientId;
-    }
+        accountData.clientId = account.clientId;
+        accountData.hasClientSecret = false;
+      }
 
     // Add OAuth status
     if (account.accessToken) {

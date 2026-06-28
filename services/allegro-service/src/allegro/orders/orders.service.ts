@@ -24,8 +24,8 @@ export class OrdersService {
   async getOrders(query: any): Promise<{ items: any[]; pagination: any }> {
     const startTime = Date.now();
     const timestamp = new Date().toISOString();
-    const page = query.page || 1;
-    const limit = query.limit || 20;
+    const page = Math.max(1, Number.parseInt(String(query.page || "1"), 10) || 1);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(String(query.limit || "20"), 10) || 20));
     const skip = (page - 1) * limit;
 
     const where: any = {};
