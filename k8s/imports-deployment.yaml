@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: allegro-api-gateway
+  name: allegro-imports
   namespace: statex-apps
   labels:
-    app: allegro-api-gateway
+    app: allegro-imports
     managed-by: k8s-migration
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: allegro-api-gateway
+      app: allegro-imports
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -19,14 +19,14 @@ spec:
   template:
     metadata:
       labels:
-        app: allegro-api-gateway
+        app: allegro-imports
     spec:
       containers:
         - name: app
-          image: localhost:5000/allegro-api-gateway:latest
+          image: localhost:5000/allegro-imports:latest
           imagePullPolicy: Always
           ports:
-            - containerPort: 3411
+            - containerPort: 3406
           envFrom:
             - configMapRef:
                 name: allegro-config
@@ -36,24 +36,11 @@ spec:
                 secretKeyRef:
                   name: database-credentials
                   key: DB_PASSWORD
-            - name: NODE_ENV
-              value: "production"
-            - name: API_GATEWAY_PORT
-              value: "3411"
-            - name: ALLEGRO_SERVICE_URL
-              value: "http://allegro-service:3000"
-            - name: AUTH_SERVICE_URL
-              value: "http://auth-microservice:3370"
-            - name: IMPORT_SERVICE_URL
-              value: "http://allegro-imports:3406"
-            - name: SETTINGS_SERVICE_URL
-              value: "http://allegro-settings:3408"
-            - name: CORS_ORIGIN
-              value: "https://allegro.alfares.cz"
-            - name: LOGGING_SERVICE_URL
-              value: "http://logging-microservice:3367"
-            - name: ALLEGRO_FRONTEND_SERVICE_PORT
-              value: "3410"
+            - name: DATABASE_URL_OVERRIDE
+              valueFrom:
+                secretKeyRef:
+                  name: allegro-database-url-secret
+                  key: DATABASE_URL_OVERRIDE
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
@@ -61,23 +48,23 @@ spec:
                   key: JWT_SECRET
           startupProbe:
             httpGet:
-              path: /api/health
-              port: 3411
+              path: /health
+              port: 3406
             failureThreshold: 30
             periodSeconds: 10
             timeoutSeconds: 5
           readinessProbe:
             httpGet:
-              path: /api/health
-              port: 3411
+              path: /health
+              port: 3406
             initialDelaySeconds: 10
             periodSeconds: 10
             failureThreshold: 3
             timeoutSeconds: 5
           livenessProbe:
             httpGet:
-              path: /api/health
-              port: 3411
+              path: /health
+              port: 3406
             periodSeconds: 30
             failureThreshold: 3
             timeoutSeconds: 5

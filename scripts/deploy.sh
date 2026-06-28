@@ -9,6 +9,8 @@ GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; BLUE='\033[0;34m'; NC
 SERVICE_NAME="allegro-service"
 API_GATEWAY_NAME="allegro-api-gateway"
 FRONTEND_NAME="allegro-frontend"
+SETTINGS_NAME="allegro-settings"
+IMPORTS_NAME="allegro-imports"
 NAMESPACE="${NAMESPACE:-statex-apps}"
 K8S_DIR="$PROJECT_ROOT/k8s"
 REGISTRY="${REGISTRY:-localhost:5000}"
@@ -20,6 +22,10 @@ API_GATEWAY_IMAGE="${REGISTRY}/${API_GATEWAY_NAME}:${IMAGE_TAG}"
 API_GATEWAY_IMAGE_LATEST="${REGISTRY}/${API_GATEWAY_NAME}:latest"
 FRONTEND_IMAGE="${REGISTRY}/${FRONTEND_NAME}:${IMAGE_TAG}"
 FRONTEND_IMAGE_LATEST="${REGISTRY}/${FRONTEND_NAME}:latest"
+SETTINGS_IMAGE="${REGISTRY}/${SETTINGS_NAME}:${IMAGE_TAG}"
+SETTINGS_IMAGE_LATEST="${REGISTRY}/${SETTINGS_NAME}:latest"
+IMPORTS_IMAGE="${REGISTRY}/${IMPORTS_NAME}:${IMAGE_TAG}"
+IMPORTS_IMAGE_LATEST="${REGISTRY}/${IMPORTS_NAME}:latest"
 FRONTEND_API_URL="${FRONTEND_API_URL:-https://allegro.alfares.cz/api}"
 
 # shellcheck disable=SC1091
@@ -41,7 +47,7 @@ preflight_service_health() {
     exit 1
   fi
 
-  for app in "$SERVICE_NAME" "$API_GATEWAY_NAME" "$FRONTEND_NAME"; do
+  for app in "$SERVICE_NAME" "$API_GATEWAY_NAME" "$FRONTEND_NAME" "$SETTINGS_NAME" "$IMPORTS_NAME"; do
     BAD_PODS=$(kubectl get pods -n "$NAMESPACE" -l app="$app" --no-headers 2>/dev/null | awk '$3 ~ /Error|CrashLoopBackOff|ImagePullBackOff|CreateContainerConfigError|CreateContainerError|ErrImagePull/ {print $1}')
     if [ -n "$BAD_PODS" ]; then
       echo -e "${RED}Deployment $app has unhealthy pods before deploy:${NC}"
@@ -73,6 +79,8 @@ deploy_timing_run_phase "Preflight" preflight_service_health
 deploy_timing_phase_start "Build images"
 docker build -f "$PROJECT_ROOT/services/allegro-service/Dockerfile" -t "$SERVICE_IMAGE" -t "$SERVICE_IMAGE_LATEST" "$PROJECT_ROOT"
 docker build -f "$PROJECT_ROOT/services/api-gateway/Dockerfile" -t "$API_GATEWAY_IMAGE" -t "$API_GATEWAY_IMAGE_LATEST" "$PROJECT_ROOT"
+docker build -f "$PROJECT_ROOT/services/settings/Dockerfile" -t "$SETTINGS_IMAGE" -t "$SETTINGS_IMAGE_LATEST" "$PROJECT_ROOT"
+docker build -f "$PROJECT_ROOT/services/imports/Dockerfile" -t "$IMPORTS_IMAGE" -t "$IMPORTS_IMAGE_LATEST" "$PROJECT_ROOT"
 docker build -f "$PROJECT_ROOT/services/frontend/Dockerfile" --build-arg FRONTEND_API_URL="$FRONTEND_API_URL" -t "$FRONTEND_IMAGE" -t "$FRONTEND_IMAGE_LATEST" "$PROJECT_ROOT"
 deploy_timing_phase_end "Build images"
 
@@ -82,6 +90,10 @@ docker push "$SERVICE_IMAGE_LATEST"
 docker push "$API_GATEWAY_IMAGE"
 docker push "$API_GATEWAY_IMAGE_LATEST"
 docker push "$FRONTEND_IMAGE"
+docker push "$SETTINGS_IMAGE"
+docker push "$SETTINGS_IMAGE_LATEST"
+docker push "$IMPORTS_IMAGE"
+docker push "$IMPORTS_IMAGE_LATEST"
 docker push "$FRONTEND_IMAGE_LATEST"
 deploy_timing_phase_end "Push images"
 
@@ -112,6 +124,10 @@ apply_deployment_manifest deployment.yaml "$SERVICE_NAME" "$SERVICE_IMAGE"
 apply_static_manifest service.yaml
 apply_deployment_manifest api-gateway-deployment.yaml "$API_GATEWAY_NAME" "$API_GATEWAY_IMAGE"
 apply_static_manifest api-gateway-service.yaml
+apply_deployment_manifest settings-deployment.yaml "$SETTINGS_NAME" "$SETTINGS_IMAGE"
+apply_static_manifest settings-service.yaml
+apply_deployment_manifest imports-deployment.yaml "$IMPORTS_NAME" "$IMPORTS_IMAGE"
+apply_static_manifest imports-service.yaml
 apply_deployment_manifest frontend-deployment.yaml "$FRONTEND_NAME" "$FRONTEND_IMAGE"
 apply_static_manifest frontend-service.yaml
 
@@ -122,11 +138,15 @@ deploy_timing_phase_start "Set deployment images"
 kubectl set image "deployment/${SERVICE_NAME}" app="$SERVICE_IMAGE" -n "$NAMESPACE"
 kubectl set image "deployment/${API_GATEWAY_NAME}" app="$API_GATEWAY_IMAGE" -n "$NAMESPACE"
 kubectl set image "deployment/${FRONTEND_NAME}" app="$FRONTEND_IMAGE" -n "$NAMESPACE"
+kubectl set image "deployment/${SETTINGS_NAME}" app="$SETTINGS_IMAGE" -n "$NAMESPACE"
+kubectl set image "deployment/${IMPORTS_NAME}" app="$IMPORTS_IMAGE" -n "$NAMESPACE"
 deploy_timing_phase_end "Set deployment images"
 
 deploy_timing_phase_start "Wait for rollouts"
 rollout_wait "$SERVICE_NAME"
 rollout_wait "$API_GATEWAY_NAME"
+rollout_wait "$SETTINGS_NAME"
+rollout_wait "$IMPORTS_NAME"
 rollout_wait "$FRONTEND_NAME"
 deploy_timing_phase_end "Wait for rollouts"
 
@@ -138,6 +158,8 @@ deploy_timing_phase_start "Post-deploy status"
 kubectl get pods -n "$NAMESPACE" -l app="$SERVICE_NAME"
 kubectl get pods -n "$NAMESPACE" -l app="$API_GATEWAY_NAME"
 kubectl get pods -n "$NAMESPACE" -l app="$FRONTEND_NAME"
+kubectl get pods -n "$NAMESPACE" -l app="$SETTINGS_NAME"
+kubectl get pods -n "$NAMESPACE" -l app="$IMPORTS_NAME"
 deploy_timing_phase_end "Post-deploy status"
 
 deploy_timing_finish_success "Allegro Service"
