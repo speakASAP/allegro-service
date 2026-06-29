@@ -54,7 +54,7 @@ plan by turning Allegro import and export mapping into safe implementation lanes
 | W2 live migration and deploy coordination completed | Pass | Live Prisma history was baseline-resolved for already-existing schema migrations, then `20260629170000_add_allegro_sync_projection_foundation` was applied. `migrate status` reports up to date and Kubernetes deployments now run image tag `c0d4953`. |
 | Local stock sync evidence recording executed | Pass | `audit-current-stock-source` ran with `--record-sync-run --confirm-sync-recording ALLEGRO_SYNC_RECORDING_LOCAL_ONLY`; it wrote 3 sync runs, 27 raw payloads, 27 projection audit logs, and 27 stock snapshots. |
 | Raw payload retention audit works in runtime | Pass | `audit-raw-payload-retention` now bootstraps `DATABASE_URL` from pod `DB_*` env and reported 27 `offer_stock_payload` records, 0 expired, report-only cleanup. |
-| TASK-009 audit debt remains separate | Pass with debt | Strict audit and pre-coding failures name TASK-009 documentation/graph issues; TASK-010-specific strict-audit findings were corrected. |
+| TASK-009 IPS debt repaired | Pass | TASK-009 documentation/graph debt was repaired on 2026-06-29; strict audit, pre-coding, and TASK-010 readiness gates now pass for this slice. |
 
 ## Gate evidence
 
@@ -275,13 +275,13 @@ This does not yet claim full category coverage or live UI enforcement.
 
 ## Recommendation
 
-Accept TASK-010-W0, W1, W2, W3, W4 preview-token binding, and W5
-retention/category-readiness foundation as implemented with validation debt
-noted. Do not claim full deployment readiness until TASK-009 audit debt is
-repaired or the readiness gates are made task-scoped enough to ignore unrelated
-historical debt. Continue to require preview/dry-run evidence and explicit
-owner approval for any new live apply path beyond the 2026-06-29 current-stock
-Warehouse import.
+Accept TASK-010-W0, W1, W2, W3, W4 preview-token binding, W5
+retention/category-readiness foundation, P1/P2/P7 guarded import surfaces, and
+durable order-forwarding attempt storage as implemented. TASK-009 IPS debt was
+repaired on 2026-06-29, and the TASK-010 strict audit, pre-coding, and
+readiness gates now pass for this slice. Continue to require preview/dry-run
+evidence and explicit owner approval for any new live apply path beyond the
+2026-06-29 current-stock Warehouse import.
 
 ## Traceability confirmation
 
@@ -361,11 +361,39 @@ Date: 2026-06-29
 - `npm run ips:audit`: PASS, 100/100, 73 files checked, 0 findings.
 - `npm run ips:pre-coding`: PASS.
 - `python3 scripts/deployment_readiness_gate.py --root . --target TASK-010`: PASS.
+- Live Prisma migration deploy: PASS on 2026-06-29.
+  `20260629210000_add_allegro_order_forwarding_attempts` was applied against
+  the cluster database through the cluster-internal Postgres service IP, and
+  post-deploy `migrate status` reported database schema up to date with 9
+  migrations.
+- Live table verification: PASS on 2026-06-29.
+  `public.allegro_order_forwarding_attempts` exists in the Allegro database;
+  row count was 0 before any live central order-forwarding command.
+- `./scripts/deploy.sh`: PARTIAL on 2026-06-29 for image tag `14183a9`.
+  Image build, push, manifest apply, and image set completed, then the script
+  exited 1 after an intermediate `allegro-service` rollout wait timeout while
+  the new pod was still starting.
+- Follow-up Kubernetes rollout verification: PASS on 2026-06-29.
+  `allegro-service`, `allegro-api-gateway`, `allegro-settings`,
+  `allegro-imports`, and `allegro-frontend` all successfully rolled out to
+  image tag `14183a9`.
+- External health after deployment: PASS on 2026-06-29.
+  `https://allegro.alfares.cz/api/health` returned API gateway `status=ok`,
+  and `https://allegro.alfares.cz/` returned HTTP 200.
+- Protected operations route check: PASS on 2026-06-29.
+  Unauthenticated
+  `GET /api/allegro/operations/order-forwarding-attempts?page=1&limit=5`
+  returned HTTP 401 `No token provided`, confirming the route is reachable
+  through the guarded operations surface without exposing data anonymously.
 
 ### Boundaries
 
-- Migration file is tracked for deployment, but live database migration apply is pending until the deployment step.
-- No deploy was run before this pre-deploy validation addendum.
+- Live database migration apply completed for
+  `20260629210000_add_allegro_order_forwarding_attempts`; the forwarding
+  attempts table exists and was empty before any live central forwarding.
+- Kubernetes deployments were rolled to image tag `14183a9`; the deploy script
+  timed out during an intermediate rollout wait, but follow-up rollout status
+  passed for all five Allegro deployments.
 - No live central order forwarding command was run.
 - No Warehouse, Catalog, BizBox, Allegro write, payment/refund, shipment, label, or fulfillment write-back path was run.
 - `orders.create.v1` duplicate/equality behavior is confirmed by orders-microservice source inspection and verification scripts. No live central forwarding command was run.
@@ -396,4 +424,4 @@ Date: 2026-06-29
 
 - No live central order forwarding command was run.
 - No orders-microservice code or database state was changed.
-- No Allegro deploy or live migration apply was run before this pre-deploy validation addendum.
+- No Allegro deploy or live migration apply was run during the orders-microservice duplicate/equality verification; the Allegro migration and deployment happened later in the durable forwarding deployment step.

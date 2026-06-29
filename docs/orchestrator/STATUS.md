@@ -20,6 +20,7 @@ Boundary: read-only Allegro/API probes and audit script deployment only; no Ware
 - W2 sync/projection migration is applied live and deployed.
 - Owner-approved one-time current-stock Warehouse apply completed on 2026-06-29.
 - P1 order sync now defaults to local projection only; central forwarding is exact-confirmation gated.
+- Durable central order forwarding attempt/status storage is migrated and deployed on image tag `14183a9`.
 - P2 script import paths now separate dry-run, local projection, and Catalog apply confirmations.
 - P7 operations read API and the dashboard Operations route are implemented.
 
@@ -50,7 +51,6 @@ The operations raw-payload endpoint returns metadata only and does not select ra
 
 ## Blockers
 
-- Durable central order forwarding attempt/status storage is implemented in code and migration; live migration apply and deploy are pending for this slice.
 - `orders.create.v1` duplicate/equality behavior confirmed from orders-microservice source and verification scripts: exact replay returns existing order without duplicate side effects; mismatched same-key replay returns HTTP 409.
 - `[MISSING: preview-token governed service/controller import approval routes]`
 - `[MISSING: governed recurring stock sync and Allegro quantity command write-back]`
