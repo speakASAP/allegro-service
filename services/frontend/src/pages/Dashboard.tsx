@@ -30,6 +30,7 @@ const Dashboard: React.FC = () => {
     { name: 'Allegro drafts & offers', path: '/dashboard/offers', icon: 'AO' },
     { name: 'Orders', path: '/dashboard/orders', icon: 'OR' },
     { name: 'Import jobs', path: '/dashboard/import', icon: 'IJ' },
+    { name: 'Operations', path: '/dashboard/operations', icon: 'OP' },
     { name: 'Settings & OAuth', path: '/dashboard/settings', icon: 'SO' },
     { name: 'Admin users', path: '/dashboard/admin/users', icon: 'AU' },
   ];

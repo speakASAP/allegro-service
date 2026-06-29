@@ -773,8 +773,49 @@ Re-run requirements:
 
 The data model is ready to represent checkout forms, order line items, current offers, partial historical offers, and governed publish attempts.
 
-The first local-only order projection apply is complete. The current generic order sync path still must not be used for production import replay without an explicit no-forward guard, because it can forward mapped orders to orders-microservice.
+The first local-only order projection apply is complete. The generic order sync path now defaults to local projection only; central forwarding to orders-microservice is explicit and exact-confirmation gated. Durable forwarding replay/equality storage is still missing, so production central order replay remains a separate owner-gated workflow.
 
 The second pass shows that billing, payment operations, returns/refunds/claims, invoices, issues, shipment-management, and One Fulfillment are official Allegro domains but are not yet first-class local projections. They are read-only design lanes until schema/client contracts and owner-approved write gates exist.
 
 Next step: design read-only projection schemas and dry-run clients for billing/payment, returns/refunds/invoices/issues, and shipment-management/One Fulfillment before any new apply/write workflow.
+
+## TASK-010 Guarded Import/Operations Update
+
+Date: 2026-06-29
+
+P1 order projection split is implemented in `OrdersService.syncOrdersFromAllegro()`:
+
+- Default behavior is local projection only.
+- Central order forwarding to orders-microservice requires
+  `forwardToOrdersMicroservice=true` and exact confirmation
+  `ALLEGRO_ORDER_FORWARDING_TO_ORDERS_MICROSERVICE`.
+- Mapping completeness still blocks malformed central order payloads.
+- `[MISSING: durable central order forwarding attempt/status storage]`
+- `[MISSING: confirmed orders.create.v1 duplicate response and payload-equality procedure]`
+
+P2 offer/product import adapter guardrails are implemented for the script entrypoints:
+
+- `import-order-offer-products.ts` now has separate `dry-run`,
+  `local-projection`, and `catalog-apply` modes.
+- Local projection requires `--apply-local-projection --confirm-local-only`.
+- Catalog apply requires
+  `--apply --confirm-catalog-apply ALLEGRO_ORDER_OFFER_CATALOG_IMPORT`.
+- The local projection path does not clear existing `catalogProductId` links when
+  recovering order-derived offers without a Catalog match.
+- `import-allegro-offers-to-catalog.ts` now defaults to dry-run, requires
+  `--confirm-catalog-apply ALLEGRO_ACTIVE_OFFER_CATALOG_IMPORT` before app/DB
+  startup for apply, and makes active-account mutation explicit through
+  `--activate-account --confirm-activate-account ALLEGRO_IMPORT_ACTIVATE_ACCOUNT`.
+- Full service/controller import routes still need a governed preview-token
+  policy before they are considered production import surfaces.
+
+P7 operations read surfaces are implemented:
+
+- Backend: `GET /api/allegro/operations`, `/sync-runs`,
+  `/sync-runs/:id`, `/cursors`, `/raw-payloads`, `/projection-audit`, and
+  `/stock-snapshots`.
+- Frontend: the dashboard Operations route.
+- Raw payload metadata is returned without selecting or returning raw `payload`
+  JSON.
+- These read surfaces do not mutate Catalog, Warehouse, orders-microservice,
+  Allegro, BizBox, or local projections.

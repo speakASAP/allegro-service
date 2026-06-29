@@ -288,3 +288,49 @@ Warehouse import.
 TASK-010 is aligned with FEAT-010, GOAL-IMPACT-TASK-010, the Allegro mapping
 document, and the primary-channel implementation plan. It preserves the Intent
 Preservation chain and does not authorize live mutations.
+
+## P1/P2/P7 Validation Addendum
+
+Date: 2026-06-29
+
+### Implemented scope
+
+- P1: `OrdersService.syncOrdersFromAllegro()` now defaults to local projection
+  only. Central order forwarding requires exact confirmation
+  `ALLEGRO_ORDER_FORWARDING_TO_ORDERS_MICROSERVICE`.
+- P2: order-derived offer/product recovery scripts now separate dry-run,
+  local projection, and Catalog apply modes with exact confirmations.
+- P2: active-offer Catalog import script now defaults to dry-run and refuses
+  missing apply confirmation before Nest/Prisma startup.
+- P7: read-only operations API and dashboard Operations page expose sync run,
+  cursor, raw payload metadata, projection audit, and stock snapshot evidence.
+
+### Additional gate evidence
+
+- `git diff --check`: PASS after P1/P2/P7 code and docs updates.
+- `npx ts-node services/allegro-service/src/allegro/orders/order-forwarding.mapper.spec.ts`:
+  PASS.
+- `npx ts-node services/allegro-service/src/allegro/orders/orders.service.spec.ts`:
+  PASS. Covers default no-forward behavior and explicit guarded forwarding.
+- `npx ts-node services/allegro-service/src/allegro/operations/operations.service.spec.ts`:
+  PASS. Covers read-only summary counts and verifies raw payload JSON is not
+  selected by the metadata list.
+- `cd services/allegro-service && npm run build`: PASS after guarded import and
+  operations API changes.
+- `cd services/frontend && npm run build`: PASS after the dashboard Operations route.
+- `node dist/scripts/import-order-offer-products.js --account-name statexcz --apply`:
+  expected FAIL before apply with missing
+  `ALLEGRO_ORDER_OFFER_CATALOG_IMPORT` confirmation.
+- `node dist/scripts/import-allegro-offers-to-catalog.js --user-id 00000000-0000-0000-0000-000000000000 --apply`:
+  expected FAIL before app/DB startup with missing
+  `ALLEGRO_ACTIVE_OFFER_CATALOG_IMPORT` confirmation.
+
+### Remaining blockers
+
+- `[MISSING: durable central order forwarding attempt/status storage]`
+- `[MISSING: confirmed orders.create.v1 duplicate response and payload-equality procedure]`
+- `[MISSING: governed preview-token policy for OffersController import approval routes]`
+- `[MISSING: Catalog owner approval contract for broad active-offer Catalog import]`
+- `[MISSING: governed Allegro quantity command write-back with polling and terminal state checks]`
+- TASK-009 audit/pre-coding debt remains separate and can still make global IPS
+  readiness gates fail even when TASK-010-specific validation passes.

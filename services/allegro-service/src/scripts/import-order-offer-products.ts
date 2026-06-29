@@ -1,5 +1,6 @@
 import * as crypto from 'crypto';
 import * as path from 'path';
+import { buildScriptSafety, redactedError, requireBooleanConfirmation, requireExactConfirmation } from './lib/script-safety';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { PrismaClient } = require(path.resolve(process.cwd(), '../../shared/node_modules/.prisma/client'));
@@ -9,6 +10,9 @@ type Args = {
   accountName?: string;
   userId?: string;
   apply: boolean;
+  applyLocalProjection: boolean;
+  confirmLocalOnly: boolean;
+  confirmCatalogApply?: string;
   limit?: number;
   language: string;
   help: boolean;
@@ -24,6 +28,8 @@ type SourceAttempt = {
   keys?: string[];
   summary?: Record<string, unknown>;
 };
+
+type ImportMode = 'dry-run' | 'local-projection' | 'catalog-apply';
 
 type OfferEvidence = {
   offerId: string;
@@ -58,19 +64,26 @@ const prisma = new PrismaClient();
 const ALLEGRO_API_URL = process.env.ALLEGRO_API_URL || 'https://api.allegro.pl';
 const CATALOG_SERVICE_URL = process.env.CATALOG_SERVICE_URL || 'http://catalog-microservice:3200';
 const CATALOG_TOKEN = process.env.CATALOG_INTERNAL_SERVICE_TOKEN || process.env.INTERNAL_SERVICE_TOKEN;
+const CATALOG_APPLY_CONFIRMATION = 'ALLEGRO_ORDER_OFFER_CATALOG_IMPORT';
 
 function printHelp(): void {
   console.log(`Import products from Allegro order checkout forms.
 
 Usage:
   npm run import:order-offers:catalog -- --account-name statexcz --dry-run
-  npm run import:order-offers:catalog -- --account-id <uuid> --apply
+  npm run import:order-offers:catalog -- --account-name statexcz --apply-local-projection --confirm-local-only
+  npm run import:order-offers:catalog -- --account-id <uuid> --apply --confirm-catalog-apply ${CATALOG_APPLY_CONFIRMATION}
 
 Options:
   --account-name <name>   Allegro account name. Use --account-id when ambiguous.
   --account-id <uuid>     Allegro account id.
   --user-id <uuid>        Restrict account-name lookup to this user.
+  --apply-local-projection
+                          Persist only local AllegroOffer rows from recovered order-offer evidence.
+  --confirm-local-only    Required with --apply-local-projection.
   --apply                 Persist Catalog products, media, pricing, marketplace profile, and local AllegroOffer rows.
+  --confirm-catalog-apply <${CATALOG_APPLY_CONFIRMATION}>
+                          Required with --apply. Catalog writes remain owner-approved and guarded.
   --dry-run               Only fetch and print a report. Default.
   --limit <n>             Limit unique offers for investigation.
   --language <tag>        Allegro product search language. Default: cs-CZ.
@@ -79,7 +92,7 @@ Options:
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { apply: false, help: false, language: 'cs-CZ', searchCatalog: true };
+  const args: Args = { apply: false, applyLocalProjection: false, confirmLocalOnly: false, help: false, language: 'cs-CZ', searchCatalog: true };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     const next = () => {
@@ -93,6 +106,9 @@ function parseArgs(argv: string[]): Args {
     else if (arg === '--account-name') args.accountName = next();
     else if (arg === '--user-id') args.userId = next();
     else if (arg === '--apply') args.apply = true;
+    else if (arg === '--apply-local-projection') args.applyLocalProjection = true;
+    else if (arg === '--confirm-local-only') args.confirmLocalOnly = true;
+    else if (arg === '--confirm-catalog-apply') args.confirmCatalogApply = next();
     else if (arg === '--dry-run') args.apply = false;
     else if (arg === '--limit') args.limit = Number(next());
     else if (arg === '--language') args.language = next();
@@ -100,6 +116,47 @@ function parseArgs(argv: string[]): Args {
     else throw new Error(`Unknown argument: ${arg}`);
   }
   return args;
+}
+
+function resolveImportMode(args: Args): ImportMode {
+  if (args.apply && args.applyLocalProjection) {
+    throw new Error('Choose only one apply mode: --apply-local-projection or --apply.');
+  }
+  if (args.applyLocalProjection) {
+    return 'local-projection';
+  }
+  if (args.apply) {
+    return 'catalog-apply';
+  }
+  return 'dry-run';
+}
+
+function buildImportSafety(mode: ImportMode): Record<string, unknown> {
+  const catalogApply = mode === 'catalog-apply';
+  const localApply = mode === 'local-projection';
+  return buildScriptSafety({
+    mode: mode === 'dry-run' ? 'dry-run' : 'apply',
+    mutates: mode !== 'dry-run',
+    mutatesLocalAllegroProjection: localApply || catalogApply,
+    mutatesCatalog: catalogApply,
+    mutatesWarehouse: false,
+    mutatesOrders: false,
+    mutatesAllegro: false,
+    forwardsOrders: false,
+    writesAllowed: localApply
+      ? ['allegro_offers']
+      : catalogApply
+        ? ['catalog-microservice', 'allegro_offers']
+        : [],
+    writesForbidden: catalogApply
+      ? ['orders-microservice', 'warehouse-microservice', 'allegro-write-api', 'bizbox-import']
+      : ['orders-microservice', 'catalog-microservice', 'warehouse-microservice', 'allegro-write-api', 'bizbox-import'],
+    ...(localApply
+      ? { confirmation: { flag: '--confirm-local-only', satisfied: true } }
+      : catalogApply
+        ? { confirmation: { flag: '--confirm-catalog-apply', expected: CATALOG_APPLY_CONFIRMATION, satisfied: true } }
+        : {}),
+  });
 }
 
 function decrypt(value: string): string {
@@ -448,10 +505,10 @@ async function syncMarketplace(catalogProductId: string, product: NormalizedProd
   });
 }
 
-async function upsertLocalOffer(account: any, catalogProductId: string, product: NormalizedProduct): Promise<'created' | 'updated'> {
+async function upsertLocalOffer(account: any, catalogProductId: string | null, product: NormalizedProduct): Promise<'created' | 'updated'> {
   const existing = await prisma.allegroOffer.findUnique({ where: { allegroOfferId: product.offerId }, select: { id: true } });
   const data = {
-    catalogProductId,
+    ...(catalogProductId ? { catalogProductId } : {}),
     accountId: account.id,
     title: product.title,
     description: product.description,
@@ -475,11 +532,18 @@ async function upsertLocalOffer(account: any, catalogProductId: string, product:
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) { printHelp(); return; }
+  const mode = resolveImportMode(args);
+  if (mode === 'local-projection') {
+    requireBooleanConfirmation(args.confirmLocalOnly, '--apply-local-projection requires --confirm-local-only to prevent accidental Catalog/Warehouse/orders/Allegro writes.');
+  }
+  if (mode === 'catalog-apply') {
+    requireExactConfirmation(args.confirmCatalogApply, CATALOG_APPLY_CONFIRMATION, '--confirm-catalog-apply');
+  }
   const account = await resolveAccount(args);
   if (!account.accessToken) throw new Error(`Account ${account.id} has no OAuth access token.`);
   const token = decrypt(account.accessToken);
   const evidenceMap = await collectCheckoutEvidence(token, args);
-  const stats: any = { mode: args.apply ? 'apply' : 'dry-run', accountId: account.id, accountName: account.name, checkoutUniqueOffers: evidenceMap.size, sourceQuality: {}, created: 0, updated: 0, catalogSynced: 0, mediaCreated: 0, pricingSynced: 0, marketplaceSynced: 0, errors: [] };
+  const stats: any = { mode, safety: buildImportSafety(mode), accountId: account.id, accountName: account.name, checkoutUniqueOffers: evidenceMap.size, sourceQuality: {}, created: 0, updated: 0, catalogSynced: 0, mediaCreated: 0, pricingSynced: 0, marketplaceSynced: 0, errors: [] };
   const report: any[] = [];
   for (const evidence of evidenceMap.values()) {
     await enrichEvidence(token, evidence, args);
@@ -487,7 +551,11 @@ async function main(): Promise<void> {
     stats.sourceQuality[product.sourceQuality] = (stats.sourceQuality[product.sourceQuality] || 0) + 1;
     const itemReport: any = { offerId: product.offerId, title: product.title, sourceQuality: product.sourceQuality, images: product.images.length, hasDescription: Boolean(product.description), ean: product.ean, categoryId: product.categoryId, attempts: evidence.attempts };
     try {
-      if (args.apply) {
+      if (mode === 'local-projection') {
+        const result = await upsertLocalOffer(account, null, product);
+        stats[result] += 1;
+        itemReport.localProjection = result;
+      } else if (mode === 'catalog-apply') {
         const catalogProduct = await upsertCatalog(product);
         stats.catalogSynced += 1;
         const mediaCreated = await syncMedia(catalogProduct.id, product);
@@ -511,7 +579,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  console.error(JSON.stringify({ done: false, message: error?.message || String(error), stack: error?.stack }, null, 2));
+  console.error(JSON.stringify({ done: false, ...redactedError(error) }, null, 2));
   process.exit(1);
 }).finally(async () => {
   await prisma.$disconnect();

@@ -8,6 +8,25 @@ import { PrismaService, LoggerService, OrderClientService } from '@allegro/share
 import { AllegroApiService } from '../allegro-api.service';
 import { AllegroForwardingOffer, buildOrderForwardingPayload, getAllegroLineOfferIds } from './order-forwarding.mapper';
 
+export const ALLEGRO_ORDER_FORWARDING_CONFIRMATION = 'ALLEGRO_ORDER_FORWARDING_TO_ORDERS_MICROSERVICE';
+
+export type SyncOrdersFromAllegroOptions = {
+  forwardToOrdersMicroservice?: boolean;
+  confirmForwarding?: string;
+};
+
+function resolveOrderForwardingEnabled(options: SyncOrdersFromAllegroOptions): boolean {
+  if (!options.forwardToOrdersMicroservice) {
+    return false;
+  }
+
+  if (options.confirmForwarding !== ALLEGRO_ORDER_FORWARDING_CONFIRMATION) {
+    throw new Error(`Refusing to forward Allegro orders without confirmForwarding=${ALLEGRO_ORDER_FORWARDING_CONFIRMATION}. Run local projection/dry-run evidence first.`);
+  }
+
+  return true;
+}
+
 function parseMoney(value: any, fallback = 0): number {
   const amount = typeof value === 'object' && value !== null ? value.amount : value;
   const parsed = Number.parseFloat(String(amount ?? fallback));
@@ -190,13 +209,17 @@ export class OrdersService {
   /**
    * Fetch orders from Allegro API and sync to database
    */
-  async syncOrdersFromAllegro() {
+  async syncOrdersFromAllegro(options: SyncOrdersFromAllegroOptions = {}) {
     this.logger.log('Syncing orders from Allegro');
+    const forwardingEnabled = resolveOrderForwardingEnabled(options);
 
     let offset = 0;
     const limit = 100;
     let hasMore = true;
     let totalSynced = 0;
+    let forwarded = 0;
+    let forwardingSkipped = 0;
+    let forwardingFailed = 0;
 
     while (hasMore) {
       try {
@@ -302,12 +325,24 @@ export class OrdersService {
               });
             }
 
-            // Forward order to orders-microservice only when every line has its own catalog product mapping.
+            // Central order forwarding is an explicit replay/apply action. Local projection remains the default.
             if (savedOrder) {
               try {
                 const forwarding = buildOrderForwardingPayload(allegroOrder, offersByAllegroOfferId);
 
-                if (!forwarding.orderData) {
+                if (!forwardingEnabled) {
+                  forwardingSkipped += 1;
+                  this.logger.log('Projected Allegro order locally; central orders forwarding is disabled', {
+                    allegroOrderId: allegroOrder.id,
+                    localOrderId: savedOrder.id,
+                    forwardingReady: Boolean(forwarding.orderData),
+                    blockedReasons: forwarding.blockedReasons,
+                    missingOfferIds: forwarding.missingOfferIds,
+                    missingCatalogOfferIds: forwarding.missingCatalogOfferIds,
+                    lineOfferIds: forwarding.lineOfferIds,
+                  });
+                } else if (!forwarding.orderData) {
+                  forwardingSkipped += 1;
                   this.logger.warn('Skipped forwarding Allegro order to orders-microservice because catalog mapping is incomplete', {
                     allegroOrderId: allegroOrder.id,
                     localOrderId: savedOrder.id,
@@ -318,6 +353,7 @@ export class OrdersService {
                   });
                 } else {
                   await this.orderClient.createOrder(forwarding.orderData);
+                  forwarded += 1;
                   this.logger.log('Order forwarded to orders-microservice', {
                     allegroOrderId: allegroOrder.id,
                     localOrderId: savedOrder.id,
@@ -326,6 +362,7 @@ export class OrdersService {
                   });
                 }
               } catch (error: any) {
+                forwardingFailed += 1;
                 // Log error but don't fail the sync
                 this.logger.error('Failed to forward order to orders-microservice', {
                   allegroOrderId: allegroOrder.id,
@@ -353,7 +390,13 @@ export class OrdersService {
       }
     }
 
-    this.logger.log('Finished syncing orders', { totalSynced });
-    return { totalSynced };
+    const forwarding = {
+      enabled: forwardingEnabled,
+      forwarded,
+      skipped: forwardingSkipped,
+      failed: forwardingFailed,
+    };
+    this.logger.log('Finished syncing orders', { totalSynced, forwarding });
+    return { totalSynced, localProjected: totalSynced, forwarding };
   }
 }

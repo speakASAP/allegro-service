@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { strict as assert } from 'assert';
-import { OrdersService } from './orders.service';
+import { ALLEGRO_ORDER_FORWARDING_CONFIRMATION, OrdersService } from './orders.service';
 
 type OfferFixture = {
   id: string;
@@ -95,6 +95,24 @@ function buildAllegroOrder(lineItems: any[]) {
   };
 }
 
+async function testDefaultSyncProjectsLocallyWithoutCentralForwarding() {
+  const order = buildAllegroOrder([
+    { offer: { id: 'offer-1', name: 'Mapped line' }, quantity: 1, price: { amount: '10.00' } },
+  ]);
+  const fixture = createServiceFixture([order], [
+    { id: 'db-offer-1', allegroOfferId: 'offer-1', accountId: 'account-a', catalogProductId: 'catalog-a', title: 'Stored first' },
+  ]);
+
+  const result = await fixture.service.syncOrdersFromAllegro();
+
+  assert.equal(result.totalSynced, 1);
+  assert.equal(result.forwarding.enabled, false);
+  assert.equal(result.forwarding.forwarded, 0);
+  assert.equal(result.forwarding.skipped, 1);
+  assert.equal(fixture.orderClientCalls.length, 0);
+  assert.equal(fixture.logs.some((entry) => entry[0] === 'Projected Allegro order locally; central orders forwarding is disabled'), true);
+}
+
 async function testMultiLineOrderForwardsEachLineCatalogProductId() {
   const order = buildAllegroOrder([
     { offer: { id: 'offer-1', name: 'First line' }, quantity: 2, price: { amount: '10.00' } },
@@ -105,9 +123,14 @@ async function testMultiLineOrderForwardsEachLineCatalogProductId() {
     { id: 'db-offer-2', allegroOfferId: 'offer-2', accountId: 'account-a', catalogProductId: 'catalog-b', title: 'Stored second' },
   ]);
 
-  const result = await fixture.service.syncOrdersFromAllegro();
+  const result = await fixture.service.syncOrdersFromAllegro({
+    forwardToOrdersMicroservice: true,
+    confirmForwarding: ALLEGRO_ORDER_FORWARDING_CONFIRMATION,
+  });
 
   assert.equal(result.totalSynced, 1);
+  assert.equal(result.forwarding.enabled, true);
+  assert.equal(result.forwarding.forwarded, 1);
   assert.deepEqual(fixture.captured.offerFindMany.where.allegroOfferId.in.sort(), ['offer-1', 'offer-2']);
   assert.equal(fixture.captured.orderUpsert.create.catalogProductId, 'catalog-a');
   assert.equal(fixture.captured.orderUpsert.create.lineItemsCount, 2);
@@ -140,9 +163,14 @@ async function testMissingPrimaryOfferStillPersistsCheckoutFormButSkipsCentralFo
     { id: 'db-offer-2', allegroOfferId: 'offer-2', accountId: 'account-a', catalogProductId: 'catalog-b' },
   ]);
 
-  const result = await fixture.service.syncOrdersFromAllegro();
+  const result = await fixture.service.syncOrdersFromAllegro({
+    forwardToOrdersMicroservice: true,
+    confirmForwarding: ALLEGRO_ORDER_FORWARDING_CONFIRMATION,
+  });
 
   assert.equal(result.totalSynced, 1);
+  assert.equal(result.forwarding.enabled, true);
+  assert.equal(result.forwarding.skipped, 1);
   assert.equal(fixture.captured.orderUpsert.create.allegroOfferId, null);
   assert.equal(fixture.captured.orderUpsert.create.catalogProductId, null);
   assert.equal(fixture.captured.lineItemCreateMany.data.length, 2);
@@ -164,7 +192,10 @@ async function testMissingCatalogProductSkipsMalformedCentralForward() {
     { id: 'db-offer-2', allegroOfferId: 'offer-2', accountId: 'account-a', catalogProductId: null },
   ]);
 
-  await fixture.service.syncOrdersFromAllegro();
+  await fixture.service.syncOrdersFromAllegro({
+    forwardToOrdersMicroservice: true,
+    confirmForwarding: ALLEGRO_ORDER_FORWARDING_CONFIRMATION,
+  });
 
   assert.equal(fixture.orderClientCalls.length, 0);
   assert.equal(fixture.warnings.length, 1);
@@ -173,6 +204,7 @@ async function testMissingCatalogProductSkipsMalformedCentralForward() {
 }
 
 export async function runOrdersServiceSpec(): Promise<void> {
+  await testDefaultSyncProjectsLocallyWithoutCentralForwarding();
   await testMultiLineOrderForwardsEachLineCatalogProductId();
   await testMissingPrimaryOfferStillPersistsCheckoutFormButSkipsCentralForward();
   await testMissingCatalogProductSkipsMalformedCentralForward();
