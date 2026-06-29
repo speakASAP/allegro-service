@@ -21,6 +21,7 @@ import { ImportService } from './import.service';
 import { JwtAuthGuard, LoggerService } from '@allegro/shared';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 
 interface MulterFile {
   fieldname: string;
@@ -29,6 +30,12 @@ interface MulterFile {
   mimetype: string;
   size: number;
   buffer: Buffer;
+}
+
+
+function createPreviewToken(file: MulterFile): string {
+  const hash = crypto.createHash('sha256').update(file.buffer).digest('hex');
+  return `sha256:${hash}`;
 }
 
 @Controller('import')
@@ -60,7 +67,13 @@ export class ImportController {
 
     try {
       const result = await this.importService.previewCsv(filePath, file.originalname);
-      return { success: true, data: result };
+      return {
+        success: true,
+        data: {
+          ...result,
+          previewToken: createPreviewToken(file),
+        },
+      };
     } finally {
       fs.unlink(filePath, () => undefined);
     }
@@ -72,6 +85,7 @@ export class ImportController {
   async uploadCsv(
     @UploadedFile() file: MulterFile | undefined,
     @Headers('x-stock-import-confirmation') confirmation: string | undefined,
+    @Headers('x-stock-import-preview-token') previewToken: string | undefined,
   ) {
     if (confirmation !== 'previewed-and-approved') {
       throw new HttpException(
@@ -89,6 +103,20 @@ export class ImportController {
 
     if (!file) {
       throw new Error('No file uploaded');
+    }
+
+    if (!previewToken || previewToken !== createPreviewToken(file)) {
+      throw new HttpException(
+        {
+          success: false,
+          error: {
+            code: 'STOCK_IMPORT_PREVIEW_TOKEN_INVALID',
+            message: 'Upload must match the exact BizBox CSV file that was previewed.',
+            statusCode: HttpStatus.PRECONDITION_REQUIRED,
+          },
+        },
+        HttpStatus.PRECONDITION_REQUIRED,
+      );
     }
 
     // Save file to uploads directory

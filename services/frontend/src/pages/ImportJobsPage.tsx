@@ -34,6 +34,7 @@ interface BizboxCsvPreview {
   sampleRows: Array<{ row: number; code: string | null; name: string | null; ean: string | null; stockQuantity: number }>;
   issues: Array<{ row: number; code: string | null; issue: string }>;
   mutatesWarehouse: boolean;
+  previewToken: string;
 }
 
 interface PreviewOffer {
@@ -210,6 +211,7 @@ const ImportJobsPage: React.FC = () => {
         timeout: 180000,
         headers: {
           'x-stock-import-confirmation': 'previewed-and-approved',
+          'x-stock-import-preview-token': csvPreview?.previewToken || '',
         },
       });
 
