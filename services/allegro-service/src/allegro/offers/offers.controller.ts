@@ -26,6 +26,13 @@ import { UpdateOfferDto } from '../dto/update-offer.dto';
 import { OfferQueryDto } from '../dto/offer-query.dto';
 import { PublishLifecycleService } from '../publish-lifecycle/publish-lifecycle.service';
 
+const OFFER_IMPORT_CATALOG_APPLY_CONFIRMATION = 'ALLEGRO_HTTP_OFFER_IMPORT_CATALOG_APPLY';
+
+type OfferImportApprovalBody = {
+  offerIds?: string[];
+  confirmCatalogApply?: string;
+};
+
 @Controller('allegro/offers')
 export class OffersController {
   private readonly logger: LoggerService;
@@ -38,6 +45,22 @@ export class OffersController {
   ) {
     this.logger = loggerService;
     this.logger.setContext('OffersController');
+  }
+
+  private requireCatalogImportConfirmation(body: { confirmCatalogApply?: string } | undefined, route: string): void {
+    if (body?.confirmCatalogApply !== OFFER_IMPORT_CATALOG_APPLY_CONFIRMATION) {
+      throw new HttpException(
+        {
+          success: false,
+          error: {
+            code: 'CATALOG_IMPORT_CONFIRMATION_REQUIRED',
+            message: `Refusing ${route} without confirmCatalogApply=${OFFER_IMPORT_CATALOG_APPLY_CONFIRMATION}. Use preview evidence and an owner-approved apply path before importing offers into Catalog/Warehouse.`,
+            status: HttpStatus.CONFLICT,
+          },
+        },
+        HttpStatus.CONFLICT,
+      );
+    }
   }
 
   private isRemoteAffectingOfferUpdate(dto: UpdateOfferDto): boolean {
@@ -182,8 +205,9 @@ export class OffersController {
 
   @Post('import/approve')
   @UseGuards(JwtAuthGuard)
-  async importApprovedOffers(@Request() req: any, @Body() body: { offerIds: string[] }): Promise<{ success: boolean; data: any }> {
+  async importApprovedOffers(@Request() req: any, @Body() body: OfferImportApprovalBody): Promise<{ success: boolean; data: any }> {
     try {
+      this.requireCatalogImportConfirmation(body, 'POST /allegro/offers/import/approve');
       const userId = String(req.user.id);
       this.logger.log('[importApprovedOffers] Controller received request', {
         userId,
@@ -191,7 +215,7 @@ export class OffersController {
         offerIds: body.offerIds?.slice(0, 5), // Log first 5 for debugging
       });
 
-      const result = await this.offersService.importApprovedOffers(userId, body.offerIds);
+      const result = await this.offersService.importApprovedOffers(userId, body.offerIds || []);
 
       this.logger.log('[importApprovedOffers] Controller completed successfully', {
         userId,
@@ -245,14 +269,22 @@ export class OffersController {
   @Get('import')
   @UseGuards(JwtAuthGuard)
   async importOffers(@Request() req: any): Promise<{ success: boolean; data: any }> {
-    this.logger.log('[importOffers] Import request received', {
+    this.logger.warn('[importOffers] Legacy GET import route blocked', {
       userId: req.user?.id,
       userSub: req.user?.sub,
-      hasUser: !!req.user,
-      userKeys: req.user ? Object.keys(req.user) : [],
-      userObject: req.user ? JSON.stringify(req.user) : 'null',
     });
-    
+    throw new HttpException(
+      {
+        success: false,
+        error: {
+          code: 'LEGACY_IMPORT_ROUTE_DISABLED',
+          message: 'Legacy GET /allegro/offers/import is disabled because it mutates Catalog/Warehouse without preview-token confirmation. Use a guarded POST import approval route or the confirmed import scripts.',
+          status: HttpStatus.CONFLICT,
+        },
+      },
+      HttpStatus.CONFLICT,
+    );
+
     try {
       // Extract user ID - try multiple sources
       const userId = String(req.user?.id || req.user?.sub || req.user?.userId || 'unknown');
@@ -399,9 +431,10 @@ export class OffersController {
   @UseGuards(JwtAuthGuard)
   async importApprovedOffersFromSalesCenter(
     @Request() req: any,
-    @Body() body: { offerIds: string[] },
+    @Body() body: OfferImportApprovalBody,
   ): Promise<{ success: boolean; data: any }> {
     try {
+      this.requireCatalogImportConfirmation(body, 'POST /allegro/offers/import/sales-center/approve');
       const userId = String(req.user.id);
       this.logger.log('[importApprovedOffersFromSalesCenter] Controller received request', {
         userId,
@@ -411,7 +444,7 @@ export class OffersController {
 
       const result = await this.offersService.importApprovedOffersFromSalesCenter(
         userId,
-        body.offerIds,
+        body.offerIds || [],
       );
 
       this.logger.log('[importApprovedOffersFromSalesCenter] Controller completed successfully', {
@@ -465,7 +498,8 @@ export class OffersController {
 
   @Post('import/sales-center')
   @UseGuards(JwtAuthGuard)
-  async importFromSalesCenter(@Request() req: any): Promise<{ success: boolean; data: any }> {
+  async importFromSalesCenter(@Request() req: any, @Body() body: { confirmCatalogApply?: string } = {}): Promise<{ success: boolean; data: any }> {
+    this.requireCatalogImportConfirmation(body, 'POST /allegro/offers/import/sales-center');
     const userId = String(req.user.id);
     const result = await this.offersService.importFromSalesCenter(userId);
     return { success: true, data: result };

@@ -806,8 +806,10 @@ P2 offer/product import adapter guardrails are implemented for the script entryp
   `--confirm-catalog-apply ALLEGRO_ACTIVE_OFFER_CATALOG_IMPORT` before app/DB
   startup for apply, and makes active-account mutation explicit through
   `--activate-account --confirm-activate-account ALLEGRO_IMPORT_ACTIVATE_ACCOUNT`.
-- Full service/controller import routes still need a governed preview-token
-  policy before they are considered production import surfaces.
+- HTTP import approval routes now require exact body confirmation
+  `ALLEGRO_HTTP_OFFER_IMPORT_CATALOG_APPLY`; the legacy GET all-import route
+  is blocked. A richer preview-token policy can still replace this confirmation
+  guard later.
 
 P7 operations read surfaces are implemented:
 

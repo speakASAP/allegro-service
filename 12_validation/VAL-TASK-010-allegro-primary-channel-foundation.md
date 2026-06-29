@@ -302,6 +302,9 @@ Date: 2026-06-29
   local projection, and Catalog apply modes with exact confirmations.
 - P2: active-offer Catalog import script now defaults to dry-run and refuses
   missing apply confirmation before Nest/Prisma startup.
+- P2: HTTP offer import approval routes now require
+  `ALLEGRO_HTTP_OFFER_IMPORT_CATALOG_APPLY`; the legacy GET all-import route
+  is blocked.
 - P7: read-only operations API and dashboard Operations page expose sync run,
   cursor, raw payload metadata, projection audit, and stock snapshot evidence.
 
