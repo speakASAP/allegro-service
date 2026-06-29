@@ -10,6 +10,19 @@ type Args = {
   help: boolean;
 };
 
+function ensureDatabaseUrl(): void {
+  if (process.env.DATABASE_URL) return;
+  const user = encodeURIComponent(process.env.DB_USER || "");
+  const password = encodeURIComponent(process.env.DB_PASSWORD || "");
+  const host = process.env.DB_HOST || "";
+  const port = process.env.DB_PORT || "5432";
+  const db = process.env.DB_NAME || "";
+  if (user && host && db) {
+    process.env.DATABASE_URL = `postgresql://${user}:${password}@${host}:${port}/${db}`;
+  }
+}
+
+ensureDatabaseUrl();
 const prisma = new PrismaClient();
 
 function printHelp(): void {
