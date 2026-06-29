@@ -26,13 +26,27 @@ dotenv.config();
 interface MigrationStats {
   totalProducts: number;
   totalAllegroProducts: number;
+  totalOffers: number;
   created: number;
   updated: number;
   skipped: number;
   errors: number;
   stockSynced: number;
   stockSkipped: number;
+  mediaCreated: number;
+  mediaSkipped: number;
   errorDetails: Array<{ productId: string; sku: string; error: string }>;
+}
+
+interface CatalogMediaInput {
+  type: 'image';
+  url: string;
+  thumbnailUrl?: string | null;
+  altText?: string | null;
+  title?: string | null;
+  position: number;
+  isPrimary: boolean;
+  metadata?: Record<string, any>;
 }
 
 interface NormalizedRecord {
@@ -51,7 +65,7 @@ interface NormalizedRecord {
 }
 
 interface CatalogMappingRecord {
-  source: 'Product' | 'AllegroProduct';
+  source: 'Product' | 'AllegroProduct' | 'AllegroOffer';
   legacyId: string;
   sku: string;
   ean?: string | null;
@@ -104,6 +118,7 @@ class ProductMigrationService {
         'Content-Type': 'application/json',
       },
     });
+    this.configureCatalogAuthHeaders();
 
     const loggingUrl = process.env.LOGGING_SERVICE_URL || 'http://logging-microservice:3367';
     this.loggingClient = axios.create({
@@ -126,14 +141,27 @@ class ProductMigrationService {
     this.stats = {
       totalProducts: 0,
       totalAllegroProducts: 0,
+      totalOffers: 0,
       created: 0,
       updated: 0,
       skipped: 0,
       errors: 0,
       stockSynced: 0,
       stockSkipped: 0,
+      mediaCreated: 0,
+      mediaSkipped: 0,
       errorDetails: [],
     };
+  }
+
+  private configureCatalogAuthHeaders(): void {
+    const internalToken = process.env.CATALOG_INTERNAL_SERVICE_TOKEN || process.env.INTERNAL_SERVICE_TOKEN;
+    if (!internalToken) {
+      return;
+    }
+
+    this.catalogClient.defaults.headers.common['x-internal-service-token'] = internalToken;
+    this.catalogClient.defaults.headers.common['x-service-name'] = 'allegro-service';
   }
 
   /**
@@ -177,6 +205,162 @@ class ProductMigrationService {
     return digitsOnly;
   }
 
+  private firstText(...values: any[]): string | null {
+    for (const value of values) {
+      if (typeof value === 'string' && value.trim()) {
+        return value.trim();
+      }
+    }
+    return null;
+  }
+
+  private collectTextFromDescription(description: any): string | null {
+    if (!description) return null;
+    if (typeof description === 'string') return description.trim() || null;
+
+    const sections = Array.isArray(description.sections) ? description.sections : [];
+    const parts: string[] = [];
+    for (const section of sections) {
+      const items = Array.isArray(section?.items) ? section.items : [];
+      for (const item of items) {
+        if (typeof item?.content === 'string') {
+          const text = item.content
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+          if (text) parts.push(text);
+        }
+      }
+    }
+
+    return parts.length > 0 ? parts.join('\n\n') : null;
+  }
+
+  private parameterValues(parameter: any): string[] {
+    if (!parameter) return [];
+    const directValues = Array.isArray(parameter.values) ? parameter.values : [];
+    const directValueIds = Array.isArray(parameter.valuesIds) ? parameter.valuesIds : [];
+    const rawValues = Array.isArray(parameter?.values) ? parameter.values : [];
+    return [...directValues, ...directValueIds, ...rawValues]
+      .map((value) => String(value).trim())
+      .filter(Boolean);
+  }
+
+  private findParameterValue(parameters: any[] | undefined, names: string[], ids: string[] = []): string | null {
+    if (!Array.isArray(parameters)) return null;
+    const normalizedNames = names.map((name) => name.toLowerCase());
+    const normalizedIds = ids.map((id) => id.toLowerCase());
+
+    for (const parameter of parameters) {
+      const name = String(parameter?.name || '').toLowerCase();
+      const id = String(parameter?.parameterId || parameter?.id || '').toLowerCase();
+      if (!normalizedNames.includes(name) && !normalizedIds.includes(id)) {
+        continue;
+      }
+
+      const values = this.parameterValues(parameter);
+      if (values.length > 0) {
+        return values[0];
+      }
+    }
+
+    return null;
+  }
+
+  private extractImageUrls(...sources: any[]): CatalogMediaInput[] {
+    const urls: string[] = [];
+    const addUrl = (value: any) => {
+      if (typeof value !== 'string') return;
+      const trimmed = value.trim();
+      if (/^https?:\/\//i.test(trimmed)) {
+        urls.push(trimmed);
+      }
+    };
+
+    const visit = (value: any) => {
+      if (!value) return;
+      if (typeof value === 'string') {
+        addUrl(value);
+        return;
+      }
+      if (Array.isArray(value)) {
+        value.forEach(visit);
+        return;
+      }
+      if (typeof value === 'object') {
+        addUrl(value.url);
+        addUrl(value.originalUrl);
+        addUrl(value.thumbnailUrl);
+        addUrl(value.location);
+        if (Array.isArray(value.images)) visit(value.images);
+        if (Array.isArray(value.photos)) visit(value.photos);
+        if (Array.isArray(value.pictures)) visit(value.pictures);
+      }
+    };
+
+    sources.forEach(visit);
+
+    return Array.from(new Set(urls)).map((url, index) => ({
+      type: 'image',
+      url,
+      thumbnailUrl: null,
+      altText: 'Allegro product image',
+      title: 'Allegro image',
+      position: index,
+      isPrimary: index === 0,
+      metadata: { source: 'allegro' },
+    }));
+  }
+
+  private enrichWithAllegroData(base: any, source: any, offers: any[] = []): any {
+    const rawData = source?.rawData || {};
+    const parameters = Array.isArray(source?.parameters) ? source.parameters : [];
+    const newestOffer = offers[0] || {};
+    const offerRawData = newestOffer.rawData || {};
+    const description = this.collectTextFromDescription(newestOffer.description)
+      || this.collectTextFromDescription(offerRawData.description)
+      || this.collectTextFromDescription(rawData.description);
+    const brand = this.firstText(
+      base.brand,
+      source?.brand,
+      rawData.brand,
+      rawData.product?.brand,
+      this.findParameterValue(parameters, ['brand', 'marka'])
+    );
+    const manufacturer = this.firstText(
+      base.manufacturer,
+      source?.manufacturer,
+      source?.manufacturerCode,
+      rawData.manufacturer,
+      rawData.producer,
+      rawData.product?.manufacturer,
+      this.findParameterValue(parameters, ['manufacturer', 'producer', 'producent'])
+    );
+    const ean = this.normalizeEan(
+      this.firstText(
+        base.ean,
+        source?.ean,
+        rawData.ean,
+        rawData.product?.ean,
+        this.findParameterValue(parameters, ['ean', 'gtin'], ['225693'])
+      )
+    );
+
+    return {
+      ...base,
+      description: description || base.description || null,
+      brand: brand || null,
+      manufacturer: manufacturer || null,
+      ean: ean || base.ean || null,
+    };
+  }
+
+  private extractMedia(source: any, offers: any[] = []): CatalogMediaInput[] {
+    const rawData = source?.rawData || {};
+    const offerImages = offers.flatMap((offer) => [offer.images, offer.rawData?.images, offer.rawData?.productSet]);
+    return this.extractImageUrls(source?.images, rawData.images, rawData.photos, rawData.product?.images, rawData.productSet, ...offerImages);
+  }
+
   /**
    * Check if product exists in catalog-microservice by SKU or EAN
    */
@@ -202,6 +386,26 @@ class ProductMigrationService {
         }
       } catch (error: any) {
         // Product not found by EAN, continue
+      }
+    }
+
+    return null;
+  }
+
+  private async findAllegroProductInCatalog(sku: string, ean: string | null | undefined, offers: any[] = []): Promise<any | null> {
+    const direct = await this.findProductInCatalog(sku, ean);
+    if (direct) {
+      return direct;
+    }
+
+    for (const offer of offers) {
+      if (!offer?.allegroOfferId) {
+        continue;
+      }
+      const offerSku = `ALLEGRO-OFFER-${offer.allegroOfferId}`;
+      const found = await this.findProductInCatalog(offerSku, ean);
+      if (found) {
+        return found;
       }
     }
 
@@ -272,6 +476,69 @@ class ProductMigrationService {
     };
 
     return catalogProduct;
+  }
+
+  private mapAllegroOfferToCatalog(offer: any, productSource?: any): any {
+    const base = {
+      sku: `ALLEGRO-OFFER-${offer.allegroOfferId}`,
+      title: offer.title || offer.rawData?.name || 'Product',
+      description: this.collectTextFromDescription(offer.description) || this.collectTextFromDescription(offer.rawData?.description) || null,
+      brand: productSource?.brand || null,
+      manufacturer: productSource?.manufacturerCode || null,
+      ean: productSource?.ean || null,
+      isActive: offer.status !== 'ENDED',
+    };
+    return this.enrichWithAllegroData(base, productSource || offer, [offer]);
+  }
+
+  private async syncCatalogMedia(catalogProductId: string, mediaItems: CatalogMediaInput[], sku: string): Promise<void> {
+    if (this.dryRun) {
+      this.stats.mediaSkipped += mediaItems.length;
+      return;
+    }
+
+    if (mediaItems.length === 0) {
+      return;
+    }
+
+    let existing: any[] = [];
+    try {
+      const response = await this.catalogClient.get(`/api/media/product/${catalogProductId}`);
+      existing = response.data?.data || [];
+    } catch (error: any) {
+      this.stats.mediaSkipped += mediaItems.length;
+      await this.log('warn', 'Failed to fetch existing catalog media; skipping media sync', {
+        sku,
+        catalogProductId,
+        error: error?.message || String(error),
+      });
+      return;
+    }
+
+    const existingUrls = new Set(existing.map((item) => item.url).filter(Boolean));
+    for (const item of mediaItems) {
+      if (existingUrls.has(item.url)) {
+        this.stats.mediaSkipped++;
+        continue;
+      }
+
+      try {
+        await this.catalogClient.post('/api/media', {
+          productId: catalogProductId,
+          ...item,
+        });
+        existingUrls.add(item.url);
+        this.stats.mediaCreated++;
+      } catch (error: any) {
+        this.stats.mediaSkipped++;
+        await this.log('warn', 'Failed to create catalog media', {
+          sku,
+          catalogProductId,
+          url: item.url,
+          error: error.response?.data?.message || error.message || String(error),
+        });
+      }
+    }
   }
 
   /**
@@ -418,13 +685,18 @@ class ProductMigrationService {
       const existing = await this.findProductInCatalog(sku, product.ean);
 
       // Map product data
-      const catalogData = this.mapProductToCatalog(product);
+      const relatedOffers = await this.prisma.allegroOffer.findMany({
+        where: { productId: product.id },
+        orderBy: { updatedAt: 'desc' },
+      });
+      const catalogData = this.enrichWithAllegroData(this.mapProductToCatalog(product), product, relatedOffers);
 
       // Create or update
       const catalogProduct = await this.createOrUpdateProduct(catalogData, existing);
 
       const quantity = this.getProductStock(product);
       await this.syncWarehouseStock(catalogProduct.id, quantity, sku, 'allegro Product');
+      await this.syncCatalogMedia(catalogProduct.id, this.extractMedia(product, relatedOffers), sku);
 
       this.recordMapping({
         source: 'Product',
@@ -462,17 +734,27 @@ class ProductMigrationService {
     const sku = allegroProduct.ean || `ALLEGRO-${allegroProduct.allegroProductId}`;
     
     try {
-      // Check if product already exists in catalog
-      const existing = await this.findProductInCatalog(sku, allegroProduct.ean);
+      const relatedOffers = await this.prisma.allegroOffer.findMany({
+        where: { allegroProductId: allegroProduct.id },
+        orderBy: { updatedAt: 'desc' },
+      });
+
+      // Check if product already exists in catalog. Earlier imports used offer IDs as SKUs.
+      const existing = await this.findAllegroProductInCatalog(sku, allegroProduct.ean, relatedOffers);
 
       // Map product data
-      const catalogData = this.mapAllegroProductToCatalog(allegroProduct);
+      const catalogData = this.enrichWithAllegroData(this.mapAllegroProductToCatalog(allegroProduct), allegroProduct, relatedOffers);
+      if (existing?.sku) {
+        catalogData.sku = existing.sku;
+      }
 
       // Create or update
       const catalogProduct = await this.createOrUpdateProduct(catalogData, existing);
 
       const quantity = this.getAllegroProductStock(allegroProduct);
       await this.syncWarehouseStock(catalogProduct.id, quantity, sku, 'allegro AllegroProduct');
+      await this.syncCatalogMedia(catalogProduct.id, this.extractMedia(allegroProduct, relatedOffers), sku);
+      await this.syncRelatedOfferCatalogProducts(relatedOffers, catalogProduct.id, allegroProduct);
 
       this.recordMapping({
         source: 'AllegroProduct',
@@ -503,11 +785,92 @@ class ProductMigrationService {
     }
   }
 
+  private async migrateAllegroOffer(offer: any): Promise<void> {
+    const sku = `ALLEGRO-OFFER-${offer.allegroOfferId}`;
+
+    try {
+      const existing = await this.findProductInCatalog(sku, null);
+      const catalogData = this.mapAllegroOfferToCatalog(offer);
+      if (existing?.sku) {
+        catalogData.sku = existing.sku;
+      }
+
+      const catalogProduct = await this.createOrUpdateProduct(catalogData, existing);
+      await this.syncWarehouseStock(catalogProduct.id, Number(offer.stockQuantity || 0), sku, 'allegro AllegroOffer');
+      await this.syncCatalogMedia(catalogProduct.id, this.extractMedia(offer, [offer]), sku);
+
+      this.recordMapping({
+        source: 'AllegroOffer',
+        legacyId: offer.id,
+        sku,
+        ean: null,
+        catalogProductId: catalogProduct.id,
+        stockQuantity: Number(offer.stockQuantity || 0),
+      });
+
+      if (existing) {
+        this.stats.updated++;
+        const action = this.dryRun ? 'Would update' : 'Updated';
+        console.log(`✅ ${action} AllegroOffer: ${sku} (${offer.title || offer.allegroOfferId})`);
+      } else {
+        this.stats.created++;
+        const action = this.dryRun ? 'Would create' : 'Created';
+        console.log(`✅ ${action} AllegroOffer: ${sku} (${offer.title || offer.allegroOfferId})`);
+      }
+    } catch (error: any) {
+      this.stats.errors++;
+      this.stats.errorDetails.push({
+        productId: offer.id,
+        sku,
+        error: error.message,
+      });
+      console.error(`❌ Error migrating AllegroOffer ${sku}: ${error.message}`);
+    }
+  }
+
+  private async syncRelatedOfferCatalogProducts(offers: any[], primaryCatalogProductId: string, productSource: any): Promise<void> {
+    for (const offer of offers) {
+      if (!offer?.allegroOfferId) {
+        continue;
+      }
+
+      const sku = `ALLEGRO-OFFER-${offer.allegroOfferId}`;
+      const existing = await this.findProductInCatalog(sku, null);
+      if (!existing || existing.id === primaryCatalogProductId) {
+        continue;
+      }
+
+      try {
+        const catalogData = this.mapAllegroOfferToCatalog(offer, productSource);
+        catalogData.sku = existing.sku;
+        const catalogProduct = await this.createOrUpdateProduct(catalogData, existing);
+        await this.syncCatalogMedia(catalogProduct.id, this.extractMedia(offer, [offer]), sku);
+        this.stats.updated++;
+        const action = this.dryRun ? 'Would update' : 'Updated';
+        console.log(`✅ ${action} related AllegroOffer catalog product: ${sku} (${offer.title || offer.allegroOfferId})`);
+      } catch (error: any) {
+        this.stats.errors++;
+        this.stats.errorDetails.push({
+          productId: offer.id,
+          sku,
+          error: error.message,
+        });
+        console.error(`❌ Error syncing related AllegroOffer catalog product ${sku}: ${error.message}`);
+      }
+    }
+  }
+
   /**
    * Migrate all products from Product table
    */
   private async migrateProductsTable(): Promise<void> {
     console.log('\n📦 Migrating products from Product table...\n');
+
+    if (!(this.prisma as any).product) {
+      this.stats.totalProducts = 0;
+      console.log('Legacy Product model is not available in Prisma schema; skipping Product table\n');
+      return;
+    }
 
     const products = await this.prisma.product.findMany({
       orderBy: { createdAt: 'asc' },
@@ -539,6 +902,7 @@ class ProductMigrationService {
     console.log('\n📦 Migrating products from AllegroProduct table...\n');
 
     const allegroProducts = await this.prisma.allegroProduct.findMany({
+      include: { parameters: true },
       orderBy: { createdAt: 'asc' },
     });
 
@@ -558,6 +922,28 @@ class ProductMigrationService {
     }
   }
 
+  private async migrateUnlinkedAllegroOffersTable(): Promise<void> {
+    console.log('\n📦 Migrating unlinked products from AllegroOffer table...\n');
+
+    const offers = await this.prisma.allegroOffer.findMany({
+      where: { allegroProductId: null },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    this.stats.totalOffers = offers.length;
+    console.log(`Found ${offers.length} unlinked AllegroOffers to migrate\n`);
+
+    for (let i = 0; i < offers.length; i++) {
+      const offer = offers[i];
+      console.log(`[${i + 1}/${offers.length}] Processing AllegroOffer: ${offer.allegroOfferId}`);
+      await this.migrateAllegroOffer(offer);
+
+      if (i < offers.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+  }
+
   /**
    * Print migration statistics
    */
@@ -567,12 +953,15 @@ class ProductMigrationService {
     console.log('='.repeat(60));
     console.log(`Total Products (Product table): ${this.stats.totalProducts}`);
     console.log(`Total AllegroProducts: ${this.stats.totalAllegroProducts}`);
+    console.log(`Total unlinked AllegroOffers: ${this.stats.totalOffers}`);
     console.log(`✅ Created: ${this.stats.created}`);
     console.log(`🔄 Updated: ${this.stats.updated}`);
     console.log(`⏭️  Skipped: ${this.stats.skipped}`);
     console.log(`❌ Errors: ${this.stats.errors}`);
     console.log(`📦 Stock synced: ${this.stats.stockSynced}`);
     console.log(`📦 Stock skipped: ${this.stats.stockSkipped}`);
+    console.log(`🖼️  Media created: ${this.stats.mediaCreated}`);
+    console.log(`🖼️  Media skipped: ${this.stats.mediaSkipped}`);
     console.log('='.repeat(60));
 
     if (this.stats.errorDetails.length > 0) {
@@ -614,7 +1003,6 @@ class ProductMigrationService {
       // Load offer stock snapshots to prefer freshest stock values
       const offers = await this.prisma.allegroOffer.findMany({
         select: {
-          productId: true,
           allegroProductId: true,
           stockQuantity: true,
           updatedAt: true,
@@ -632,6 +1020,9 @@ class ProductMigrationService {
 
       // Migrate AllegroProduct table
       await this.migrateAllegroProductsTable();
+
+      // Migrate offers that do not have an AllegroProduct row but already exist in Catalog by offer SKU
+      await this.migrateUnlinkedAllegroOffersTable();
 
       // Print statistics
       this.printStats();
@@ -708,11 +1099,12 @@ class ProductMigrationService {
     });
 
     const [products, allegroProducts, offers] = await Promise.all([
-      this.prisma.product.findMany({ orderBy: { updatedAt: 'desc' } }),
-      this.prisma.allegroProduct.findMany({ orderBy: { updatedAt: 'desc' } }),
+      (this.prisma as any).product
+        ? (this.prisma as any).product.findMany({ orderBy: { updatedAt: 'desc' } })
+        : Promise.resolve([]),
+      this.prisma.allegroProduct.findMany({ include: { parameters: true }, orderBy: { updatedAt: 'desc' } }),
       this.prisma.allegroOffer.findMany({
         select: {
-          productId: true,
           allegroProductId: true,
           stockQuantity: true,
           updatedAt: true,
@@ -858,4 +1250,3 @@ if (require.main === module) {
 }
 
 export { ProductMigrationService };
-
