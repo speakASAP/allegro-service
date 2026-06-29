@@ -199,6 +199,7 @@ export class ProductsService {
         page,
         limit,
         search,
+        isActive: true,
       });
 
       // Enrich with AllegroProduct data (Allegro-specific raw data)

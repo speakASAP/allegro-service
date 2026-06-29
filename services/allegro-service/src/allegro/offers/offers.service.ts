@@ -1764,59 +1764,9 @@ export class OffersService {
 
             const allegroProductId = await this.upsertAllegroProductFromOffer(fullOfferData, oauthToken);
             
-            // Create or link catalog product if AllegroProduct was created
+            // Catalog entries for imported offers are owned by the offer-specific sync below.
+            // Creating a second Product from AllegroProduct/EAN leaves incomplete duplicates.
             let catalogProductId: string | null = null;
-            if (allegroProductId) {
-              try {
-                const allegroProduct = await this.prisma.allegroProduct.findUnique({
-                  where: { id: allegroProductId },
-                });
-                
-                if (allegroProduct && (allegroProduct.ean || allegroProduct.allegroProductId)) {
-                  const sku = allegroProduct.ean || `ALLEGRO-${allegroProduct.allegroProductId}`;
-                  
-                  // Try to find existing catalog product
-                  let catalogProduct;
-                  try {
-                    catalogProduct = await this.catalogClient.getProductBySku(sku);
-                  } catch {
-                    // Not found by SKU, try by EAN if available
-                    if (allegroProduct.ean) {
-                      const searchResults = await this.catalogClient.searchProducts({ search: allegroProduct.ean });
-                      catalogProduct = searchResults.items?.find((p: any) => p.ean === allegroProduct.ean);
-                    }
-                  }
-                  
-                  if (catalogProduct) {
-                    catalogProductId = catalogProduct.id;
-                    this.logger.log('[importApprovedOffers] Found existing catalog product', {
-                      catalogProductId,
-                      sku,
-                    });
-                  } else {
-                    // Create new catalog product
-                    catalogProduct = await this.catalogClient.createProduct({
-                      sku,
-                      title: allegroProduct.name || 'Product',
-                      brand: allegroProduct.brand || undefined,
-                      manufacturer: allegroProduct.manufacturerCode || undefined,
-                      ean: allegroProduct.ean || undefined,
-                    });
-                    catalogProductId = catalogProduct.id;
-                    this.logger.log('[importApprovedOffers] Created new catalog product', {
-                      catalogProductId,
-                      sku,
-                    });
-                  }
-                }
-              } catch (error: any) {
-                this.logger.warn('[importApprovedOffers] Failed to create/link catalog product', {
-                  error: error.message,
-                  allegroProductId,
-                });
-                // Continue without catalog product link
-              }
-            }
             
             const offerData = this.sanitizeOfferDataForPrisma(this.extractOfferData(fullOfferData));
             catalogProductId = await this.syncCatalogFromImportedOffer(
@@ -2222,59 +2172,9 @@ export class OffersService {
 
             const allegroProductId = await this.upsertAllegroProductFromOffer(fullOfferData, oauthToken);
             
-            // Create or link catalog product if AllegroProduct was created
+            // Catalog entries for imported offers are owned by the offer-specific sync below.
+            // Creating a second Product from AllegroProduct/EAN leaves incomplete duplicates.
             let catalogProductId: string | null = null;
-            if (allegroProductId) {
-              try {
-                const allegroProduct = await this.prisma.allegroProduct.findUnique({
-                  where: { id: allegroProductId },
-                });
-                
-                if (allegroProduct && (allegroProduct.ean || allegroProduct.allegroProductId)) {
-                  const sku = allegroProduct.ean || `ALLEGRO-${allegroProduct.allegroProductId}`;
-                  
-                  // Try to find existing catalog product
-                  let catalogProduct;
-                  try {
-                    catalogProduct = await this.catalogClient.getProductBySku(sku);
-                  } catch {
-                    // Not found by SKU, try by EAN if available
-                    if (allegroProduct.ean) {
-                      const searchResults = await this.catalogClient.searchProducts({ search: allegroProduct.ean });
-                      catalogProduct = searchResults.items?.find((p: any) => p.ean === allegroProduct.ean);
-                    }
-                  }
-                  
-                  if (catalogProduct) {
-                    catalogProductId = catalogProduct.id;
-                    this.logger.log('[importAllOffers] Found existing catalog product', {
-                      catalogProductId,
-                      sku,
-                    });
-                  } else {
-                    // Create new catalog product
-                    catalogProduct = await this.catalogClient.createProduct({
-                      sku,
-                      title: allegroProduct.name || 'Product',
-                      brand: allegroProduct.brand || undefined,
-                      manufacturer: allegroProduct.manufacturerCode || undefined,
-                      ean: allegroProduct.ean || undefined,
-                    });
-                    catalogProductId = catalogProduct.id;
-                    this.logger.log('[importAllOffers] Created new catalog product', {
-                      catalogProductId,
-                      sku,
-                    });
-                  }
-                }
-              } catch (error: any) {
-                this.logger.warn('[importAllOffers] Failed to create/link catalog product', {
-                  error: error.message,
-                  allegroProductId,
-                });
-                // Continue without catalog product link
-              }
-            }
             
             const offerData = this.sanitizeOfferDataForPrisma(this.extractOfferData(fullOfferData));
             catalogProductId = await this.syncCatalogFromImportedOffer(
