@@ -37,6 +37,8 @@ interface MigrationStats {
   mediaSkipped: number;
   marketplaceProfilesSynced: number;
   marketplaceProfilesSkipped: number;
+  pricingSynced: number;
+  pricingSkipped: number;
   errorDetails: Array<{ productId: string; sku: string; error: string }>;
 }
 
@@ -154,6 +156,8 @@ class ProductMigrationService {
       mediaSkipped: 0,
       marketplaceProfilesSynced: 0,
       marketplaceProfilesSkipped: 0,
+      pricingSynced: 0,
+      pricingSkipped: 0,
       errorDetails: [],
     };
   }
@@ -514,6 +518,16 @@ class ProductMigrationService {
     };
   }
 
+  private extractPrice(source: any, offers: any[] = []): { amount: number; currency: string } | null {
+    const profile = this.buildAllegroMarketplaceProfile(source, offers, {});
+    const amount = Number(profile.overrides.price);
+    const currency = String(profile.overrides.currency || '').trim().toUpperCase();
+    if (!Number.isFinite(amount) || amount <= 0 || !/^[A-Z]{3}$/.test(currency)) {
+      return null;
+    }
+    return { amount, currency };
+  }
+
   /**
    * Check if product exists in catalog-microservice by SKU or EAN
    */
@@ -713,6 +727,54 @@ class ProductMigrationService {
     }
   }
 
+  private async syncCatalogPricing(catalogProductId: string, price: { amount: number; currency: string } | null, sku: string): Promise<void> {
+    if (this.dryRun) {
+      if (price) {
+        this.stats.pricingSkipped++;
+      }
+      return;
+    }
+
+    if (!price) {
+      this.stats.pricingSkipped++;
+      return;
+    }
+
+    try {
+      const currentResponse = await this.catalogClient.get(`/api/pricing/product/${catalogProductId}/current`);
+      const current = currentResponse.data?.data;
+      const currentAmount = current?.basePrice != null ? Number(current.basePrice) : null;
+      const currentCurrency = current?.currency ? String(current.currency).toUpperCase() : null;
+      if (current?.isActive && currentAmount === price.amount && currentCurrency === price.currency) {
+        this.stats.pricingSkipped++;
+        return;
+      }
+    } catch {
+      // No current price or pricing endpoint unavailable; try to write below.
+    }
+
+    try {
+      await this.catalogClient.post('/api/pricing', {
+        productId: catalogProductId,
+        basePrice: price.amount,
+        currency: price.currency,
+        priceType: 'regular',
+        isActive: true,
+        validFrom: new Date().toISOString(),
+      });
+      this.stats.pricingSynced++;
+    } catch (error: any) {
+      this.stats.pricingSkipped++;
+      await this.log('warn', 'Failed to sync Allegro price to Catalog pricing', {
+        sku,
+        catalogProductId,
+        amount: price.amount,
+        currency: price.currency,
+        error: error.response?.data?.message || error.response?.data?.error?.message || error.message || String(error),
+      });
+    }
+  }
+
   /**
    * Create or update product in catalog-microservice
    */
@@ -870,6 +932,7 @@ class ProductMigrationService {
       await this.syncWarehouseStock(catalogProduct.id, quantity, sku, 'allegro Product');
       await this.syncCatalogMedia(catalogProduct.id, this.extractMedia(product, relatedOffers), sku);
       await this.syncMarketplaceProfile(catalogProduct.id, this.buildAllegroMarketplaceProfile(product, relatedOffers, catalogData), sku);
+      await this.syncCatalogPricing(catalogProduct.id, this.extractPrice(product, relatedOffers), sku);
 
       this.recordMapping({
         source: 'Product',
@@ -928,6 +991,7 @@ class ProductMigrationService {
       await this.syncWarehouseStock(catalogProduct.id, quantity, sku, 'allegro AllegroProduct');
       await this.syncCatalogMedia(catalogProduct.id, this.extractMedia(allegroProduct, relatedOffers), sku);
       await this.syncMarketplaceProfile(catalogProduct.id, this.buildAllegroMarketplaceProfile(allegroProduct, relatedOffers, catalogData), sku);
+      await this.syncCatalogPricing(catalogProduct.id, this.extractPrice(allegroProduct, relatedOffers), sku);
       await this.syncRelatedOfferCatalogProducts(relatedOffers, catalogProduct.id, allegroProduct);
 
       this.recordMapping({
@@ -973,6 +1037,7 @@ class ProductMigrationService {
       await this.syncWarehouseStock(catalogProduct.id, Number(offer.stockQuantity || 0), sku, 'allegro AllegroOffer');
       await this.syncCatalogMedia(catalogProduct.id, this.extractMedia(offer, [offer]), sku);
       await this.syncMarketplaceProfile(catalogProduct.id, this.buildAllegroMarketplaceProfile(offer, [offer], catalogData), sku);
+      await this.syncCatalogPricing(catalogProduct.id, this.extractPrice(offer, [offer]), sku);
 
       this.recordMapping({
         source: 'AllegroOffer',
@@ -1021,6 +1086,7 @@ class ProductMigrationService {
         const catalogProduct = await this.createOrUpdateProduct(catalogData, existing);
         await this.syncCatalogMedia(catalogProduct.id, this.extractMedia(offer, [offer]), sku);
         await this.syncMarketplaceProfile(catalogProduct.id, this.buildAllegroMarketplaceProfile(productSource || offer, [offer], catalogData), sku);
+        await this.syncCatalogPricing(catalogProduct.id, this.extractPrice(productSource || offer, [offer]), sku);
         this.stats.updated++;
         const action = this.dryRun ? 'Would update' : 'Updated';
         console.log(`✅ ${action} related AllegroOffer catalog product: ${sku} (${offer.title || offer.allegroOfferId})`);
@@ -1140,6 +1206,8 @@ class ProductMigrationService {
     console.log(`🖼️  Media skipped: ${this.stats.mediaSkipped}`);
     console.log(`🧩 Marketplace profiles synced: ${this.stats.marketplaceProfilesSynced}`);
     console.log(`🧩 Marketplace profiles skipped: ${this.stats.marketplaceProfilesSkipped}`);
+    console.log(`💰 Pricing synced: ${this.stats.pricingSynced}`);
+    console.log(`💰 Pricing skipped: ${this.stats.pricingSkipped}`);
     console.log('='.repeat(60));
 
     if (this.stats.errorDetails.length > 0) {
