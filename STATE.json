@@ -4,14 +4,14 @@
   "stage": "production",
   "health": "ok",
   "cycle": 6,
-  "last_cycle_at": "2026-06-29T19:45:00Z",
+  "last_cycle_at": "2026-06-29T18:45:00Z",
   "tasks_active": 1,
   "tasks_failed_last_cycle": 0,
   "open_task_ids": [
     "TASK-010"
   ],
   "last_milestone": "task009-public-client-landing-dashboard-live-validated",
-  "next_focus": "TASK-010 W5 raw payload retention metadata and category-parameter offline readiness complete after commit: continue with W2 migration/deploy coordination, live category coverage enforcement, and remaining domain import/export adapters; stock apply remains owner-gated.",
+  "next_focus": "TASK-010 live cycle complete: W2 migration baseline/deploy applied, c0d4953 deployed, owner-approved current-stock Warehouse apply and sync evidence recording completed. Continue with P1 orders projection split and P2 offers/products import adapter refactor; recurring stock sync and Allegro quantity commands remain policy-gated.",
   "blockers": [],
   "budget_units_used": 0,
   "metrics": {

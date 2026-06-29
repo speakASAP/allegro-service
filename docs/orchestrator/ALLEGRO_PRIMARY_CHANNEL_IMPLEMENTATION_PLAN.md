@@ -545,7 +545,7 @@ Required output fields:
 | Offer/listing | Allegro sale offer/product-offer | `AllegroOffer` | allegro-service for channel snapshot; Catalog for product content | Allegro publish lifecycle | Listing is a channel representation of Catalog data. |
 | Category/parameters | Allegro category APIs | category/parameter cache or raw payload | allegro-service cache, Catalog mapping policy | Allegro publisher | Needed before valid export-back. |
 | Stock snapshot | Allegro product-offer detail | `AllegroOfferStockSnapshot` | Warehouse for physical stock; allegro-service for channel snapshot | Warehouse-backed stock command lane | Ordered quantity is not stock. |
-| Stock command | Allegro quantity command API | `AllegroStockCommandAttempt` | Warehouse decision, allegro-service command | Warehouse-backed stock sync planner | Blocked until stock orchestration approval. |
+| Stock command | Allegro quantity command API | `AllegroStockCommandAttempt` | Warehouse decision, allegro-service command | Warehouse-backed stock sync planner | Current-stock Warehouse import executed once; Allegro quantity-command write-back still gated. |
 | Checkout/order | Allegro checkout forms | `AllegroOrder`, `AllegroOrderLineItem` | orders-microservice for central order | orders-microservice | Forward only fully mapped orders. |
 | Buyer/delivery | Allegro checkout forms | order projection fields/raw payload | orders-microservice after accepted forward | none | PII, redaction required. |
 | Payment summary | Allegro checkout/payment summary | order projection plus payment operation projection | payments/finance for payment logic | none initially | Start read-only. |
@@ -1732,7 +1732,7 @@ Merge order:
 
 ### W5: Warehouse-backed stock sync
 
-Status: blocked until Warehouse/stock orchestration approval
+Status: partially_executed_for_current_stock_import; Allegro quantity-command write-back remains dependency_gated
 Owner role: stock integration agent
 Objective: Plan and then implement Warehouse-backed Allegro quantity commands.
 Allowed files:
@@ -1743,8 +1743,8 @@ Allowed files:
 
 Forbidden files/actions:
 
-- Warehouse mutations;
-- live Allegro stock apply;
+- Warehouse mutations outside owner-approved guarded current-stock import;
+- live Allegro quantity-command stock apply;
 - legacy DB-first stock endpoint in production.
 
 Expected output:
@@ -1758,7 +1758,7 @@ Dependencies:
 
 - W2 schema;
 - Warehouse semantics;
-- stock orchestration approval.
+- recurring stock orchestration policy for automatic sync and Allegro quantity commands.
 
 Validation:
 
@@ -1981,7 +1981,7 @@ These lanes must wait:
 
 - W3 orders integration waits for W2 plus orders owner contract.
 - W4 offer export waits for category/parameter validation and W2.
-- W5 stock sync waits for Warehouse semantics and stock orchestration approval.
+- W5 current-stock Warehouse import has one owner-approved execution; recurring stock sync and Allegro quantity commands wait for a standing policy.
 - BizBox apply hardening waits for import owner and Warehouse/Catalog owner
   gates.
 
@@ -2173,7 +2173,7 @@ resolved:
 
 - `[MISSING: confirmed Allegro OAuth scopes for billing, payments, returns, claims, invoices, issues, shipments, and fulfillment]`
 - `[MISSING: Warehouse sellable stock semantics and reservation policy]`
-- `[MISSING: stock orchestration approval for live Allegro quantity commands]`
+- `[MISSING: recurring stock orchestration policy for automatic Allegro quantity commands]`
 - `[MISSING: category and parameter mapping completeness for publish beyond offline readiness helper]`
 - `[MISSING: finance owner decision for payment/refund/settlement writes]`
 - `[MISSING: customer service owner decision for return/claim/issue write-back]`

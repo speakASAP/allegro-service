@@ -84,7 +84,7 @@ Live account evidence, without buyer PII:
 | Order shipments/tracking | `/order/checkout-forms/{id}/shipments`, `/order/carriers` | only delivery fields and nullable `trackingNumber`; no durable shipment table | tracking write and fulfillment status write blocked |
 | Shipment management | `/shipment-management/*` | `[MISSING: local schema/client]` | create/cancel/label/protocol/pickup blocked |
 | One Fulfillment | `/fulfillment/*` | `[MISSING: local schema/client]` | ASN writes and One Fulfillment commands blocked |
-| Warehouse-backed stock | Warehouse API plus Allegro offer quantity commands | draft quantity capped to Warehouse availability at `10009cb`; no durable Allegro stock sync | blocked pending stock orchestration approval |
+| Warehouse-backed stock | Warehouse API plus Allegro offer quantity commands | current-stock Warehouse import executed once on 2026-06-29 with guarded confirmation; draft quantity capped to Warehouse availability | recurring sync and Allegro quantity-command write-back remain gated |
 
 ## Entity Relationship Map
 
@@ -764,8 +764,8 @@ Re-run requirements:
 - Validation owner: same thread, unless a separate integration-validator is started.
 - Completed: guarded local-only checkout form importer, order projection apply, and orders UI/API pagination validation.
 - Ready now: read-only schema/client design for billing/payment operations, returns/refunds/claims/invoices/issues, and shipment-management/One Fulfillment projections.
-- Dependency-gated: export-back to Allegro offers, stock sync, shipment creation, billing normalization, payment/refund actions, invoice uploads, and issue mutation.
-- Blocked: Warehouse-backed stock mutation without stock orchestration approval.
+- Completed once with owner approval: guarded current-stock Warehouse import from Allegro product-offer stock evidence.
+- Dependency-gated: export-back to Allegro offers, recurring stock sync, Allegro quantity commands, shipment creation, billing normalization, payment/refund actions, invoice uploads, and issue mutation.
 - Shared files/contracts: `prisma/schema.prisma`, order sync code, publish lifecycle, stock contract, future billing/shipment/returns schema contracts.
 - Merge order for future work: docs/runbook first, projection schemas second, read-only dry-run clients third, UI/API read surfaces fourth, owner-approved write gates last.
 

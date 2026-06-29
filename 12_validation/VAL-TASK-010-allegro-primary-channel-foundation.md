@@ -50,7 +50,10 @@ plan by turning Allegro import and export mapping into safe implementation lanes
 | Live publish was not executed in W4b validation | Pass | W4b validation used diff, build, and synthetic publish lifecycle spec only. It did not run live publish/update, Allegro write endpoints, migration apply, deploy, Warehouse stock mutation, or BizBox apply. |
 | Live publish was not executed in W4c validation | Pass | W4c validation used diff, build, and synthetic publish lifecycle spec only. It did not run live publish/update, Allegro write endpoints, migration apply, deploy, Warehouse stock mutation, or BizBox apply. |
 | Live mutation paths were not executed in W5 validation | Pass | W5 validation used diff, build, synthetic category readiness tests, documentation review, and report-only code paths only. It did not run live Allegro reads/writes, import apply, export apply, migration apply, deploy, Warehouse stock mutation, or BizBox apply. |
-| Stock apply remains owner-gated | Pass | `services/allegro-service/src/scripts/import-current-allegro-stock-to-warehouse.ts` was not edited or executed in TASK-010 follow-up validation. |
+| Owner-approved current-stock Warehouse apply executed | Pass | On 2026-06-29 owner approval was granted for stock apply. Guarded dry-run/verify found 9 unique stock-authoritative offers, Warehouse matched 9/9, and guarded apply used `--confirm-apply ALLEGRO_CURRENT_STOCK_IMPORT` against warehouse `c0de0000-0000-4000-8000-000000000013`; applied 9, failed 0. |
+| W2 live migration and deploy coordination completed | Pass | Live Prisma history was baseline-resolved for already-existing schema migrations, then `20260629170000_add_allegro_sync_projection_foundation` was applied. `migrate status` reports up to date and Kubernetes deployments now run image tag `c0d4953`. |
+| Local stock sync evidence recording executed | Pass | `audit-current-stock-source` ran with `--record-sync-run --confirm-sync-recording ALLEGRO_SYNC_RECORDING_LOCAL_ONLY`; it wrote 3 sync runs, 27 raw payloads, 27 projection audit logs, and 27 stock snapshots. |
+| Raw payload retention audit works in runtime | Pass | `audit-raw-payload-retention` now bootstraps `DATABASE_URL` from pod `DB_*` env and reported 27 `offer_stock_payload` records, 0 expired, report-only cleanup. |
 | TASK-009 audit debt remains separate | Pass with debt | Strict audit and pre-coding failures name TASK-009 documentation/graph issues; TASK-010-specific strict-audit findings were corrected. |
 
 ## Gate evidence
@@ -124,6 +127,35 @@ plan by turning Allegro import and export mapping into safe implementation lanes
 - `npm run ips:audit`: FAIL on 2026-06-29 after W5 with the same 17 TASK-009
   documentation/graph findings; no new TASK-010 findings appeared in the gate
   output.
+- Live Prisma baseline and migration deploy: PASS on 2026-06-29. Seven
+  already-existing schema migrations were marked applied in
+  `_prisma_migrations`, then
+  `20260629170000_add_allegro_sync_projection_foundation` was applied;
+  post-check reported database schema up to date and the five W2 tables
+  present.
+- `./scripts/deploy.sh`: PASS on 2026-06-29 for image tag `8552ef5` in
+  211.30s, then PASS for image tag `c0d4953` in 56.20s after the retention
+  audit runtime fix.
+- External health after deploy: PASS on 2026-06-29. The frontend route
+  returned HTTP 200 and the API health route returned `status=ok`.
+- Current-stock dry-run/verify: PASS on 2026-06-29. Mode `dry-run`,
+  `mutatesWarehouse=false`, 9 unique stock-authoritative offers, Warehouse
+  matches 9, mismatches 0, errors 0.
+- Owner-approved current-stock Warehouse apply: PASS on 2026-06-29. Mode
+  `apply`, `mutatesWarehouse=true`, warehouse
+  `c0de0000-0000-4000-8000-000000000013`, `applied=9`, `applyFailed=0`,
+  reason code `ALLEGRO_CURRENT_STOCK_IMPORT`.
+- Post-apply dry-run/verify: PASS on 2026-06-29. Warehouse still matched
+  9/9 unique stock-authoritative offers with errors 0.
+- Local sync evidence recording: PASS on 2026-06-29. Confirmed local-only
+  sync recording wrote 3 sync runs, 27 raw payloads, 27 audit logs, and 27
+  stock snapshots.
+- Raw payload retention audit: PASS on 2026-06-29 after `c0d4953`.
+  Report-only audit found 27 `offer_stock_payload` records and 0 expired
+  payloads.
+- `npm run ips:audit`: FAIL on 2026-06-29 after live-cycle documentation
+  updates with the same 17 TASK-009 documentation/graph findings; no new
+  TASK-010 findings appeared in the gate output.
 
 ## Invariant evidence
 
@@ -215,8 +247,9 @@ This does not yet claim full category coverage or live UI enforcement.
 - Known pre-existing issue: TASK-009 documentation/graph audit debt existed
   before TASK-010 and remains out of scope because TASK-010 did not edit
   TASK-009 files.
-- Warehouse and stock orchestration approval for live Allegro quantity command
-  apply is not granted in TASK-010.
+- Owner approval for the one-time current-stock Warehouse apply was granted
+  and used on 2026-06-29. Recurring automatic stock sync and Allegro
+  quantity-command write-back remain separate follow-up work.
 - Finance owner approval for refunds, captures, payouts, and settlement writes
   is not granted in TASK-010.
 - Customer service owner approval for returns, claims, invoices, and issues
@@ -227,15 +260,18 @@ This does not yet claim full category coverage or live UI enforcement.
   metadata/report-only until a separate owner-approved maintenance job exists.
 - Full live category mapping coverage and UI/API enforcement of category
   parameter readiness remain gated beyond the W5 offline helper.
-- W3 did not apply the W2 migration to any live database, so the new recording
-  flags require the target database to already have W2 tables deployed.
+- Live Prisma history had to be baseline-resolved because
+  `_prisma_migrations` was absent while older schema changes already existed.
+  The W2 sync/projection migration is now applied, but this baseline event
+  should remain documented for future migration audits.
 - W4 intentionally makes confirmation token-bound. Direct convenience routes
   that still use one-step prepare/confirm/execute must either accept and forward
   preview tokens or remain blocked/fail-closed before production use.
 - W4b/W4c cover direct single-offer update, sync-to-Allegro, and bulk publish
   token propagation. W5 covers retention metadata and offline category-parameter
-  readiness evidence. Migration/deploy coordination, live category coverage, and
-  owner-approved stock apply remain follow-up work before production use.
+  readiness evidence. Migration/deploy coordination and the owner-approved
+  current-stock Warehouse apply are complete; live category coverage and Allegro
+  quantity-command write-back remain follow-up work before production use.
 
 ## Recommendation
 
@@ -243,7 +279,9 @@ Accept TASK-010-W0, W1, W2, W3, W4 preview-token binding, and W5
 retention/category-readiness foundation as implemented with validation debt
 noted. Do not claim full deployment readiness until TASK-009 audit debt is
 repaired or the readiness gates are made task-scoped enough to ignore unrelated
-historical debt, and do not run live apply paths without owner approval.
+historical debt. Continue to require preview/dry-run evidence and explicit
+owner approval for any new live apply path beyond the 2026-06-29 current-stock
+Warehouse import.
 
 ## Traceability confirmation
 
