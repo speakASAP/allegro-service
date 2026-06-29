@@ -18,11 +18,11 @@ export class PublishLifecycleController {
   @Post(':attemptId/confirm')
   async confirm(
     @Param('attemptId') attemptId: string,
-    @Body() _dto: ConfirmPublishAttemptDto,
+    @Body() dto: ConfirmPublishAttemptDto,
     @Request() req: any,
   ): Promise<{ success: boolean; data: any }> {
     const userId = String(req.user?.id || req.user?.sub || 'unknown');
-    const attempt = await this.publishLifecycleService.confirm(attemptId, userId);
+    const attempt = await this.publishLifecycleService.confirm(attemptId, userId, dto.previewToken);
     return { success: true, data: attempt };
   }
 

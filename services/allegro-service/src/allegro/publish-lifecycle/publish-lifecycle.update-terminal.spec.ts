@@ -151,11 +151,35 @@ async function testUpdateAttemptPreparesWithoutBlocking() {
   assert.equal(updateGate?.status, 'PASS');
   assert.equal(updateGate?.evidence?.terminalStatuses?.join(','), 'SUCCEEDED,FAILED');
   assert.equal(attempt.commandPayload.accessToken, '[REDACTED]');
+  assert.equal(typeof attempt.previewToken, 'string');
+  assert.equal(attempt.previewToken.startsWith('alg-preview-v1-'), true);
+  assert.equal(attempt.previewTokenBinding.requiredForConfirm, true);
+}
+
+async function testConfirmRequiresPreviewToken() {
+  const harness = createServiceHarness();
+  const attempt = await harness.service.prepare(
+    {
+      action: 'UPDATE',
+      offerId: '11111111-1111-1111-1111-111111111111',
+      idempotencyKey: 'confirm-update-preview-token-required',
+      commandPayload: {
+        title: 'Updated title',
+        syncToAllegro: true,
+      },
+    },
+    'user-1',
+  );
+
+  await assert.rejects(
+    () => harness.service.confirm(attempt.id, 'user-1'),
+    (error: any) => error.getResponse?.().code === 'PREVIEW_TOKEN_REQUIRED',
+  );
 }
 
 async function testUpdateAttemptExecutesToSucceededTerminalResult() {
   const harness = createServiceHarness();
-  const attempt = await harness.service.prepareConfirmAndExecute(
+  const prepared = await harness.service.prepare(
     {
       action: 'UPDATE',
       offerId: '11111111-1111-1111-1111-111111111111',
@@ -165,6 +189,11 @@ async function testUpdateAttemptExecutesToSucceededTerminalResult() {
         syncToAllegro: true,
       },
     },
+    'user-1',
+  );
+  const queued = await harness.service.confirm(prepared.id, 'user-1', prepared.previewToken);
+  const attempt = await harness.service.execute(
+    queued.id,
     'user-1',
     'req-success',
   );
@@ -198,12 +227,17 @@ async function testUpdateAttemptExecutesToFailedTerminalResult() {
     },
   });
 
-  const attempt = await harness.service.prepareConfirmAndExecute(
+  const prepared = await harness.service.prepare(
     {
       action: 'UPDATE',
       offerId: '11111111-1111-1111-1111-111111111111',
       idempotencyKey: 'execute-update-terminal-failure',
     },
+    'user-1',
+  );
+  const queued = await harness.service.confirm(prepared.id, 'user-1', prepared.previewToken);
+  const attempt = await harness.service.execute(
+    queued.id,
     'user-1',
     'req-failure',
   );
@@ -216,6 +250,7 @@ async function testUpdateAttemptExecutesToFailedTerminalResult() {
 
 export async function runPublishLifecycleUpdateTerminalSpec(): Promise<void> {
   await testUpdateAttemptPreparesWithoutBlocking();
+  await testConfirmRequiresPreviewToken();
   await testUpdateAttemptExecutesToSucceededTerminalResult();
   await testUpdateAttemptExecutesToFailedTerminalResult();
 }

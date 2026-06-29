@@ -12,6 +12,7 @@ import {
 
 const SECRET_KEYS = ['authorization', 'token', 'accessToken', 'refreshToken', 'clientSecret', 'secret', 'apiKey', 'password'];
 const TERMINAL_STATUSES = ['SUCCEEDED', 'FAILED', 'CANCELLED'] as const;
+const PREVIEW_TOKEN_VERSION = 'v1';
 
 @Injectable()
 export class PublishLifecycleService {
@@ -56,7 +57,7 @@ export class PublishLifecycleService {
 
     const existing = await prismaAny.allegroPublishAttempt.findUnique({ where: { idempotencyKey } });
     if (existing) {
-      return this.withDerivedStatus(existing);
+      return this.withPreviewToken(existing);
     }
 
     const policyEvaluation = await this.policyEngine.evaluate({
@@ -73,6 +74,19 @@ export class PublishLifecycleService {
       .filter((result) => result.status === 'BLOCK')
       .map((result) => ({ gate: result.gate, reason: result.reason || 'blocked' }));
 
+    const commandPayload = this.redact(dto.commandPayload || {});
+    const staleAt = this.addHours(now, 24);
+    const previewToken = this.buildPreviewToken({
+      action: dto.action,
+      idempotencyKey,
+      requestedByUserId,
+      accountId,
+      catalogProductId,
+      offerId: offer?.id || null,
+      commandPayload,
+      staleAt,
+    });
+
     const attempt = await prismaAny.allegroPublishAttempt.create({
       data: {
         action: dto.action,
@@ -83,9 +97,26 @@ export class PublishLifecycleService {
         catalogProductId,
         allegroOfferId: offer?.allegroOfferId || null,
         offerId: offer?.id || null,
-        commandPayload: this.redact(dto.commandPayload || {}),
+        commandPayload,
         policySnapshot: {
           ...policyEvaluation,
+          previewTokenBinding: {
+            version: PREVIEW_TOKEN_VERSION,
+            requiredForConfirm: true,
+            tokenHash: this.hashPreviewToken(previewToken),
+            tokenReturnedIn: 'prepare_response_only',
+            expiresAt: staleAt.toISOString(),
+            bindingFields: [
+              'action',
+              'idempotencyKey',
+              'requestedByUserId',
+              'accountId',
+              'catalogProductId',
+              'offerId',
+              'commandPayload',
+              'staleAt',
+            ],
+          },
           lifecycleStates: ['PREPARED', 'BLOCKED', 'CONFIRMED', 'QUEUED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'STALE'],
           legacyDirectPaths: [
             'POST /allegro/offers/publish-all',
@@ -96,7 +127,7 @@ export class PublishLifecycleService {
         },
         blockedReasons,
         preparedAt: now,
-        staleAt: this.addHours(now, 24),
+        staleAt,
       },
     });
 
@@ -110,10 +141,10 @@ export class PublishLifecycleService {
       blockedReasonCount: blockedReasons.length,
     });
 
-    return this.withDerivedStatus(attempt);
+    return this.withPreviewToken(attempt, previewToken);
   }
 
-  async confirm(attemptId: string, requestedByUserId: string): Promise<any> {
+  async confirm(attemptId: string, requestedByUserId: string, previewToken?: string): Promise<any> {
     const prismaAny = this.prisma as any;
     const attempt = await prismaAny.allegroPublishAttempt.findUnique({ where: { id: attemptId } });
 
@@ -132,17 +163,20 @@ export class PublishLifecycleService {
     if (!['PREPARED', 'CONFIRMED', 'QUEUED'].includes(attempt.status)) {
       throw new HttpException(`Cannot confirm attempt in ${attempt.status} status`, HttpStatus.CONFLICT);
     }
+    this.requirePreviewToken(attempt, previewToken);
     if (attempt.status === 'QUEUED') {
       return this.withDerivedStatus(attempt);
     }
 
     const now = new Date();
+    const policySnapshot = this.withPreviewTokenConfirmation(attempt.policySnapshot, previewToken || '', now);
     const updated = await prismaAny.allegroPublishAttempt.update({
       where: { id: attemptId },
       data: {
         status: 'QUEUED',
         confirmedAt: attempt.confirmedAt || now,
         queuedAt: attempt.queuedAt || now,
+        policySnapshot,
       },
     });
 
@@ -159,24 +193,25 @@ export class PublishLifecycleService {
 
 
 
-  async prepareConfirmAndExecute(dto: PreparePublishAttemptDto, requestedByUserId: string, requestId?: string): Promise<any> {
+  async prepareConfirmAndExecute(dto: PreparePublishAttemptDto, requestedByUserId: string, requestId?: string, previewToken?: string): Promise<any> {
     const attempt = await this.prepare(dto, requestedByUserId);
     if (attempt.status === 'BLOCKED') {
       return attempt;
     }
 
-    const queued = await this.confirm(attempt.id, requestedByUserId);
+    const queued = await this.confirm(attempt.id, requestedByUserId, previewToken);
     return this.execute(queued.id, requestedByUserId, requestId);
   }
 
-  async executeMany(dtoList: PreparePublishAttemptDto[], requestedByUserId: string, requestId?: string): Promise<any> {
+  async executeMany(dtoList: PreparePublishAttemptDto[], requestedByUserId: string, requestId?: string, previewTokensByIdempotencyKey: Record<string, string> = {}): Promise<any> {
     const results: any[] = [];
     let successful = 0;
     let failed = 0;
     let blocked = 0;
 
     for (const dto of dtoList) {
-      const attempt = await this.prepareConfirmAndExecute(dto, requestedByUserId, requestId);
+      const previewToken = dto.idempotencyKey ? previewTokensByIdempotencyKey[dto.idempotencyKey] : undefined;
+      const attempt = await this.prepareConfirmAndExecute(dto, requestedByUserId, requestId, previewToken);
       results.push({
         attemptId: attempt.id,
         offerId: attempt.offerId,
@@ -360,6 +395,105 @@ export class PublishLifecycleService {
   }
 
 
+
+  private requirePreviewToken(attempt: any, previewToken?: string): void {
+    if (!previewToken) {
+      throw new HttpException(
+        {
+          code: 'PREVIEW_TOKEN_REQUIRED',
+          message: 'Confirming an Allegro publish attempt requires the preview token returned by prepare.',
+        },
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    const expected = this.expectedPreviewTokenHash(attempt);
+    const received = this.hashPreviewToken(previewToken);
+    if (expected !== received) {
+      throw new HttpException(
+        {
+          code: 'PREVIEW_TOKEN_MISMATCH',
+          message: 'Preview token does not match the prepared Allegro publish attempt.',
+        },
+        HttpStatus.CONFLICT,
+      );
+    }
+  }
+
+  private withPreviewToken(attempt: any, previewToken?: string): any {
+    const derived = this.withDerivedStatus(attempt);
+    if ((TERMINAL_STATUSES as readonly string[]).includes(derived.status)) {
+      return derived;
+    }
+    const token = previewToken || this.buildPreviewTokenFromAttempt(derived);
+    return {
+      ...derived,
+      previewToken: token,
+      previewTokenBinding: {
+        version: PREVIEW_TOKEN_VERSION,
+        requiredForConfirm: true,
+        expiresAt: derived.staleAt || null,
+        tokenReturnedIn: 'prepare_response_only',
+      },
+    };
+  }
+
+  private withPreviewTokenConfirmation(policySnapshot: any, previewToken: string, confirmedAt: Date): any {
+    const previewTokenBinding = {
+      ...(policySnapshot?.previewTokenBinding || {}),
+      confirmedAt: confirmedAt.toISOString(),
+      confirmationTokenHash: this.hashPreviewToken(previewToken),
+      rawTokenStored: false,
+    };
+    return {
+      ...(policySnapshot || {}),
+      previewTokenBinding,
+    };
+  }
+
+  private expectedPreviewTokenHash(attempt: any): string {
+    const storedHash = attempt?.policySnapshot?.previewTokenBinding?.tokenHash;
+    if (storedHash) return storedHash;
+    return this.hashPreviewToken(this.buildPreviewTokenFromAttempt(attempt));
+  }
+
+  private buildPreviewTokenFromAttempt(attempt: any): string {
+    return this.buildPreviewToken({
+      action: attempt.action,
+      idempotencyKey: attempt.idempotencyKey,
+      requestedByUserId: attempt.requestedByUserId,
+      accountId: attempt.accountId || null,
+      catalogProductId: attempt.catalogProductId || null,
+      offerId: attempt.offerId || null,
+      commandPayload: attempt.commandPayload || {},
+      staleAt: attempt.staleAt || null,
+    });
+  }
+
+  private buildPreviewToken(input: Record<string, unknown>): string {
+    const secret = process.env.ALLEGRO_PREVIEW_TOKEN_SECRET || process.env.ENCRYPTION_KEY || 'local-preview-token-secret';
+    const canonical = this.stableStringify({ version: PREVIEW_TOKEN_VERSION, input, secret });
+    return `alg-preview-${PREVIEW_TOKEN_VERSION}-${createHash('sha256').update(canonical).digest('hex').slice(0, 48)}`;
+  }
+
+  private hashPreviewToken(previewToken: string): string {
+    return `sha256:${createHash('sha256').update(String(previewToken || '')).digest('hex')}`;
+  }
+
+  private stableStringify(value: unknown): string {
+    return JSON.stringify(this.sortJson(value));
+  }
+
+  private sortJson(value: any): any {
+    if (value instanceof Date) return value.toISOString();
+    if (Array.isArray(value)) return value.map((item) => this.sortJson(item));
+    if (!value || typeof value !== 'object') return value;
+    const sorted: Record<string, unknown> = {};
+    for (const key of Object.keys(value).sort()) {
+      sorted[key] = this.sortJson(value[key]);
+    }
+    return sorted;
+  }
 
   private async markFailed(attemptId: string, code: string, message: string, details: unknown): Promise<any> {
     return (this.prisma as any).allegroPublishAttempt.update({

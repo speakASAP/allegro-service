@@ -41,6 +41,10 @@ export class PreparePublishAttemptDto {
 }
 
 export class ConfirmPublishAttemptDto {
+  @IsString()
+  @IsNotEmpty()
+  previewToken!: string;
+
   @IsOptional()
   @IsString()
   @IsNotEmpty()

@@ -52,3 +52,9 @@ export class BulkPrepareCatalogSellActionDto {
   @Type(() => PrepareCatalogSellActionDto)
   items!: PrepareCatalogSellActionDto[];
 }
+
+export class ConfirmCatalogSellActionDto {
+  @IsString()
+  @IsNotEmpty()
+  previewToken!: string;
+}

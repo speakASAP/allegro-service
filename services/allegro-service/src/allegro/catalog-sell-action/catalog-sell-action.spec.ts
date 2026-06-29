@@ -216,7 +216,7 @@ import { strict as assert } from 'assert';
 
         async function testConfirmQueuesWithoutExecuting() {
           const { service } = createHarness();
-          const result = await service.confirm('attempt-1', 'user-1');
+          const result = await service.confirm('attempt-1', 'user-1', 'synthetic-preview-token');
 
           assert.equal(result.status, 'QUEUED');
           assert.equal(result.nextAction, 'monitor_publish_queue');
@@ -301,7 +301,7 @@ import { strict as assert } from 'assert';
             }],
           });
 
-          const result = await service.confirmProductPublish(existingDraft.catalogProductId, 'user-1');
+          const result = await service.confirmProductPublish(existingDraft.catalogProductId, 'user-1', 'synthetic-preview-token');
 
           assert.equal(result.status, 'QUEUED');
           assert.equal(result.nextAction, 'monitor_publish_queue');

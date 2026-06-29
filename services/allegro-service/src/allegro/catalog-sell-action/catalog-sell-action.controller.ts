@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Put, Request, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '@allegro/shared';
-import { BulkPrepareCatalogSellActionDto, PrepareCatalogSellActionDto } from './catalog-sell-action.dto';
+import { BulkPrepareCatalogSellActionDto, ConfirmCatalogSellActionDto, PrepareCatalogSellActionDto } from './catalog-sell-action.dto';
 import { CatalogSellActionService } from './catalog-sell-action.service';
 
 @Controller('allegro/catalog-sell')
@@ -46,17 +46,22 @@ export class CatalogSellActionController {
   @Post('products/:catalogProductId/confirm')
   async confirmProductPublish(
     @Param('catalogProductId') catalogProductId: string,
+    @Body() dto: ConfirmCatalogSellActionDto,
     @Request() req: any,
   ): Promise<{ success: boolean; data: any }> {
     const userId = String(req.user?.id || req.user?.sub || 'unknown');
-    const data = await this.catalogSellActionService.confirmProductPublish(catalogProductId, userId);
+    const data = await this.catalogSellActionService.confirmProductPublish(catalogProductId, userId, dto.previewToken);
     return { success: true, data };
   }
 
   @Post(':attemptId/confirm')
-  async confirm(@Param('attemptId') attemptId: string, @Request() req: any): Promise<{ success: boolean; data: any }> {
+  async confirm(
+    @Param('attemptId') attemptId: string,
+    @Body() dto: ConfirmCatalogSellActionDto,
+    @Request() req: any,
+  ): Promise<{ success: boolean; data: any }> {
     const userId = String(req.user?.id || req.user?.sub || 'unknown');
-    const data = await this.catalogSellActionService.confirm(attemptId, userId);
+    const data = await this.catalogSellActionService.confirm(attemptId, userId, dto.previewToken);
     return { success: true, data };
   }
 

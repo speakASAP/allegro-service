@@ -90,8 +90,8 @@ export class CatalogSellActionService {
     };
   }
 
-  async confirm(attemptId: string, requestedByUserId: string): Promise<any> {
-    const attempt = await this.publishLifecycleService.confirm(attemptId, requestedByUserId);
+  async confirm(attemptId: string, requestedByUserId: string, previewToken: string): Promise<any> {
+    const attempt = await this.publishLifecycleService.confirm(attemptId, requestedByUserId, previewToken);
     const draft = attempt.offerId ? await (this.prisma as any).allegroOffer.findUnique({ where: { id: attempt.offerId } }) : null;
 
     return {
@@ -185,12 +185,12 @@ export class CatalogSellActionService {
     };
   }
 
-  async confirmProductPublish(catalogProductId: string, requestedByUserId: string): Promise<any> {
+  async confirmProductPublish(catalogProductId: string, requestedByUserId: string, previewToken: string): Promise<any> {
     const current = await this.getProductStatus(catalogProductId, requestedByUserId);
     if (!current.attempt?.id) {
       throw new HttpException('Prepare an Allegro publish attempt before confirmation', HttpStatus.CONFLICT);
     }
-    return this.confirm(current.attempt.id, requestedByUserId);
+    return this.confirm(current.attempt.id, requestedByUserId, previewToken);
   }
 
   private async loadCatalogProduct(catalogProductId: string): Promise<any> {
