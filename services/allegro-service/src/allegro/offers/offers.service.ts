@@ -1776,38 +1776,7 @@ export class OffersService {
               catalogProductId,
               '[importApprovedOffers]',
             );
-            
-            // Sync stock to warehouse-microservice if catalog product exists and stock is available
-            if (catalogProductId && offerData.stockQuantity > 0) {
-              try {
-                const warehouseId = await this.warehouseClient.getDefaultWarehouseId();
-                if (warehouseId) {
-                  await this.warehouseClient.setStock(
-                    catalogProductId,
-                    warehouseId,
-                    offerData.stockQuantity,
-                    `Stock imported from Allegro offer ${allegroOffer.id}`
-                  );
-                  this.logger.log('[importApprovedOffers] Stock synced to warehouse-microservice', {
-                    catalogProductId,
-                    warehouseId,
-                    stockQuantity: offerData.stockQuantity,
-                  });
-                } else {
-                  this.logger.warn('[importApprovedOffers] No default warehouse ID found, skipping stock sync', {
-                    catalogProductId,
-                    stockQuantity: offerData.stockQuantity,
-                  });
-                }
-              } catch (error: any) {
-                this.logger.warn('[importApprovedOffers] Failed to sync stock to warehouse-microservice', {
-                  error: error.message,
-                  catalogProductId,
-                  stockQuantity: offerData.stockQuantity,
-                });
-                // Continue without stock sync - stock is still stored in offer
-              }
-            }
+            await this.syncWarehouseStockFromImportedOffer(catalogProductId, fullOfferData, allegroOffer.id, '[importApprovedOffers]');
             
             // Extract and ensure responsible producer exists
             let responsibleProducerId: string | null = null;
@@ -2184,38 +2153,7 @@ export class OffersService {
               catalogProductId,
               '[importAllOffers]',
             );
-            
-            // Sync stock to warehouse-microservice if catalog product exists and stock is available
-            if (catalogProductId && offerData.stockQuantity > 0) {
-              try {
-                const warehouseId = await this.warehouseClient.getDefaultWarehouseId();
-                if (warehouseId) {
-                  await this.warehouseClient.setStock(
-                    catalogProductId,
-                    warehouseId,
-                    offerData.stockQuantity,
-                    `Stock imported from Allegro offer ${allegroOffer.id}`
-                  );
-                  this.logger.log('[importAllOffers] Stock synced to warehouse-microservice', {
-                    catalogProductId,
-                    warehouseId,
-                    stockQuantity: offerData.stockQuantity,
-                  });
-                } else {
-                  this.logger.warn('[importAllOffers] No default warehouse ID found, skipping stock sync', {
-                    catalogProductId,
-                    stockQuantity: offerData.stockQuantity,
-                  });
-                }
-              } catch (error: any) {
-                this.logger.warn('[importAllOffers] Failed to sync stock to warehouse-microservice', {
-                  error: error.message,
-                  catalogProductId,
-                  stockQuantity: offerData.stockQuantity,
-                });
-                // Continue without stock sync - stock is still stored in offer
-              }
-            }
+            await this.syncWarehouseStockFromImportedOffer(catalogProductId, fullOfferData, allegroOffer.id, '[importAllOffers]');
             
             // Log before saving
             this.logger.log('[importAllOffers] Saving offer to database', {
@@ -2551,6 +2489,19 @@ export class OffersService {
             
             const allegroProductId = await this.upsertAllegroProductFromOffer(fullOfferData, oauthToken);
             const offerData = this.sanitizeOfferDataForPrisma(this.extractOfferData(fullOfferData));
+            const catalogProductId = await this.syncCatalogFromImportedOffer(
+              fullOfferData,
+              offerData,
+              allegroProductId,
+              null,
+              '[importApprovedOffersFromSalesCenter]',
+            );
+            await this.syncWarehouseStockFromImportedOffer(
+              catalogProductId,
+              fullOfferData,
+              allegroOffer.id,
+              '[importApprovedOffersFromSalesCenter]',
+            );
             
             // Log after parsing - what was extracted
             this.logger.log('[importApprovedOffersFromSalesCenter] Raw data parsed successfully', {
@@ -2590,6 +2541,7 @@ export class OffersService {
               update: {
                 ...offerData,
                 ...(allegroProductId ? { allegroProductId } : {}),
+                ...(catalogProductId ? { catalogProductId } : {}),
                 syncStatus: 'SYNCED',
                 syncSource: 'SALES_CENTER',
                 lastSyncedAt: new Date(),
@@ -2597,6 +2549,7 @@ export class OffersService {
               create: {
                 ...offerData,
                 ...(allegroProductId ? { allegroProductId } : {}),
+                ...(catalogProductId ? { catalogProductId } : {}),
                 syncStatus: 'SYNCED',
                 syncSource: 'SALES_CENTER',
                 lastSyncedAt: new Date(),
@@ -2840,11 +2793,25 @@ export class OffersService {
 
           const allegroProductId = await this.upsertAllegroProductFromOffer(fullOfferData, oauthToken);
           const offerData = this.sanitizeOfferDataForPrisma(this.extractOfferData(fullOfferData));
+          const catalogProductId = await this.syncCatalogFromImportedOffer(
+            fullOfferData,
+            offerData,
+            allegroProductId,
+            null,
+            '[importFromSalesCenter]',
+          );
+          await this.syncWarehouseStockFromImportedOffer(
+            catalogProductId,
+            fullOfferData,
+            allegroOffer.id,
+            '[importFromSalesCenter]',
+          );
           const offer = await this.prisma.allegroOffer.upsert({
             where: { allegroOfferId: allegroOffer.id },
             update: {
               ...offerData,
               ...(allegroProductId ? { allegroProductId } : {}),
+              ...(catalogProductId ? { catalogProductId } : {}),
               // Multi-account support: track which account owns this offer
               ...(activeAccountId ? { accountId: activeAccountId } : {}),
               syncStatus: 'SYNCED',
@@ -2854,6 +2821,7 @@ export class OffersService {
             create: {
               ...offerData,
               ...(allegroProductId ? { allegroProductId } : {}),
+              ...(catalogProductId ? { catalogProductId } : {}),
               // Multi-account support: track which account owns this offer
               ...(activeAccountId ? { accountId: activeAccountId } : {}),
               syncStatus: 'SYNCED',
@@ -3161,6 +3129,72 @@ export class OffersService {
     }
   }
 
+  private async syncWarehouseStockFromImportedOffer(
+    catalogProductId: string | null,
+    allegroOffer: any,
+    allegroOfferId: string,
+    logContext: string,
+  ): Promise<void> {
+    if (!catalogProductId) {
+      this.logger.warn(`${logContext} Skipping Warehouse stock sync; Catalog product is unavailable`, {
+        allegroOfferId,
+      });
+      return;
+    }
+
+    const quantity = this.extractOptionalNonNegativeNumber(
+      allegroOffer?.stock?.available,
+      allegroOffer?.availableQuantity,
+      allegroOffer?.stockQuantity,
+      allegroOffer?.quantity,
+      allegroOffer?.rawData?.stock?.available,
+    );
+
+    if (quantity === null) {
+      this.logger.warn(`${logContext} Skipping Warehouse stock sync; Allegro stock quantity is missing`, {
+        allegroOfferId,
+        catalogProductId,
+      });
+      return;
+    }
+
+    try {
+      const warehouseId = await this.warehouseClient.getDefaultWarehouseId();
+      if (!warehouseId) {
+        this.logger.warn(`${logContext} No default warehouse ID found, skipping stock sync`, {
+          allegroOfferId,
+          catalogProductId,
+          stockQuantity: quantity,
+        });
+        return;
+      }
+
+      await this.warehouseClient.setStock(
+        catalogProductId,
+        warehouseId,
+        quantity,
+        {
+          reasonCode: 'ALLEGRO_OFFER_STOCK_IMPORT',
+          reference: String(allegroOfferId),
+        },
+      );
+
+      this.logger.log(`${logContext} Stock synced to warehouse-microservice`, {
+        allegroOfferId,
+        catalogProductId,
+        warehouseId,
+        stockQuantity: quantity,
+      });
+    } catch (error: any) {
+      this.logger.warn(`${logContext} Failed to sync stock to warehouse-microservice`, {
+        error: error?.response?.data?.message || error?.message || String(error),
+        allegroOfferId,
+        catalogProductId,
+        stockQuantity: quantity,
+      });
+    }
+  }
+
   private async findCatalogProductForImportedOffer(
     sku: string,
     existingCatalogProductId?: string | null,
@@ -3325,6 +3359,20 @@ export class OffersService {
       }
     }
     return 0;
+  }
+
+  private extractOptionalNonNegativeNumber(...values: any[]): number | null {
+    for (const value of values) {
+      if (value === undefined || value === null || value === '') {
+        continue;
+      }
+
+      const numeric = Number(value);
+      if (Number.isFinite(numeric) && numeric >= 0) {
+        return numeric;
+      }
+    }
+    return null;
   }
 
   private async syncCatalogMediaFromImportedOffer(
@@ -3593,7 +3641,13 @@ export class OffersService {
    */
   private extractOfferData(allegroOffer: any): any {
     const images = this.extractImages(allegroOffer);
-    const stockAvailable = allegroOffer.stock?.available || 0;
+    const stockAvailable = this.extractOptionalNonNegativeNumber(
+      allegroOffer.stock?.available,
+      allegroOffer.availableQuantity,
+      allegroOffer.stockQuantity,
+      allegroOffer.quantity,
+      allegroOffer.rawData?.stock?.available,
+    ) ?? 0;
     const publicationStatus = allegroOffer.publication?.status || 'INACTIVE';
     const priceAmount = allegroOffer.sellingMode?.price?.amount || '0';
     const currency = allegroOffer.sellingMode?.price?.currency || this.getDefaultCurrency();
@@ -3905,6 +3959,13 @@ export class OffersService {
         lastSyncedAt: new Date(),
       } as any,
     });
+
+    await this.syncWarehouseStockFromImportedOffer(
+      (updated as any).catalogProductId || (offer as any).catalogProductId || null,
+      fullOffer,
+      offer.allegroOfferId,
+      '[syncOfferFromAllegro]',
+    );
 
     const validation = this.validateOfferReadiness(updated);
     this.logger.log('[syncOfferFromAllegro] Validation result', {

@@ -105,7 +105,10 @@ export class ImportService {
                   product.id,
                   warehouseId,
                   stockQuantity,
-                  `Stock imported from CSV: ${fileName}`
+                  {
+                    reasonCode: 'BIZBOX_CSV_STOCK_IMPORT',
+                    reference: fileName,
+                  }
                 );
               } catch (error: any) {
                 this.logger.error(`Failed to update stock in warehouse-microservice: ${error.message}`, error.stack, 'ImportService');
@@ -265,4 +268,3 @@ export class ImportService {
     }
   }
 }
-

@@ -3,6 +3,11 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { LoggerService } from '../logger/logger.service';
 
+export interface WarehouseStockAuditInput {
+  reasonCode?: string;
+  reference?: string;
+}
+
 /**
  * API client for warehouse-microservice
  * Fetches stock levels and manages stock reservations
@@ -18,13 +23,61 @@ export class WarehouseClientService {
     this.baseUrl = process.env.WAREHOUSE_SERVICE_URL || 'http://warehouse-microservice:3201';
   }
 
+  private requestOptions(): Record<string, any> {
+    const token =
+      process.env.WAREHOUSE_SERVICE_TOKEN ||
+      process.env.WAREHOUSE_INTERNAL_SERVICE_TOKEN ||
+      process.env.JWT_TOKEN ||
+      process.env.INTERNAL_SERVICE_TOKEN;
+
+    if (!token) {
+      return {};
+    }
+
+    return {
+      headers: {
+        Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}`,
+      },
+    };
+  }
+
+  private normalizeReasonCode(value?: string): string {
+    const normalized = String(value || 'WAREHOUSE_STOCK_SYNC')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 100);
+
+    return normalized || 'WAREHOUSE_STOCK_SYNC';
+  }
+
+  private normalizeReference(value?: string): string | undefined {
+    const normalized = String(value || '').trim();
+    return normalized ? normalized.slice(0, 200) : undefined;
+  }
+
+  private stockAuditPayload(audit?: string | WarehouseStockAuditInput): WarehouseStockAuditInput {
+    if (typeof audit === 'string') {
+      return {
+        reasonCode: this.normalizeReasonCode(audit),
+        reference: this.normalizeReference(audit),
+      };
+    }
+
+    return {
+      reasonCode: this.normalizeReasonCode(audit?.reasonCode),
+      reference: this.normalizeReference(audit?.reference),
+    };
+  }
+
   /**
    * Get stock for a product across all warehouses
    */
   async getStockByProduct(productId: string): Promise<any[]> {
     try {
       const response = await firstValueFrom(
-        this.httpService.get(`${this.baseUrl}/api/stock/${productId}`)
+        this.httpService.get(`${this.baseUrl}/api/stock/${productId}`, this.requestOptions())
       );
       return response.data.data || [];
     } catch (error: unknown) {
@@ -40,7 +93,7 @@ export class WarehouseClientService {
   async getTotalAvailable(productId: string): Promise<number> {
     try {
       const response = await firstValueFrom(
-        this.httpService.get(`${this.baseUrl}/api/stock/${productId}/total`)
+        this.httpService.get(`${this.baseUrl}/api/stock/${productId}/total`, this.requestOptions())
       );
       return response.data.data?.totalAvailable || 0;
     } catch (error: unknown) {
@@ -61,7 +114,7 @@ export class WarehouseClientService {
           warehouseId,
           quantity,
           orderId,
-        })
+        }, this.requestOptions())
       );
       return response.data.data;
     } catch (error: unknown) {
@@ -83,7 +136,7 @@ export class WarehouseClientService {
           warehouseId,
           quantity,
           orderId,
-        })
+        }, this.requestOptions())
       );
       return response.data.data;
     } catch (error: unknown) {
@@ -97,15 +150,16 @@ export class WarehouseClientService {
   /**
    * Set stock quantity (absolute value)
    */
-  async setStock(productId: string, warehouseId: string, quantity: number, reason?: string): Promise<any> {
+  async setStock(productId: string, warehouseId: string, quantity: number, audit?: string | WarehouseStockAuditInput): Promise<any> {
     try {
+      const auditPayload = this.stockAuditPayload(audit);
       const response = await firstValueFrom(
         this.httpService.post(`${this.baseUrl}/api/stock/set`, {
           productId,
           warehouseId,
           quantity,
-          reason,
-        })
+          ...auditPayload,
+        }, this.requestOptions())
       );
       return response.data.data;
     } catch (error: unknown) {
@@ -121,13 +175,14 @@ export class WarehouseClientService {
    */
   async decrementStock(productId: string, warehouseId: string, quantity: number, reason?: string): Promise<any> {
     try {
+      const auditPayload = this.stockAuditPayload(reason || 'ORDER_SHIPPED');
       const response = await firstValueFrom(
         this.httpService.post(`${this.baseUrl}/api/stock/decrement`, {
           productId,
           warehouseId,
           quantity,
-          reason: reason || 'Order shipped',
-        })
+          ...auditPayload,
+        }, this.requestOptions())
       );
       return response.data.data;
     } catch (error: unknown) {
@@ -144,7 +199,7 @@ export class WarehouseClientService {
   async getWarehouses(): Promise<any[]> {
     try {
       const response = await firstValueFrom(
-        this.httpService.get(`${this.baseUrl}/api/warehouses`)
+        this.httpService.get(`${this.baseUrl}/api/warehouses`, this.requestOptions())
       );
       return response.data.data || [];
     } catch (error: unknown) {
@@ -178,4 +233,3 @@ export class WarehouseClientService {
     return null;
   }
 }
-

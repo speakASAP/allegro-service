@@ -46,6 +46,16 @@ spec:
                 secretKeyRef:
                   name: auth-microservice-secret
                   key: JWT_SECRET
+            - name: JWT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: allegro-service-secret
+                  key: JWT_TOKEN
+            - name: CATALOG_INTERNAL_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: allegro-service-secret
+                  key: CATALOG_INTERNAL_SERVICE_TOKEN
           startupProbe:
             httpGet:
               path: /health

@@ -83,7 +83,10 @@ export class InventoryService {
             offer.catalogProductId,
             warehouseId,
             quantity,
-            `Stock updated from Allegro offer ${offer.allegroOfferId}`
+            {
+              reasonCode: 'ALLEGRO_STOCK_UPDATE',
+              reference: offer.allegroOfferId,
+            }
           );
           this.logger.log(`Updated stock in warehouse-microservice for product ${offer.catalogProductId}`, 'InventoryService');
         }
@@ -96,4 +99,3 @@ export class InventoryService {
     return updated;
   }
 }
-
