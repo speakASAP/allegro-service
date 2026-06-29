@@ -118,6 +118,7 @@ model AllegroOffer {
   orderLineItems  AllegroOrderLineItem[]
   syncJobs        SyncJob[]
   publishAttempts AllegroPublishAttempt[]
+  stockSnapshots  AllegroOfferStockSnapshot[]
 
   allegroProduct       AllegroProduct?        @relation(fields: [allegroProductId], references: [id], onDelete: SetNull)
   account              AllegroAccount?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
@@ -178,6 +179,168 @@ model AllegroPublishAttempt {
   @@index([createdAt])
   @@index([staleAt])
   @@map("allegro_publish_attempts")
+}
+
+// Account-aware sync run evidence for Allegro channel imports, audits, and future exports.
+model AllegroSyncRun {
+  id                String    @id @default(uuid()) @db.Uuid
+  accountId         String    @db.Uuid
+  domain            String    @db.VarChar(80)
+  direction         String    @db.VarChar(30)
+  mode              String    @db.VarChar(30)
+  status            String    @db.VarChar(50)
+  idempotencyKey    String?   @unique @db.VarChar(160)
+  startedAt         DateTime  @default(now()) @db.Timestamp(6)
+  completedAt       DateTime? @db.Timestamp(6)
+  scannedCount      Int       @default(0)
+  createdCount      Int       @default(0)
+  updatedCount      Int       @default(0)
+  unchangedCount    Int       @default(0)
+  skippedCount      Int       @default(0)
+  failedCount       Int       @default(0)
+  cursorBefore      Json?
+  cursorAfter       Json?
+  configSnapshot    Json?
+  errorSummary      Json?
+  createdByUserId   String?   @db.VarChar(255)
+  createdAt         DateTime  @default(now()) @db.Timestamp(6)
+  updatedAt         DateTime  @updatedAt @db.Timestamp(6)
+
+  account             AllegroAccount               @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  cursors             AllegroSyncCursor[]          @relation("AllegroSyncCursorLastRun")
+  rawPayloads         AllegroRawPayload[]
+  projectionAuditLogs AllegroProjectionAuditLog[]
+  stockSnapshots      AllegroOfferStockSnapshot[]
+
+  @@index([accountId])
+  @@index([domain])
+  @@index([direction])
+  @@index([mode])
+  @@index([status])
+  @@index([startedAt])
+  @@index([completedAt])
+  @@map("allegro_sync_runs")
+}
+
+// Per-account cursor and watermark ownership for deterministic Allegro syncs.
+model AllegroSyncCursor {
+  id          String    @id @default(uuid()) @db.Uuid
+  accountId   String    @db.Uuid
+  domain      String    @db.VarChar(80)
+  endpoint    String    @db.VarChar(500)
+  cursorType  String    @db.VarChar(80)
+  cursorValue String?   @db.Text
+  watermarkAt DateTime? @db.Timestamp(6)
+  lastRunId   String?   @db.Uuid
+  lockedUntil DateTime? @db.Timestamp(6)
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
+  updatedAt   DateTime  @updatedAt @db.Timestamp(6)
+
+  account AllegroAccount  @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  lastRun AllegroSyncRun? @relation("AllegroSyncCursorLastRun", fields: [lastRunId], references: [id], onDelete: SetNull)
+
+  @@unique([accountId, domain, endpoint, cursorType])
+  @@index([accountId])
+  @@index([domain])
+  @@index([endpoint])
+  @@index([lastRunId])
+  @@index([lockedUntil])
+  @@index([updatedAt])
+  @@map("allegro_sync_cursors")
+}
+
+// Immutable raw Allegro payload evidence with PII classification and hashes.
+model AllegroRawPayload {
+  id               String   @id @default(uuid()) @db.Uuid
+  syncRunId        String?  @db.Uuid
+  accountId        String   @db.Uuid
+  domain           String   @db.VarChar(80)
+  endpoint         String   @db.VarChar(500)
+  externalId       String   @db.VarChar(255)
+  revision         String?  @db.VarChar(255)
+  payloadHash      String   @db.VarChar(128)
+  payload          Json
+  piiClass         String   @db.VarChar(50)
+  redactionVersion String   @db.VarChar(50)
+  receivedAt       DateTime @default(now()) @db.Timestamp(6)
+  createdAt        DateTime @default(now()) @db.Timestamp(6)
+
+  account        AllegroAccount              @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  syncRun        AllegroSyncRun?             @relation(fields: [syncRunId], references: [id], onDelete: SetNull)
+  stockSnapshots AllegroOfferStockSnapshot[]
+
+  @@unique([accountId, domain, externalId, payloadHash])
+  @@index([syncRunId])
+  @@index([accountId])
+  @@index([domain])
+  @@index([endpoint])
+  @@index([externalId])
+  @@index([payloadHash])
+  @@index([receivedAt])
+  @@map("allegro_raw_payloads")
+}
+
+// Append-only projection change evidence for replay and audit reviews.
+model AllegroProjectionAuditLog {
+  id              String   @id @default(uuid()) @db.Uuid
+  syncRunId       String?  @db.Uuid
+  accountId       String   @db.Uuid
+  entityType      String   @db.VarChar(80)
+  entityId        String?  @db.Uuid
+  externalId      String?  @db.VarChar(255)
+  action          String   @db.VarChar(50)
+  beforeHash      String?  @db.VarChar(128)
+  afterHash       String?  @db.VarChar(128)
+  diffSummary     Json?
+  redactedContext Json?
+  idempotencyKey  String?  @db.VarChar(160)
+  createdAt       DateTime @default(now()) @db.Timestamp(6)
+
+  account AllegroAccount  @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  syncRun AllegroSyncRun? @relation(fields: [syncRunId], references: [id], onDelete: SetNull)
+
+  @@index([syncRunId])
+  @@index([accountId])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([externalId])
+  @@index([action])
+  @@index([idempotencyKey])
+  @@index([createdAt])
+  @@map("allegro_projection_audit_logs")
+}
+
+// Current Allegro listing stock snapshots; Warehouse remains physical stock owner.
+model AllegroOfferStockSnapshot {
+  id                String   @id @default(uuid()) @db.Uuid
+  syncRunId         String?  @db.Uuid
+  accountId         String   @db.Uuid
+  offerId           String?  @db.Uuid
+  allegroOfferId    String   @db.VarChar(100)
+  catalogProductId  String?  @db.Uuid
+  sourceEndpoint    String   @db.VarChar(500)
+  sourceFetchedAt   DateTime @default(now()) @db.Timestamp(6)
+  payloadHash       String   @db.VarChar(128)
+  availableQuantity Int?
+  authorityClass    String   @db.VarChar(80)
+  rawPayloadId      String?  @db.Uuid
+  comparisonSummary Json?
+  createdAt         DateTime @default(now()) @db.Timestamp(6)
+
+  account    AllegroAccount     @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  syncRun    AllegroSyncRun?    @relation(fields: [syncRunId], references: [id], onDelete: SetNull)
+  offer      AllegroOffer?      @relation(fields: [offerId], references: [id], onDelete: SetNull)
+  rawPayload AllegroRawPayload? @relation(fields: [rawPayloadId], references: [id], onDelete: SetNull)
+
+  @@index([syncRunId])
+  @@index([accountId])
+  @@index([offerId])
+  @@index([allegroOfferId])
+  @@index([catalogProductId])
+  @@index([rawPayloadId])
+  @@index([sourceFetchedAt])
+  @@index([authorityClass])
+  @@map("allegro_offer_stock_snapshots")
 }
 
 // Orders from Allegro
@@ -472,6 +635,11 @@ model AllegroAccount {
   offers          AllegroOffer[]
   producers       ResponsibleProducer[]
   publishAttempts AllegroPublishAttempt[]
+  syncRuns        AllegroSyncRun[]
+  syncCursors     AllegroSyncCursor[]
+  rawPayloads     AllegroRawPayload[]
+  projectionAuditLogs AllegroProjectionAuditLog[]
+  stockSnapshots  AllegroOfferStockSnapshot[]
 
   @@index([userId])
   @@index([isActive])

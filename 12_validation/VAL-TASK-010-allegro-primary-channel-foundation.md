@@ -19,8 +19,9 @@ Validator: AI agent
 ## Summary
 
 TASK-010 opens the Allegro primary-channel foundation implementation. This
-validation report starts with IPS traceability and no-mutation checks, then must
-be updated with exact command evidence as W1/W2 code lanes are implemented.
+validation report covers W0/W1 and W2 foundation work: IPS traceability,
+script-safety guardrails, additive Prisma sync/projection models, and
+no-mutation checks.
 
 ## Upstream goal
 
@@ -34,6 +35,8 @@ plan by turning Allegro import and export mapping into safe implementation lanes
 | TASK-010 IPS spine exists | Pass | `FEAT-010`, `TASK-010`, `GOAL-IMPACT-TASK-010`, context package, execution plan, prompt, validation report, graph nodes/edges, `TASKS.md`, and `STATE.json` are present at commit `ef315a2`. |
 | Live mutation paths were not executed | Pass | Validation used diff, build, and documentation gates only. No live Allegro import or export apply, Warehouse stock mutation, BizBox apply, central order replay apply, payment/refund write, or deploy was run. |
 | Script foundation scope is bounded | Pass | W1 added `services/allegro-service/src/scripts/lib/script-safety.ts` and integrated only `import-checkout-forms-local.ts` plus `audit-current-stock-source.ts`. |
+| Additive schema foundation is bounded | Pass | W2 added only new Prisma models and a new migration for `AllegroSyncRun`, `AllegroSyncCursor`, `AllegroRawPayload`, `AllegroProjectionAuditLog`, and `AllegroOfferStockSnapshot`; no existing fields were renamed or dropped. |
+| Migration was not applied to live database | Pass | W2 ran Prisma validate/generate and service build only. It did not run `migrate deploy`, direct migration runners, import scripts, or live data mutation commands. |
 | Stock apply remains owner-gated | Pass | `services/allegro-service/src/scripts/import-current-allegro-stock-to-warehouse.ts` was not edited or executed in TASK-010 follow-up validation. |
 | TASK-009 audit debt remains separate | Pass with debt | Strict audit and pre-coding failures name TASK-009 documentation/graph issues; TASK-010-specific strict-audit findings were corrected. |
 
@@ -42,6 +45,12 @@ plan by turning Allegro import and export mapping into safe implementation lanes
 - `git diff --check`: PASS on 2026-06-29 during W0/W1 validation.
 - `cd services/allegro-service && npm run build`: PASS on 2026-06-29 after
   script safety helper integration.
+- `npx prisma validate --schema prisma/schema.prisma`: PASS on 2026-06-29 after
+  W2 schema model additions.
+- `npx prisma generate --schema prisma/schema.prisma`: PASS on 2026-06-29 after
+  W2 schema model additions.
+- `cd services/allegro-service && npm run build`: PASS on 2026-06-29 after W2
+  additive schema model additions.
 - `npm run ips:audit`: FAIL on 2026-06-29 with 17 findings, all tied to
   pre-existing TASK-009 documentation/graph debt plus the audit heuristic that
   treats the active TASK-009 plan as blocking prompt use. TASK-010-specific
@@ -64,7 +73,7 @@ plan by turning Allegro import and export mapping into safe implementation lanes
 - ALG-INV-004: Pass. `npm run ips:pre-coding` reported no sensitive-data
   findings.
 - ALG-INV-005: Pass. TASK-010 did not change runtime service ownership
-  boundaries.
+  boundaries; W2 added channel projection tables only.
 - ALG-INV-006: Pass. TASK-010 traceability exists across feature, task,
   goal-impact, context, execution plan, prompt, validation, graph, `TASKS.md`,
   and `STATE.json`.
@@ -82,8 +91,12 @@ service credentials, raw order payloads, or unmasked production screenshots.
 
 W1 adds a shared `script-safety` helper so safe scripts report mutation scope,
 mode, task id, allowed writes, forbidden writes, forwarding status, and
-confirmation status consistently. Future apply paths still need preview-token
-binding and idempotency before production use.
+confirmation status consistently. W2 adds account-aware sync runs, cursors, raw
+payload hashes, projection audit logs, and stock snapshots so future imports can
+be replayed and reviewed without using `SyncJob` or `WebhookEvent` as overloaded
+primary-channel state. `AllegroSyncRun.idempotencyKey` is unique when present so
+replayed sync runs can be bound to one durable run record. Future apply paths
+still need preview-token binding and idempotency before production use.
 
 ## Issues found
 
@@ -98,13 +111,14 @@ binding and idempotency before production use.
   write-back is not granted in TASK-010.
 - Fulfillment owner approval for shipment and label write-back is not granted in
   TASK-010.
+- Raw payload retention policy and full PII class taxonomy remain follow-up
+  design work before broad raw payload capture is enabled in scripts.
 
 ## Recommendation
 
-Accept TASK-010-W0 and TASK-010-W1 as implemented with validation debt noted.
-Do not claim full deployment readiness until TASK-009 audit debt is repaired or
-the readiness gates are made task-scoped enough to ignore unrelated historical
-debt.
+Accept TASK-010-W0, W1, and W2 as implemented with validation debt noted. Do not
+claim full deployment readiness until TASK-009 audit debt is repaired or the
+readiness gates are made task-scoped enough to ignore unrelated historical debt.
 
 ## Traceability confirmation
 

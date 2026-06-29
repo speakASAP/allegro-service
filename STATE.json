@@ -11,7 +11,7 @@
     "TASK-010"
   ],
   "last_milestone": "task009-public-client-landing-dashboard-live-validated",
-  "next_focus": "TASK-010 active: implement Allegro primary-channel foundation with guarded script framework first; schema/projection and stock apply lanes remain integration-owner and owner-gated.",
+  "next_focus": "TASK-010 W2 complete after commit: continue with read-only sync pipeline wiring that records AllegroSyncRun/cursors/raw payload hashes/audit logs; stock apply remains owner-gated.",
   "blockers": [],
   "budget_units_used": 0,
   "metrics": {
