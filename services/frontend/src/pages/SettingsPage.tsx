@@ -41,6 +41,41 @@ interface Settings {
   activeAllegroAccountId?: string | null;
 }
 
+const ALLEGRO_DEVELOPER_APPS_URL = "https://apps.developer.allegro.pl/";
+const ALLEGRO_OAUTH_REDIRECT_URI = "https://allegro.alfares.cz/api/allegro/oauth/callback";
+
+const AllegroCredentialsHelp: React.FC = () => (
+  <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+    <p className="font-medium">How to get Allegro API credentials</p>
+    <ol className="mt-2 list-decimal space-y-1 pl-5">
+      <li>
+        Open{" "}
+        <a
+          className="font-medium underline"
+          href={ALLEGRO_DEVELOPER_APPS_URL}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Allegro Developer My applications
+        </a>{" "}
+        and sign in with the seller account you want to connect.
+      </li>
+      <li>Create a new application or open your existing application for this integration.</li>
+      <li>
+        In redirect/callback URLs, add{" "}
+        <code className="break-all rounded bg-white px-1 py-0.5 text-xs text-blue-950">
+          {ALLEGRO_OAUTH_REDIRECT_URI}
+        </code>
+        .
+      </li>
+      <li>Save the application, then copy its Client ID and Client Secret into the fields here. Do not use your Allegro password.</li>
+    </ol>
+    <p className="mt-2 text-xs text-blue-800">
+      Account Name is only a label in this dashboard; use a shop or seller name you will recognize.
+    </p>
+  </div>
+);
+
 const SettingsPage: React.FC = () => {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(false);
@@ -439,6 +474,7 @@ const SettingsPage: React.FC = () => {
                       )}
                       {editingAccountId === account.id ? (
                         <div className="space-y-3 mt-3">
+                          <AllegroCredentialsHelp />
                           <Input
                             label="Account Name"
                             type="text"
@@ -548,6 +584,7 @@ const SettingsPage: React.FC = () => {
           {showAddAccount ? (
             <div className="p-4 border rounded-lg space-y-4">
               <h4 className="font-semibold">Add New Allegro Account</h4>
+              <AllegroCredentialsHelp />
               <Input
                 label="Account Name"
                 type="text"
