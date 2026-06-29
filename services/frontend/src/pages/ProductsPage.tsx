@@ -357,7 +357,13 @@ const ProductsPage: React.FC = () => {
       </div>
 
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        OAuth/account readiness is required before publish confirmation. Prepare draft is safe: it creates or reuses a local inactive draft and policy attempt, then waits for user confirmation.
+        <p className="font-semibold">OAuth account readiness is required before publish confirmation.</p>
+        <ol className="mt-2 list-decimal space-y-1 pl-5">
+          <li>Open Settings & OAuth and complete Allegro authorization for the seller account.</li>
+          <li>Select the authorized account in the dashboard header.</li>
+          <li>Select a product, prepare its local inactive draft, review policy blockers, then confirm publish explicitly.</li>
+        </ol>
+        <p className="mt-2 text-xs">If authorization cannot start because client credentials are absent or expired, an operator can update the OAuth keys in Kubernetes Vault and retry the authorization flow.</p>
       </div>
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
@@ -387,7 +393,6 @@ const ProductsPage: React.FC = () => {
                   <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Brand / EAN</th>
                   <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Draft status</th>
                   <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Next action</th>
-                  <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white">
@@ -396,7 +401,20 @@ const ProductsPage: React.FC = () => {
                   const statusError = statusErrors[product.id];
                   const active = selectedProduct?.id === product.id;
                   return (
-                    <tr key={product.id} className={active ? 'bg-blue-50' : ''}>
+                    <tr
+                      key={product.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-selected={active}
+                      onClick={() => selectProduct(product)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          void selectProduct(product);
+                        }
+                      }}
+                      className={`${active ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : 'hover:bg-gray-50'} cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    >
                       <td className="px-4 py-3 text-sm">
                         <div className="font-medium text-gray-900">{productTitle(product)}</div>
                         <div className="text-xs text-gray-500">{productSku(product)}</div>
@@ -412,18 +430,16 @@ const ProductsPage: React.FC = () => {
                           status?.status || status?.draft?.publicationStatus || 'Not prepared'
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm">{statusError || status?.nextAction || 'prepare_draft'}</td>
-                      <td className="px-4 py-3 text-right">
-                        <Button size="small" variant={active ? 'primary' : 'secondary'} onClick={() => selectProduct(product)}>
-                          {active ? 'Selected' : 'Select'}
-                        </Button>
+                      <td className="px-4 py-3 text-sm">
+                        <div>{statusError || status?.nextAction || 'prepare_draft'}</div>
+                        {active && <div className="mt-1 text-xs font-semibold text-blue-700">Selected</div>}
                       </td>
                     </tr>
                   );
                 })}
                 {products.length === 0 && (
                   <tr>
-                    <td className="px-4 py-8 text-center text-sm text-gray-500" colSpan={5}>
+                    <td className="px-4 py-8 text-center text-sm text-gray-500" colSpan={4}>
                       {loading ? 'Loading catalog products...' : 'No catalog products found'}
                     </td>
                   </tr>

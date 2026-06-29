@@ -77,7 +77,13 @@ const Dashboard: React.FC = () => {
               })}
             </ul>
             <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-              Publishing is confirmation-gated. OAuth readiness and account selection must be resolved before Allegro queue submission.
+              <p className="font-semibold">Publish confirmation is gated.</p>
+              <ol className="mt-2 list-decimal space-y-1 pl-4">
+                <li>Authorize an Allegro account in Settings & OAuth.</li>
+                <li>Select that authorized account in the header.</li>
+                <li>Return here, prepare the draft, then confirm publish.</li>
+              </ol>
+              <p className="mt-2 text-xs">If OAuth client credentials are missing or expired, ops may store the renewed keys in Kubernetes Vault before retrying authorization.</p>
             </div>
           </nav>
         </aside>
