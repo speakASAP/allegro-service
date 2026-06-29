@@ -1,5 +1,6 @@
 import * as crypto from 'crypto';
 import * as path from 'path';
+import { buildScriptSafety, redactedError, requireBooleanConfirmation } from './lib/script-safety';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { PrismaClient } = require(path.resolve(process.cwd(), '../../shared/node_modules/.prisma/client'));
@@ -299,18 +300,24 @@ function summarize(forms: any[], plan: any, attempts: SourceAttempt[], mode: 'dr
   const totalQuantity = lineItems.reduce((sum: number, line: any) => sum + Number(line?.quantity || 0), 0);
   const detailAttempts = attempts.filter((attempt) => attempt.source === 'order.checkout-forms.detail');
   const failedDetails = detailAttempts.filter((attempt) => !attempt.ok);
+  const writesAllowed = mode === 'apply' ? ['allegro_orders', 'allegro_order_line_items'] : [];
 
   return {
     done: true,
+    generatedAt: new Date().toISOString(),
     mode,
     source: 'allegro-checkout-forms-local-only',
-    safety: {
-      writesAllowed: mode === 'apply' ? ['allegro_orders', 'allegro_order_line_items'] : [],
+    safety: buildScriptSafety({
+      mode,
+      mutates: mode === 'apply',
+      mutatesLocalAllegroProjection: mode === 'apply',
+      writesAllowed,
       writesForbidden: ['orders-microservice', 'catalog-microservice', 'warehouse-microservice', 'allegro-write-api', 'bizbox-import'],
       forwardsOrders: false,
       mutatesWarehouse: false,
       mutatesAllegro: false,
-    },
+      confirmation: mode === 'apply' ? { flag: '--confirm-local-only', satisfied: true } : undefined,
+    }),
     fetched: {
       checkoutForms: forms.length,
       detailAttempts: detailAttempts.length,
@@ -460,7 +467,8 @@ async function main(): Promise<void> {
     return;
   }
   if (args.apply && !args.confirmLocalOnly) {
-    throw new Error('--apply requires --confirm-local-only to prevent accidental forwarding/Catalog/Warehouse/Allegro writes.');
+    // Local projection apply is intentionally not an order-forwarding path.
+    requireBooleanConfirmation(args.confirmLocalOnly, '--apply requires --confirm-local-only to prevent accidental forwarding/Catalog/Warehouse/Allegro writes.');
   }
 
   const account = await resolveAccount(args);
@@ -478,7 +486,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  console.error(JSON.stringify({ done: false, message: error?.message || String(error), stack: error?.stack }, null, 2));
+  console.error(JSON.stringify({ done: false, ...redactedError(error) }, null, 2));
   process.exit(1);
 }).finally(async () => {
   await prisma.$disconnect();

@@ -47,6 +47,10 @@ nodes:
     type: feature
     path: 10_features/FEAT-008-operations-trust-and-scale.md
     title: Operations Trust And Scale
+  - id: FEAT-010
+    type: feature
+    path: 10_features/FEAT-010-allegro-primary-channel-foundation.md
+    title: Allegro Primary Channel Foundation
   - id: TASK-001
     type: task
     path: 11_tasks/TASK-001-apply-ips-baseline.md
@@ -79,6 +83,10 @@ nodes:
     type: task
     path: 11_tasks/TASK-008-plan-operations-trust-and-scale.md
     title: Plan Operations Trust And Scale
+  - id: TASK-010
+    type: task
+    path: 11_tasks/TASK-010-allegro-primary-channel-foundation.md
+    title: Allegro Primary Channel Foundation
   - id: EP-TASK-001
     type: execution_plan
     path: 21_execution_plans/EP-TASK-001-apply-ips-baseline.md
@@ -111,6 +119,10 @@ nodes:
     type: execution_plan
     path: 21_execution_plans/EP-TASK-008-plan-operations-trust-and-scale.md
     title: Operations Trust And Scale
+  - id: EP-TASK-010
+    type: execution_plan
+    path: 21_execution_plans/EP-TASK-010-allegro-primary-channel-foundation.md
+    title: Allegro Primary Channel Foundation
   - id: PROMPT-TASK-001-ips-baseline
     type: coding_prompt
     path: 14_prompts/PROMPT-TASK-001-ips-baseline.md
@@ -143,6 +155,10 @@ nodes:
     type: coding_prompt
     path: 14_prompts/PROMPT-TASK-008-operations-trust-and-scale.md
     title: Operations Trust And Scale Prompt
+  - id: PROMPT-TASK-010-allegro-primary-channel-foundation
+    type: coding_prompt
+    path: 14_prompts/PROMPT-TASK-010-allegro-primary-channel-foundation.md
+    title: Allegro Primary Channel Foundation Prompt
   - id: CP-TASK-001
     type: context_package
     path: 13_context_packages/CP-TASK-001-ips-baseline.md
@@ -175,6 +191,10 @@ nodes:
     type: context_package
     path: 13_context_packages/CP-TASK-008-operations-trust-and-scale.md
     title: Operations Trust And Scale Context Package
+  - id: CP-TASK-010-allegro-primary-channel-foundation
+    type: context_package
+    path: 13_context_packages/CP-TASK-010-allegro-primary-channel-foundation.md
+    title: Allegro Primary Channel Foundation Context Package
   - id: ADR-001
     type: adr
     path: 07_decisions/ADR-001-preserve-existing-nestjs-prisma-service-boundary.md
@@ -211,6 +231,10 @@ nodes:
     type: validation_report
     path: 12_validation/VAL-TASK-008-validation-report.md
     title: Operations Trust And Scale Validation
+  - id: VAL-TASK-010-allegro-primary-channel-foundation
+    type: validation_report
+    path: 12_validation/VAL-TASK-010-allegro-primary-channel-foundation.md
+    title: Allegro Primary Channel Foundation Validation
 edges:
   - from: VISION-ALLEGRO-SERVICE
     type: defines
@@ -245,6 +269,9 @@ edges:
   - from: SYS-001
     type: enables
     to: FEAT-008
+  - from: SYS-001
+    type: enables
+    to: FEAT-010
   - from: TASK-001
     type: impacts_goal
     to: VG-004
@@ -435,5 +462,29 @@ edges:
     type: validates
     to: TASK-008
   - from: EP-TASK-008
+    type: constrained_by
+    to: ADR-001
+  - from: TASK-010
+    type: impacts_goal
+    to: VG-REVENUE
+  - from: TASK-010
+    type: implements
+    to: FEAT-010
+  - from: EP-TASK-010
+    type: derives_from
+    to: TASK-010
+  - from: EP-TASK-010
+    type: generates
+    to: PROMPT-TASK-010-allegro-primary-channel-foundation
+  - from: PROMPT-TASK-010-allegro-primary-channel-foundation
+    type: derives_from
+    to: EP-TASK-010
+  - from: PROMPT-TASK-010-allegro-primary-channel-foundation
+    type: included_in_context
+    to: CP-TASK-010-allegro-primary-channel-foundation
+  - from: VAL-TASK-010-allegro-primary-channel-foundation
+    type: validates
+    to: TASK-010
+  - from: EP-TASK-010
     type: constrained_by
     to: ADR-001

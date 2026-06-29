@@ -8,6 +8,7 @@ Owner created TASK-009 runtime/UI implementation goal on 2026-06-27.
 
 ## Active
 <!-- Coordinator-maintained -->
+- 2026-06-29 TASK-010-allegro-primary-channel-foundation: active foundation task for guarded Allegro primary-channel import/export implementation; live Warehouse/BizBox/Allegro/Orders/Payments mutation lanes remain owner-gated.
 
 ## Completed
 <!-- Coordinator-append-only -->

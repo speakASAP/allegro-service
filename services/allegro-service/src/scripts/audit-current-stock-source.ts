@@ -1,5 +1,6 @@
 import * as crypto from 'crypto';
 import * as path from 'path';
+import { buildScriptSafety, redactedError } from './lib/script-safety';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { PrismaClient } = require(path.resolve(process.cwd(), '../../shared/node_modules/.prisma/client'));
@@ -330,7 +331,22 @@ async function main(): Promise<void> {
     status: 'ok',
     generatedAt: new Date().toISOString(),
     source: 'allegro-current-stock-audit.v1',
+    mode: 'audit',
+    taskId: 'TASK-010',
     mutates: false,
+    safety: buildScriptSafety({
+      mode: 'audit',
+      mutates: false,
+      mutatesLocalAllegroProjection: false,
+      mutatesCatalog: false,
+      mutatesWarehouse: false,
+      mutatesOrders: false,
+      mutatesAllegro: false,
+      mutatesBizBox: false,
+      forwardsOrders: false,
+      writesAllowed: [],
+      writesForbidden: ['orders-microservice', 'catalog-microservice', 'warehouse-microservice', 'allegro-write-api', 'bizbox-import', 'local-database'],
+    }),
     apiBaseUrl: ALLEGRO_API_URL,
     publicationStatuses: PUBLICATION_STATUSES,
     detailLimit: args.detailLimit,
@@ -353,7 +369,7 @@ async function main(): Promise<void> {
 
 main()
   .catch((error) => {
-    console.error(JSON.stringify({ status: 'error', message: error?.message || String(error) }, null, 2));
+    console.error(JSON.stringify(redactedError(error), null, 2));
     process.exit(1);
   })
   .finally(async () => {
