@@ -1,6 +1,7 @@
 import * as crypto from 'crypto';
 import * as path from 'path';
-import { buildScriptSafety, redactedError } from './lib/script-safety';
+import { buildScriptSafety, redactedError, requireExactConfirmation } from './lib/script-safety';
+import { disabledSyncRecordingSummary, recordStockAuditSyncEvidence, SYNC_RECORDING_CONFIRMATION } from './lib/sync-recording';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { PrismaClient } = require(path.resolve(process.cwd(), '../../shared/node_modules/.prisma/client'));
@@ -9,6 +10,8 @@ type Args = {
   accountId?: string;
   accountName?: string;
   allAccounts: boolean;
+  recordSyncRun: boolean;
+  confirmSyncRecording?: string;
   detailLimit: number;
   listLimit: number;
   help: boolean;
@@ -37,6 +40,11 @@ type AccountReport = {
   errors: any[];
 };
 
+type AccountAuditResult = {
+  report: AccountReport;
+  detailPayloads: any[];
+};
+
 function ensureDatabaseUrl(): void {
   if (process.env.DATABASE_URL) return;
   const user = encodeURIComponent(process.env.DB_USER || '');
@@ -62,14 +70,16 @@ Usage:
   npm run audit:current-stock-source -- --all-accounts
   npm run audit:current-stock-source -- --account-name FlipFlop
   npm run audit:current-stock-source -- --account-id <uuid> --detail-limit 500
+  npm run audit:current-stock-source -- --account-name FlipFlop --record-sync-run --confirm-sync-recording ${SYNC_RECORDING_CONFIRMATION}
 
 This script does not import offers, write Warehouse stock, activate accounts, refresh tokens, or mutate local rows.
 It reads Allegro /sale/offers and /sale/product-offers/{offerId}; only product-offers stock.available is treated as current physical stock evidence.
+With --record-sync-run it writes only local sync-run/raw-payload/audit/stock-snapshot evidence.
 `);
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { allAccounts: false, detailLimit: 500, listLimit: 100, help: false };
+  const args: Args = { allAccounts: false, recordSyncRun: false, detailLimit: 500, listLimit: 100, help: false };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     const next = () => {
@@ -82,6 +92,8 @@ function parseArgs(argv: string[]): Args {
     else if (arg === '--account-id') args.accountId = next();
     else if (arg === '--account-name') args.accountName = next();
     else if (arg === '--all-accounts') args.allAccounts = true;
+    else if (arg === '--record-sync-run') args.recordSyncRun = true;
+    else if (arg === '--confirm-sync-recording') args.confirmSyncRecording = next();
     else if (arg === '--detail-limit') args.detailLimit = Math.max(0, Number(next()));
     else if (arg === '--list-limit') args.listLimit = Math.max(1, Math.min(1000, Number(next())));
     else throw new Error(`Unknown argument: ${arg}`);
@@ -157,7 +169,7 @@ function nonNegative(value: unknown): number | null {
   return Math.floor(number);
 }
 
-async function auditAccount(account: any, args: Args): Promise<AccountReport> {
+async function auditAccount(account: any, args: Args): Promise<AccountAuditResult> {
   const report: AccountReport = {
     accountId: account.id,
     accountName: account.name,
@@ -190,7 +202,7 @@ async function auditAccount(account: any, args: Args): Promise<AccountReport> {
 
   if (report.tokenState !== 'present' && report.tokenState !== 'present_without_expiry') {
     report.errors.push({ source: 'local-token', message: report.tokenState });
-    return report;
+    return { report, detailPayloads: [] };
   }
 
   let token: string;
@@ -199,10 +211,11 @@ async function auditAccount(account: any, args: Args): Promise<AccountReport> {
   } catch (error: any) {
     report.tokenState = 'decrypt_failed';
     report.errors.push({ source: 'local-token', message: error?.message || String(error) });
-    return report;
+    return { report, detailPayloads: [] };
   }
 
   const seen = new Map<string, any>();
+  const detailPayloads: any[] = [];
   for (const status of PUBLICATION_STATUSES) {
     let offset = 0;
     let statusCount = 0;
@@ -250,13 +263,25 @@ async function auditAccount(account: any, args: Args): Promise<AccountReport> {
       }
       report.detailOk += 1;
       const stock = nonNegative(data?.stock?.available);
+      const listed = seen.get(offerId);
+      const hasCatalogProduct = Boolean(localOffers.find((offer: any) => offer.allegroOfferId === offerId)?.catalogProductId);
+      if (args.recordSyncRun) {
+        detailPayloads.push({
+          accountId: account.id,
+          offerId,
+          status,
+          data,
+          listedStock: nonNegative(listed?.stock?.available),
+          listedPublicationStatus: listed?.publication?.status || null,
+          hasCatalogProduct,
+        });
+      }
       if (stock !== null) {
         report.stockAuthoritativeOffers += 1;
         report.stockAuthoritativeTotal += stock;
         report.stockAuthoritativeOfferIds.push(offerId);
       }
       if (report.samples.length < 12) {
-        const listed = seen.get(offerId);
         report.samples.push({
           offerId,
           title: data?.name || listed?.name || null,
@@ -264,7 +289,7 @@ async function auditAccount(account: any, args: Args): Promise<AccountReport> {
           listedStock: nonNegative(listed?.stock?.available),
           currentStock: stock,
           detailStatus: status,
-          hasCatalogProduct: Boolean(localOffers.find((offer: any) => offer.allegroOfferId === offerId)?.catalogProductId),
+          hasCatalogProduct,
         });
       }
     } catch (error: any) {
@@ -273,23 +298,29 @@ async function auditAccount(account: any, args: Args): Promise<AccountReport> {
     }
   }
 
-  return report;
+  return { report, detailPayloads };
 }
 
 async function main(): Promise<void> {
+  const startedAt = new Date();
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
     printHelp();
     return;
   }
+  if (args.recordSyncRun) {
+    requireExactConfirmation(args.confirmSyncRecording, SYNC_RECORDING_CONFIRMATION, '--confirm-sync-recording');
+  }
 
   const accounts = await resolveAccounts(args);
   if (!accounts.length) throw new Error('No matching Allegro accounts found.');
 
-  const reports: AccountReport[] = [];
+  const auditResults: AccountAuditResult[] = [];
   for (const account of accounts) {
-    reports.push(await auditAccount(account, args));
+    auditResults.push(await auditAccount(account, args));
   }
+  const reports = auditResults.map((result) => result.report);
+  const detailPayloads = auditResults.flatMap((result) => result.detailPayloads);
 
   const uniqueStockByOfferId = new Map<string, number>();
   for (const report of reports) {
@@ -326,6 +357,14 @@ async function main(): Promise<void> {
   const uniqueStockAuthoritativeOffers = uniqueStockByOfferId.size;
   const uniqueStockAuthoritativeTotal = Array.from(uniqueStockByOfferId.values()).reduce((sum, value) => sum + value, 0);
   const duplicateStockAuthoritativeAppearances = Math.max(0, totals.stockAuthoritativeOffers - uniqueStockAuthoritativeOffers);
+  const syncRecording = args.recordSyncRun
+    ? await recordStockAuditSyncEvidence(prisma, {
+      reports,
+      detailPayloads,
+      argsSnapshot: snapshotArgs(args),
+      startedAt,
+    })
+    : disabledSyncRecordingSummary();
 
   console.log(JSON.stringify({
     status: 'ok',
@@ -333,19 +372,23 @@ async function main(): Promise<void> {
     source: 'allegro-current-stock-audit.v1',
     mode: 'audit',
     taskId: 'TASK-010',
-    mutates: false,
+    mutates: syncRecording.enabled,
     safety: buildScriptSafety({
       mode: 'audit',
-      mutates: false,
+      mutates: syncRecording.enabled,
       mutatesLocalAllegroProjection: false,
+      mutatesLocalSyncEvidence: syncRecording.enabled,
       mutatesCatalog: false,
       mutatesWarehouse: false,
       mutatesOrders: false,
       mutatesAllegro: false,
       mutatesBizBox: false,
       forwardsOrders: false,
-      writesAllowed: [],
-      writesForbidden: ['orders-microservice', 'catalog-microservice', 'warehouse-microservice', 'allegro-write-api', 'bizbox-import', 'local-database'],
+      writesAllowed: syncRecording.enabled
+        ? ['allegro_sync_runs', 'allegro_sync_cursors', 'allegro_raw_payloads', 'allegro_projection_audit_logs', 'allegro_offer_stock_snapshots']
+        : [],
+      writesForbidden: ['orders-microservice', 'catalog-microservice', 'warehouse-microservice', 'allegro-write-api', 'bizbox-import'],
+      confirmation: syncRecording.enabled ? syncRecording.confirmation : undefined,
     }),
     apiBaseUrl: ALLEGRO_API_URL,
     publicationStatuses: PUBLICATION_STATUSES,
@@ -359,12 +402,24 @@ async function main(): Promise<void> {
     },
     uniqueStockAuthoritativeOfferIds: Array.from(uniqueStockByOfferId.keys()).sort(),
     accounts: reports,
+    syncRecording,
     interpretation: {
       stockAuthoritative: 'Only successful /sale/product-offers/{offerId}.stock.available rows are treated as current physical stock evidence.',
       listedStock: '/sale/offers stock is listed for comparison only; final import should use product-offers current stock or owner-approved external stock source.',
       tokenRefresh: 'This audit does not refresh OAuth tokens or activate accounts.',
     },
   }, null, 2));
+}
+
+function snapshotArgs(args: Args): Record<string, unknown> {
+  return {
+    accountId: args.accountId || null,
+    accountName: args.accountName || null,
+    allAccounts: args.allAccounts,
+    detailLimit: args.detailLimit,
+    listLimit: args.listLimit,
+    recordSyncRun: args.recordSyncRun,
+  };
 }
 
 main()

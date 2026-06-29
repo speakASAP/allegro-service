@@ -1,6 +1,7 @@
 import * as crypto from 'crypto';
 import * as path from 'path';
-import { buildScriptSafety, redactedError, requireBooleanConfirmation } from './lib/script-safety';
+import { buildScriptSafety, redactedError, requireBooleanConfirmation, requireExactConfirmation } from './lib/script-safety';
+import { disabledSyncRecordingSummary, recordCheckoutFormSyncEvidence, SYNC_RECORDING_CONFIRMATION } from './lib/sync-recording';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { PrismaClient } = require(path.resolve(process.cwd(), '../../shared/node_modules/.prisma/client'));
@@ -11,6 +12,8 @@ type Args = {
   userId?: string;
   apply: boolean;
   confirmLocalOnly: boolean;
+  recordSyncRun: boolean;
+  confirmSyncRecording?: string;
   maxOrders: number;
   pageSize: number;
   language: string;
@@ -38,6 +41,7 @@ function printHelp(): void {
 Usage:
   node dist/scripts/import-checkout-forms-local.js --account-name statexcz --dry-run
   node dist/scripts/import-checkout-forms-local.js --account-name statexcz --apply --confirm-local-only
+  node dist/scripts/import-checkout-forms-local.js --account-name statexcz --dry-run --record-sync-run --confirm-sync-recording ${SYNC_RECORDING_CONFIRMATION}
 
 Options:
   --account-name <name>     Allegro account name. Use --account-id when ambiguous.
@@ -46,6 +50,9 @@ Options:
   --dry-run                 Fetch and report only. Default.
   --apply                   Persist only allegro_orders and allegro_order_line_items.
   --confirm-local-only      Required with --apply. Confirms no forwarding/Catalog/Warehouse/Allegro writes.
+  --record-sync-run         Also persist local sync-run/raw-payload/audit evidence. Default: off.
+  --confirm-sync-recording <${SYNC_RECORDING_CONFIRMATION}>
+                            Required with --record-sync-run. This is a local DB write and may store sensitive order payloads.
   --max-orders <n>          Maximum checkout forms to fetch. Default: 500.
   --page-size <n>           Allegro checkout form page size, 1..100. Default: 100.
   --language <tag>          Accept-Language header. Default: cs-CZ.
@@ -56,6 +63,7 @@ function parseArgs(argv: string[]): Args {
   const args: Args = {
     apply: false,
     confirmLocalOnly: false,
+    recordSyncRun: false,
     maxOrders: 500,
     pageSize: 100,
     language: 'cs-CZ',
@@ -78,6 +86,8 @@ function parseArgs(argv: string[]): Args {
     else if (arg === '--dry-run') args.apply = false;
     else if (arg === '--apply') args.apply = true;
     else if (arg === '--confirm-local-only') args.confirmLocalOnly = true;
+    else if (arg === '--record-sync-run') args.recordSyncRun = true;
+    else if (arg === '--confirm-sync-recording') args.confirmSyncRecording = next();
     else if (arg === '--max-orders') args.maxOrders = Number(next());
     else if (arg === '--page-size') args.pageSize = Number(next());
     else if (arg === '--language') args.language = next();
@@ -295,12 +305,15 @@ async function buildPlan(forms: any[]): Promise<any> {
   };
 }
 
-function summarize(forms: any[], plan: any, attempts: SourceAttempt[], mode: 'dry-run' | 'apply', applyStats?: any): any {
+function summarize(forms: any[], plan: any, attempts: SourceAttempt[], mode: 'dry-run' | 'apply', applyStats?: any, syncRecording = disabledSyncRecordingSummary()): any {
   const lineItems = plan.lineItems;
   const totalQuantity = lineItems.reduce((sum: number, line: any) => sum + Number(line?.quantity || 0), 0);
   const detailAttempts = attempts.filter((attempt) => attempt.source === 'order.checkout-forms.detail');
   const failedDetails = detailAttempts.filter((attempt) => !attempt.ok);
-  const writesAllowed = mode === 'apply' ? ['allegro_orders', 'allegro_order_line_items'] : [];
+  const writesAllowed = [
+    ...(mode === 'apply' ? ['allegro_orders', 'allegro_order_line_items'] : []),
+    ...(syncRecording.enabled ? ['allegro_sync_runs', 'allegro_sync_cursors', 'allegro_raw_payloads', 'allegro_projection_audit_logs'] : []),
+  ];
 
   return {
     done: true,
@@ -309,8 +322,9 @@ function summarize(forms: any[], plan: any, attempts: SourceAttempt[], mode: 'dr
     source: 'allegro-checkout-forms-local-only',
     safety: buildScriptSafety({
       mode,
-      mutates: mode === 'apply',
+      mutates: mode === 'apply' || syncRecording.enabled,
       mutatesLocalAllegroProjection: mode === 'apply',
+      mutatesLocalSyncEvidence: syncRecording.enabled,
       writesAllowed,
       writesForbidden: ['orders-microservice', 'catalog-microservice', 'warehouse-microservice', 'allegro-write-api', 'bizbox-import'],
       forwardsOrders: false,
@@ -348,6 +362,7 @@ function summarize(forms: any[], plan: any, attempts: SourceAttempt[], mode: 'dr
       detailFailed: failedDetails.length,
     },
     apply: applyStats || null,
+    syncRecording,
   };
 }
 
@@ -461,6 +476,7 @@ async function applyLocalProjection(forms: any[], mappedOffers: any[]): Promise<
 }
 
 async function main(): Promise<void> {
+  const startedAt = new Date();
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
     printHelp();
@@ -469,6 +485,9 @@ async function main(): Promise<void> {
   if (args.apply && !args.confirmLocalOnly) {
     // Local projection apply is intentionally not an order-forwarding path.
     requireBooleanConfirmation(args.confirmLocalOnly, '--apply requires --confirm-local-only to prevent accidental forwarding/Catalog/Warehouse/Allegro writes.');
+  }
+  if (args.recordSyncRun) {
+    requireExactConfirmation(args.confirmSyncRecording, SYNC_RECORDING_CONFIRMATION, '--confirm-sync-recording');
   }
 
   const account = await resolveAccount(args);
@@ -482,7 +501,33 @@ async function main(): Promise<void> {
     applyStats = await applyLocalProjection(forms, plan.mappedOffers);
   }
 
-  console.log(JSON.stringify(summarize(forms, plan, attempts, args.apply ? 'apply' : 'dry-run', applyStats), null, 2));
+  const syncRecording = args.recordSyncRun
+    ? await recordCheckoutFormSyncEvidence(prisma, {
+      account,
+      forms,
+      plan,
+      attempts,
+      mode: args.apply ? 'apply' : 'dry-run',
+      applyStats,
+      argsSnapshot: snapshotArgs(args),
+      startedAt,
+    })
+    : disabledSyncRecordingSummary();
+
+  console.log(JSON.stringify(summarize(forms, plan, attempts, args.apply ? 'apply' : 'dry-run', applyStats, syncRecording), null, 2));
+}
+
+function snapshotArgs(args: Args): Record<string, unknown> {
+  return {
+    accountId: args.accountId || null,
+    accountName: args.accountName || null,
+    userId: args.userId || null,
+    apply: args.apply,
+    maxOrders: args.maxOrders,
+    pageSize: args.pageSize,
+    language: args.language,
+    recordSyncRun: args.recordSyncRun,
+  };
 }
 
 main().catch((error) => {

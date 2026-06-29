@@ -19,9 +19,9 @@ Validator: AI agent
 ## Summary
 
 TASK-010 opens the Allegro primary-channel foundation implementation. This
-validation report covers W0/W1 and W2 foundation work: IPS traceability,
-script-safety guardrails, additive Prisma sync/projection models, and
-no-mutation checks.
+validation report covers W0/W1, W2, and W3 foundation work: IPS traceability,
+script-safety guardrails, additive Prisma sync/projection models, opt-in local
+sync evidence recording, and no-mutation checks.
 
 ## Upstream goal
 
@@ -36,7 +36,9 @@ plan by turning Allegro import and export mapping into safe implementation lanes
 | Live mutation paths were not executed | Pass | Validation used diff, build, and documentation gates only. No live Allegro import or export apply, Warehouse stock mutation, BizBox apply, central order replay apply, payment/refund write, or deploy was run. |
 | Script foundation scope is bounded | Pass | W1 added `services/allegro-service/src/scripts/lib/script-safety.ts` and integrated only `import-checkout-forms-local.ts` plus `audit-current-stock-source.ts`. |
 | Additive schema foundation is bounded | Pass | W2 added only new Prisma models and a new migration for `AllegroSyncRun`, `AllegroSyncCursor`, `AllegroRawPayload`, `AllegroProjectionAuditLog`, and `AllegroOfferStockSnapshot`; no existing fields were renamed or dropped. |
+| Opt-in sync evidence wiring is bounded | Pass | W3 added `services/allegro-service/src/scripts/lib/sync-recording.ts` and explicit `--record-sync-run --confirm-sync-recording ALLEGRO_SYNC_RECORDING_LOCAL_ONLY` gates to checkout-form import and current-stock audit scripts. Default script behavior remains no sync-evidence DB writes. |
 | Migration was not applied to live database | Pass | W2 ran Prisma validate/generate and service build only. It did not run `migrate deploy`, direct migration runners, import scripts, or live data mutation commands. |
+| Migration was not applied to live database in W3 | Pass | W3 ran Prisma validate/generate and service build only. It did not run `migrate deploy`, direct migration runners, import scripts, live data mutation commands, or deploy. |
 | Stock apply remains owner-gated | Pass | `services/allegro-service/src/scripts/import-current-allegro-stock-to-warehouse.ts` was not edited or executed in TASK-010 follow-up validation. |
 | TASK-009 audit debt remains separate | Pass with debt | Strict audit and pre-coding failures name TASK-009 documentation/graph issues; TASK-010-specific strict-audit findings were corrected. |
 
@@ -51,6 +53,14 @@ plan by turning Allegro import and export mapping into safe implementation lanes
   W2 schema model additions.
 - `cd services/allegro-service && npm run build`: PASS on 2026-06-29 after W2
   additive schema model additions.
+- `git diff --check`: PASS on 2026-06-29 after W3 opt-in sync recording
+  helper wiring.
+- `npx prisma validate --schema prisma/schema.prisma`: PASS on 2026-06-29 after
+  W3 script wiring.
+- `npx prisma generate --schema prisma/schema.prisma`: PASS on 2026-06-29 after
+  W3 script wiring.
+- `cd services/allegro-service && npm run build`: PASS on 2026-06-29 after W3
+  opt-in sync recording helper wiring.
 - `npm run ips:audit`: FAIL on 2026-06-29 with 17 findings, all tied to
   pre-existing TASK-009 documentation/graph debt plus the audit heuristic that
   treats the active TASK-009 plan as blocking prompt use. TASK-010-specific
@@ -63,6 +73,16 @@ plan by turning Allegro import and export mapping into safe implementation lanes
 - `python3 scripts/deployment_readiness_gate.py --root . --target TASK-010`:
   FAIL on 2026-06-29 because strict audit and pre-coding gate inherit TASK-009
   debt. Protected-file checks and target validation-report discovery passed.
+- `npm run ips:audit`: FAIL on 2026-06-29 after W3 with the same 17
+  TASK-009 documentation/graph findings; no new TASK-010 findings appeared in
+  the gate output.
+- `npm run ips:pre-coding`: FAIL on 2026-06-29 after W3 because
+  `21_execution_plans/EP-TASK-009-public-client-landing-dashboard.md` still
+  lacks a validation plan. Sensitive-data findings remained empty.
+- `python3 scripts/deployment_readiness_gate.py --root . --target TASK-010`:
+  FAIL on 2026-06-29 after W3 because strict audit and pre-coding gate inherit
+  TASK-009 debt. Protected-file checks and target validation-report discovery
+  passed.
 
 ## Invariant evidence
 
@@ -71,7 +91,9 @@ plan by turning Allegro import and export mapping into safe implementation lanes
 - ALG-INV-002: Pass. TASK-010 did not change Allegro API rate-limit behavior.
 - ALG-INV-003: Pass. TASK-010 did not forward or own central orders.
 - ALG-INV-004: Pass. `npm run ips:pre-coding` reported no sensitive-data
-  findings.
+  findings. W3 validation did not print raw Allegro payloads, buyer fields,
+  tokens, account secrets, addresses, emails, or live order/offer identifiers in
+  this report.
 - ALG-INV-005: Pass. TASK-010 did not change runtime service ownership
   boundaries; W2 added channel projection tables only.
 - ALG-INV-006: Pass. TASK-010 traceability exists across feature, task,
@@ -82,10 +104,13 @@ plan by turning Allegro import and export mapping into safe implementation lanes
 
 ## Sensitive-data scan evidence
 
-`npm run ips:pre-coding` reported no sensitive-data findings. TASK-010 artifacts
-use synthetic or aggregate evidence only and do not add raw buyer data, emails,
-phone numbers, addresses, payment payloads, OAuth tokens, Authorization headers,
-service credentials, raw order payloads, or unmasked production screenshots.
+`npm run ips:pre-coding` reported no sensitive-data findings. TASK-010
+validation artifacts use synthetic or aggregate evidence only and do not add raw
+buyer data, emails, phone numbers, addresses, payment payloads, OAuth tokens,
+Authorization headers, service credentials, raw order payloads, raw offer
+payloads, or unmasked production screenshots. W3 code can record raw payloads
+only when an operator explicitly passes `--record-sync-run` with
+`--confirm-sync-recording ALLEGRO_SYNC_RECORDING_LOCAL_ONLY`.
 
 ## Replay and determinism evidence
 
@@ -97,6 +122,17 @@ be replayed and reviewed without using `SyncJob` or `WebhookEvent` as overloaded
 primary-channel state. `AllegroSyncRun.idempotencyKey` is unique when present so
 replayed sync runs can be bound to one durable run record. Future apply paths
 still need preview-token binding and idempotency before production use.
+
+W3 wires the schema foundation into safe script paths behind explicit opt-in
+recording. `import-checkout-forms-local.ts` can record `order.checkout-forms`
+sync runs, cursors, hashed raw checkout-form payloads, and projection audit logs
+without forwarding orders to another service. `audit-current-stock-source.ts`
+can record `sale.product-offers.stock` sync runs, cursors, raw detail payload
+hashes, projection audit logs, and `AllegroOfferStockSnapshot` rows from
+`/sale/product-offers/{offerId}` detail payloads. `/sale/offers` remains
+comparison/listing evidence only; Warehouse remains the physical stock owner.
+`script-safety` now reports `mutatesLocalSyncEvidence` separately from local
+projection writes.
 
 ## Issues found
 
@@ -112,12 +148,15 @@ still need preview-token binding and idempotency before production use.
 - Fulfillment owner approval for shipment and label write-back is not granted in
   TASK-010.
 - Raw payload retention policy and full PII class taxonomy remain follow-up
-  design work before broad raw payload capture is enabled in scripts.
+  design work before broad scheduled raw payload capture is enabled outside
+  explicitly confirmed operator scripts.
+- W3 did not apply the W2 migration to any live database, so the new recording
+  flags require the target database to already have W2 tables deployed.
 
 ## Recommendation
 
-Accept TASK-010-W0, W1, and W2 as implemented with validation debt noted. Do not
-claim full deployment readiness until TASK-009 audit debt is repaired or the
+Accept TASK-010-W0, W1, W2, and W3 as implemented with validation debt noted. Do
+not claim full deployment readiness until TASK-009 audit debt is repaired or the
 readiness gates are made task-scoped enough to ignore unrelated historical debt.
 
 ## Traceability confirmation

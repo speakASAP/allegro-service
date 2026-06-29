@@ -5,6 +5,7 @@ export type ScriptSafetyOptions = {
   mode: ScriptMode;
   mutates: boolean;
   mutatesLocalAllegroProjection?: boolean;
+  mutatesLocalSyncEvidence?: boolean;
   mutatesCatalog?: boolean;
   mutatesWarehouse?: boolean;
   mutatesOrders?: boolean;
@@ -26,6 +27,7 @@ export function buildScriptSafety(options: ScriptSafetyOptions): Record<string, 
     mode: options.mode,
     mutates: options.mutates,
     mutatesLocalAllegroProjection: Boolean(options.mutatesLocalAllegroProjection),
+    mutatesLocalSyncEvidence: Boolean(options.mutatesLocalSyncEvidence),
     mutatesCatalog: Boolean(options.mutatesCatalog),
     mutatesWarehouse: Boolean(options.mutatesWarehouse),
     mutatesOrders: Boolean(options.mutatesOrders),
