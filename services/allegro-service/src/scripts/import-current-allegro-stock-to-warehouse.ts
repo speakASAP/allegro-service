@@ -9,6 +9,7 @@ type Args = {
   accountName?: string;
   allAccounts: boolean;
   apply: boolean;
+  confirmApply?: string;
   detailLimit: number;
   listLimit: number;
   publicationStatuses: string[];
@@ -63,6 +64,7 @@ const ALLEGRO_API_URL = (process.env.ALLEGRO_API_URL || 'https://api.allegro.pl'
 const WAREHOUSE_SERVICE_URL = (process.env.WAREHOUSE_SERVICE_URL || 'http://warehouse-microservice:3201').replace(/\/$/, '');
 const DEFAULT_PUBLICATION_STATUSES = ['ACTIVE', 'INACTIVE', 'ENDED', 'ACTIVATING'];
 const REASON_CODE = 'ALLEGRO_CURRENT_STOCK_IMPORT';
+const APPLY_CONFIRMATION = 'ALLEGRO_CURRENT_STOCK_IMPORT';
 
 function printHelp(): void {
   console.log(`Import current stock-authoritative Allegro offer quantities to Warehouse.
@@ -70,12 +72,13 @@ function printHelp(): void {
 Usage:
   npm run import:current-stock:warehouse -- --all-accounts --dry-run
   npm run import:current-stock:warehouse -- --account-name FlipFlop --dry-run
-  npm run import:current-stock:warehouse -- --all-accounts --warehouse-id <uuid> --apply
+  npm run import:current-stock:warehouse -- --all-accounts --warehouse-id <uuid> --apply --confirm-apply ${APPLY_CONFIRMATION}
 
 This script reads Allegro /sale/offers and /sale/product-offers/{offerId}.
 Only product-offers stock.available is treated as current stock-authoritative.
 Dry-run is the default and does not call Warehouse or mutate local database rows.
 Apply mode calls Warehouse POST /api/stock/set for locally mapped offers. Local AllegroOffer rows remain read-only.
+Apply mode requires both --apply and --confirm-apply ${APPLY_CONFIRMATION}.
 `);
 }
 
@@ -116,6 +119,7 @@ function parseArgs(argv: string[]): Args {
     else if (arg === '--all-accounts') args.allAccounts = true;
     else if (arg === '--apply') args.apply = true;
     else if (arg === '--dry-run') args.apply = false;
+    else if (arg === '--confirm-apply') args.confirmApply = next();
     else if (arg === '--detail-limit') args.detailLimit = Math.max(0, Number(next()));
     else if (arg === '--list-limit') args.listLimit = Math.max(1, Math.min(1000, Number(next())));
     else if (arg === '--warehouse-id') args.warehouseId = next();
@@ -128,6 +132,9 @@ function parseArgs(argv: string[]): Args {
   }
   if (!args.publicationStatuses.length) {
     throw new Error('At least one --publication-status value is required.');
+  }
+  if (args.apply && args.confirmApply !== APPLY_CONFIRMATION) {
+    throw new Error(`Refusing to apply without --confirm-apply ${APPLY_CONFIRMATION}. Run --dry-run first and record owner approval before applying.`);
   }
   return args;
 }
@@ -469,6 +476,7 @@ async function main(): Promise<void> {
     detailLimit: args.detailLimit,
     warehouseId,
     reasonCode: REASON_CODE,
+    applyConfirmationRequired: args.apply ? APPLY_CONFIRMATION : null,
     accountCount: accounts.length,
     listedStockSource: '/sale/offers is used only to discover offer ids.',
     stockAuthority: '/sale/product-offers/{offerId}.stock.available',
