@@ -38,6 +38,22 @@ const decodeJwtPayload = (token: string): AuthJwtPayload => {
   return JSON.parse(json) as AuthJwtPayload;
 };
 
+const registerAllegroWorkspaceAccess = (accessToken: string) => {
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const apiBase = origin ? `${origin}/api` : '/api';
+
+  fetch(`${apiBase}/allegro/users/register-access`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    keepalive: true,
+  }).catch((error) => {
+    console.warn('Could not register Allegro workspace access', error);
+  });
+};
+
 const storeHostedAuthSession = (fragment: URLSearchParams): string => {
   const accessToken = fragment.get('access_token');
   const returnedState = fragment.get('state');
@@ -67,6 +83,7 @@ const storeHostedAuthSession = (fragment: URLSearchParams): string => {
     localStorage.removeItem('refreshToken');
   }
   localStorage.setItem('user', JSON.stringify(user));
+  registerAllegroWorkspaceAccess(accessToken);
 
   return consumeHostedAuthReturnTo();
 };

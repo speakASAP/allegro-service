@@ -27,6 +27,8 @@ import { PublishLifecycleController } from './publish-lifecycle/publish-lifecycl
 import { MarketplacePolicyEngineService } from './policy/policy-engine.service';
 import { CatalogSellActionController } from './catalog-sell-action/catalog-sell-action.controller';
 import { CatalogSellActionService } from './catalog-sell-action/catalog-sell-action.service';
+import { AdminUsersController, AllegroUsersController } from './admin-users/admin-users.controller';
+import { AdminUsersService } from './admin-users/admin-users.service';
 
 @Module({
   imports: [
@@ -52,6 +54,8 @@ import { CatalogSellActionService } from './catalog-sell-action/catalog-sell-act
     ProductsController,
     PublishLifecycleController,
     CatalogSellActionController,
+    AdminUsersController,
+    AllegroUsersController,
   ],
   providers: [
     AllegroApiService,
@@ -67,8 +71,8 @@ import { CatalogSellActionService } from './catalog-sell-action/catalog-sell-act
     PublishLifecycleService,
     MarketplacePolicyEngineService,
     CatalogSellActionService,
+    AdminUsersService,
   ],
-  exports: [AllegroApiService, OffersService, OrdersService, CategoriesService, InventoryService, EventsService, PublishLifecycleService, MarketplacePolicyEngineService, CatalogSellActionService],
+  exports: [AllegroApiService, OffersService, OrdersService, CategoriesService, InventoryService, EventsService, PublishLifecycleService, MarketplacePolicyEngineService, CatalogSellActionService, AdminUsersService],
 })
 export class AllegroModule {}
-
