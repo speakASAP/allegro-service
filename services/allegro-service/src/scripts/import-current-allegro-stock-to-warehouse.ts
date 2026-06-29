@@ -10,6 +10,7 @@ type Args = {
   allAccounts: boolean;
   apply: boolean;
   confirmApply?: string;
+  verifyWarehouse: boolean;
   detailLimit: number;
   listLimit: number;
   publicationStatuses: string[];
@@ -56,6 +57,8 @@ type CandidateResult = {
   skippedReason?: string;
   warehouseStatus?: number;
   warehouseResponse?: any;
+  warehouseTotalAvailable?: number | null;
+  warehouseMatchesAllegro?: boolean | null;
   error?: string;
 };
 
@@ -71,12 +74,14 @@ function printHelp(): void {
 
 Usage:
   npm run import:current-stock:warehouse -- --all-accounts --dry-run
+  npm run import:current-stock:warehouse -- --all-accounts --dry-run --verify-warehouse
   npm run import:current-stock:warehouse -- --account-name FlipFlop --dry-run
   npm run import:current-stock:warehouse -- --all-accounts --warehouse-id <uuid> --apply --confirm-apply ${APPLY_CONFIRMATION}
 
 This script reads Allegro /sale/offers and /sale/product-offers/{offerId}.
 Only product-offers stock.available is treated as current stock-authoritative.
 Dry-run is the default and does not call Warehouse or mutate local database rows.
+Use --verify-warehouse to read Warehouse totals and compare them to Allegro stock.available.
 Apply mode calls Warehouse POST /api/stock/set for locally mapped offers. Local AllegroOffer rows remain read-only.
 Apply mode requires both --apply and --confirm-apply ${APPLY_CONFIRMATION}.
 `);
@@ -98,6 +103,7 @@ function parseArgs(argv: string[]): Args {
   const args: Args = {
     allAccounts: false,
     apply: false,
+    verifyWarehouse: false,
     detailLimit: 500,
     listLimit: 100,
     publicationStatuses: [...DEFAULT_PUBLICATION_STATUSES],
@@ -120,6 +126,7 @@ function parseArgs(argv: string[]): Args {
     else if (arg === '--apply') args.apply = true;
     else if (arg === '--dry-run') args.apply = false;
     else if (arg === '--confirm-apply') args.confirmApply = next();
+    else if (arg === '--verify-warehouse') args.verifyWarehouse = true;
     else if (arg === '--detail-limit') args.detailLimit = Math.max(0, Number(next()));
     else if (arg === '--list-limit') args.listLimit = Math.max(1, Math.min(1000, Number(next())));
     else if (arg === '--warehouse-id') args.warehouseId = next();
@@ -360,6 +367,15 @@ async function setWarehouseStock(productId: string, warehouseId: string, quantit
   });
 }
 
+async function getWarehouseTotalAvailable(productId: string): Promise<number | null> {
+  const { data } = await requestJson(`${WAREHOUSE_SERVICE_URL}/api/stock/${encodeURIComponent(productId)}/total`, {
+    headers: warehouseHeaders(),
+  });
+  const value = data?.data?.totalAvailable;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.floor(parsed) : null;
+}
+
 async function processCandidate(candidate: ImportCandidate, args: Args, warehouseId: string | null): Promise<CandidateResult> {
   const catalogProductId = candidate.localOffer?.catalogProductId || null;
   const base: CandidateResult = {
@@ -381,8 +397,25 @@ async function processCandidate(candidate: ImportCandidate, args: Args, warehous
   if (!catalogProductId) {
     return { ...base, skippedReason: 'missing_catalog_product_mapping' };
   }
+
+  let warehouseTotalAvailable: number | null | undefined;
+  let warehouseMatchesAllegro: boolean | null | undefined;
+  if (args.verifyWarehouse) {
+    try {
+      warehouseTotalAvailable = await getWarehouseTotalAvailable(catalogProductId);
+      warehouseMatchesAllegro = warehouseTotalAvailable === candidate.stockAvailable;
+    } catch (error: any) {
+      return {
+        ...base,
+        action: 'skipped',
+        skippedReason: 'warehouse_verify_failed',
+        error: error?.message || String(error),
+      };
+    }
+  }
+
   if (!args.apply) {
-    return { ...base, action: 'would_set_warehouse_stock' };
+    return { ...base, action: 'would_set_warehouse_stock', warehouseTotalAvailable, warehouseMatchesAllegro };
   }
   if (!warehouseId) {
     return { ...base, skippedReason: 'missing_warehouse_id' };
@@ -401,6 +434,8 @@ async function processCandidate(candidate: ImportCandidate, args: Args, warehous
         reserved: warehouseResponse.data.data.reserved,
         available: warehouseResponse.data.data.available,
       } : null,
+      warehouseTotalAvailable,
+      warehouseMatchesAllegro,
     };
   } catch (error: any) {
     return {
@@ -453,6 +488,9 @@ async function main(): Promise<void> {
     if (result.skippedReason === 'missing_local_allegro_offer_mapping') acc.missingLocalOffer += 1;
     if (result.skippedReason === 'missing_catalog_product_mapping') acc.missingCatalogMapping += 1;
     if (result.skippedReason === 'apply_failed') acc.applyFailed += 1;
+    if (result.skippedReason === 'warehouse_verify_failed') acc.warehouseVerifyFailed += 1;
+    if (result.warehouseMatchesAllegro === true) acc.warehouseMatches += 1;
+    if (result.warehouseMatchesAllegro === false) acc.warehouseMismatches += 1;
     return acc;
   }, {
     stockAuthoritativeTotal: 0,
@@ -461,6 +499,9 @@ async function main(): Promise<void> {
     missingLocalOffer: 0,
     missingCatalogMapping: 0,
     applyFailed: 0,
+    warehouseMatches: 0,
+    warehouseMismatches: 0,
+    warehouseVerifyFailed: 0,
   });
 
   console.log(JSON.stringify({
@@ -470,6 +511,7 @@ async function main(): Promise<void> {
     mode: args.apply ? 'apply' : 'dry-run',
     mutatesWarehouse: args.apply,
     mutatesLocalAllegroOffer: false,
+    verifiesWarehouse: args.verifyWarehouse,
     apiBaseUrl: ALLEGRO_API_URL,
     warehouseServiceUrl: WAREHOUSE_SERVICE_URL,
     publicationStatuses: args.publicationStatuses,
