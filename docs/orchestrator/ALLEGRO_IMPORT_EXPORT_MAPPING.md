@@ -4,6 +4,7 @@ Status: final mapping baseline after first local order projection apply and seco
 Date: 2026-06-29
 Scope: statexcz Allegro account, allegro-service, read/import/export mapping
 Safety: no Chrome/browser control, no BizBox import, no Warehouse stock mutation, no stock apply
+Implementation plan: `docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md`
 
 ## Intent Preservation Chain
 
