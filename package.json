@@ -18,7 +18,8 @@
     "ips:audit": "python3 scripts/strict_doc_audit.py --format markdown --fail-on-issues",
     "ips:pre-coding": "python3 scripts/pre_coding_gate.py --root .",
     "ips:readiness": "python3 scripts/deployment_readiness_gate.py --root . --target TASK-001",
-    "ips:check": "npm run ips:audit && npm run ips:pre-coding && npm run ips:readiness"
+    "ips:check": "npm run ips:audit && npm run ips:pre-coding && npm run ips:readiness",
+    "import:allegro-orders:catalog": "cd services/allegro-service && npm run import:order-offers:catalog --"
   },
   "dependencies": {
     "@nestjs/axios": "^3.0.1",

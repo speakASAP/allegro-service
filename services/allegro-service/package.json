@@ -8,7 +8,8 @@
     "start": "node dist/main.js",
     "start:dev": "ts-node src/main.ts",
     "start:watch": "ts-node-dev --respawn src/main.ts",
-    "import:allegro-offers:catalog": "node dist/scripts/import-allegro-offers-to-catalog.js"
+    "import:allegro-offers:catalog": "node dist/scripts/import-allegro-offers-to-catalog.js",
+    "import:order-offers:catalog": "node dist/scripts/import-order-offer-products.js"
   },
   "dependencies": {
     "@allegro/shared": "file:../../shared",
