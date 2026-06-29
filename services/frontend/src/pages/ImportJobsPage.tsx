@@ -208,6 +208,9 @@ const ImportJobsPage: React.FC = () => {
 
       const response = await api.post('/import/csv', formData, {
         timeout: 180000,
+        headers: {
+          'x-stock-import-confirmation': 'previewed-and-approved',
+        },
       });
 
       if (response.data.success) {

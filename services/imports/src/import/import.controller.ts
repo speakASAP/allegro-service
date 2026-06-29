@@ -14,6 +14,7 @@ import {
   UnauthorizedException,
   UseInterceptors,
   UploadedFile,
+  Headers,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ImportService } from './import.service';
@@ -68,7 +69,24 @@ export class ImportController {
   @Post('csv')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('file'))
-  async uploadCsv(@UploadedFile() file: MulterFile | undefined) {
+  async uploadCsv(
+    @UploadedFile() file: MulterFile | undefined,
+    @Headers('x-stock-import-confirmation') confirmation: string | undefined,
+  ) {
+    if (confirmation !== 'previewed-and-approved') {
+      throw new HttpException(
+        {
+          success: false,
+          error: {
+            code: 'STOCK_IMPORT_CONFIRMATION_REQUIRED',
+            message: 'Preview the BizBox CSV and explicitly confirm before importing Warehouse stock.',
+            statusCode: HttpStatus.PRECONDITION_REQUIRED,
+          },
+        },
+        HttpStatus.PRECONDITION_REQUIRED,
+      );
+    }
+
     if (!file) {
       throw new Error('No file uploaded');
     }
