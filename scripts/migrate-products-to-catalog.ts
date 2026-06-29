@@ -35,6 +35,8 @@ interface MigrationStats {
   stockSkipped: number;
   mediaCreated: number;
   mediaSkipped: number;
+  marketplaceProfilesSynced: number;
+  marketplaceProfilesSkipped: number;
   errorDetails: Array<{ productId: string; sku: string; error: string }>;
 }
 
@@ -150,6 +152,8 @@ class ProductMigrationService {
       stockSkipped: 0,
       mediaCreated: 0,
       mediaSkipped: 0,
+      marketplaceProfilesSynced: 0,
+      marketplaceProfilesSkipped: 0,
       errorDetails: [],
     };
   }
@@ -361,6 +365,155 @@ class ProductMigrationService {
     return this.extractImageUrls(source?.images, rawData.images, rawData.photos, rawData.product?.images, rawData.productSet, ...offerImages);
   }
 
+  private firstDefined(...values: any[]): any {
+    return values.find((value) => value !== undefined && value !== null && value !== '');
+  }
+
+  private extractAllegroParameters(source: any, offers: any[] = []): any[] {
+    const rawData = source?.rawData || {};
+    const productSetParameters = (offers || [])
+      .flatMap((offer) => Array.isArray(offer.rawData?.productSet) ? offer.rawData.productSet : [])
+      .flatMap((item) => item?.product?.parameters || item?.parameters || []);
+    return [
+      ...(Array.isArray(source?.parameters) ? source.parameters : []),
+      ...(Array.isArray(rawData.parameters) ? rawData.parameters : []),
+      ...(Array.isArray(rawData.product?.parameters) ? rawData.product.parameters : []),
+      ...productSetParameters,
+    ];
+  }
+
+  private buildCanonicalAliases() {
+    return {
+      title: {
+        canonicalPath: 'title',
+        aliases: ['name', 'productName', 'product', 'goods', 'goodsName', 'idName', 'název', 'nazwa', 'товар', 'название'],
+      },
+      description: {
+        canonicalPath: 'description',
+        aliases: ['description', 'longDescription', 'opis', 'popis', 'описание'],
+      },
+      brand: {
+        canonicalPath: 'brand',
+        aliases: ['brand', 'marka', 'značka', 'марка'],
+      },
+      manufacturer: {
+        canonicalPath: 'manufacturer',
+        aliases: ['manufacturer', 'manufacturerCode', 'producer', 'producent', 'výrobce', 'производитель'],
+      },
+      ean: {
+        canonicalPath: 'ean',
+        aliases: ['ean', 'gtin', 'EAN (GTIN)', 'barcode', 'kod kreskowy', 'штрихкод'],
+      },
+      sku: {
+        canonicalPath: 'sku',
+        aliases: ['sku', 'code', 'product_code', 'catalogCode', 'external.id'],
+      },
+    };
+  }
+
+  private buildAllegroMarketplaceProfile(source: any, offers: any[] = [], catalogData: any = {}) {
+    const newestOffer = offers[0] || {};
+    const rawData = source?.rawData || {};
+    const newestRaw = newestOffer.rawData || {};
+    const parameters = this.extractAllegroParameters(source, offers);
+    const media = this.extractMedia(source, offers);
+    const categoryId = this.firstText(
+      newestOffer.categoryId,
+      newestRaw.category?.id,
+      rawData.category?.id,
+      rawData.product?.category?.id,
+    );
+    const price = this.firstDefined(
+      newestOffer.price != null ? Number(newestOffer.price) : undefined,
+      newestRaw.sellingMode?.price?.amount != null ? Number(newestRaw.sellingMode.price.amount) : undefined,
+      newestRaw.price?.amount != null ? Number(newestRaw.price.amount) : undefined,
+    );
+    const currency = this.firstText(
+      newestOffer.currency,
+      newestRaw.sellingMode?.price?.currency,
+      newestRaw.price?.currency,
+    );
+    const quantity = this.firstDefined(
+      newestOffer.stockQuantity,
+      newestOffer.quantity,
+      newestRaw.stock?.available,
+      newestRaw.quantity,
+    );
+
+    return {
+      canonical: {
+        title: catalogData.title,
+        description: catalogData.description,
+        brand: catalogData.brand,
+        manufacturer: catalogData.manufacturer,
+        ean: catalogData.ean,
+      },
+      overrides: {
+        categoryId,
+        parameters,
+        price,
+        currency,
+        quantity,
+        images: media.map((item) => item.url),
+        sellingMode: newestRaw.sellingMode || null,
+        delivery: newestOffer.deliveryOptions || newestRaw.delivery || null,
+        payments: newestOffer.paymentOptions || newestRaw.payments || null,
+        location: newestRaw.location || null,
+        responsibleProducer: newestRaw.productSet?.[0]?.responsibleProducer || rawData.responsibleProducer || null,
+        publication: newestRaw.publication || { status: newestOffer.publicationStatus || newestOffer.status || null },
+        afterSalesServices: newestRaw.afterSalesServices || null,
+        taxSettings: newestRaw.taxSettings || null,
+      },
+      externalRefs: {
+        allegroProductId: source?.allegroProductId || newestRaw.productSet?.[0]?.product?.id || rawData.product?.id || null,
+        allegroOfferIds: offers.map((offer) => offer.allegroOfferId).filter(Boolean),
+        listingIds: offers.map((offer) => offer.allegroListingId).filter(Boolean),
+        accountIds: Array.from(new Set(offers.map((offer) => offer.accountId).filter(Boolean))),
+        categoryIds: Array.from(new Set([categoryId, ...offers.map((offer) => offer.categoryId)].filter(Boolean))),
+      },
+      sourceData: {
+        importedAt: new Date().toISOString(),
+        source: 'allegro-service',
+        aliases: this.buildCanonicalAliases(),
+        product: {
+          id: source?.id,
+          allegroProductId: source?.allegroProductId,
+          name: source?.name,
+          brand: source?.brand,
+          manufacturerCode: source?.manufacturerCode,
+          ean: source?.ean,
+          publicationStatus: source?.publicationStatus,
+          isAiCoCreated: source?.isAiCoCreated,
+          marketedBeforeGPSR: source?.marketedBeforeGPSR,
+          rawData,
+          parameters,
+        },
+        offers: offers.map((offer) => ({
+          id: offer.id,
+          allegroOfferId: offer.allegroOfferId,
+          allegroListingId: offer.allegroListingId,
+          title: offer.title,
+          categoryId: offer.categoryId,
+          price: offer.price != null ? Number(offer.price) : null,
+          currency: offer.currency,
+          quantity: offer.quantity,
+          stockQuantity: offer.stockQuantity,
+          status: offer.status,
+          publicationStatus: offer.publicationStatus,
+          deliveryOptions: offer.deliveryOptions,
+          paymentOptions: offer.paymentOptions,
+          images: offer.images,
+          rawData: offer.rawData,
+          accountId: offer.accountId,
+          syncStatus: offer.syncStatus,
+          syncSource: offer.syncSource,
+          lastSyncedAt: offer.lastSyncedAt,
+        })),
+      },
+      status: 'imported',
+    };
+  }
+
   /**
    * Check if product exists in catalog-microservice by SKU or EAN
    */
@@ -541,6 +694,25 @@ class ProductMigrationService {
     }
   }
 
+  private async syncMarketplaceProfile(catalogProductId: string, profile: any, sku: string): Promise<void> {
+    if (this.dryRun) {
+      this.stats.marketplaceProfilesSkipped++;
+      return;
+    }
+
+    try {
+      await this.catalogClient.put(`/api/products/${catalogProductId}/marketplace-fields/allegro`, profile);
+      this.stats.marketplaceProfilesSynced++;
+    } catch (error: any) {
+      this.stats.marketplaceProfilesSkipped++;
+      await this.log('warn', 'Failed to sync Allegro marketplace profile', {
+        sku,
+        catalogProductId,
+        error: error.response?.data?.message || error.response?.data?.error?.message || error.message || String(error),
+      });
+    }
+  }
+
   /**
    * Create or update product in catalog-microservice
    */
@@ -697,6 +869,7 @@ class ProductMigrationService {
       const quantity = this.getProductStock(product);
       await this.syncWarehouseStock(catalogProduct.id, quantity, sku, 'allegro Product');
       await this.syncCatalogMedia(catalogProduct.id, this.extractMedia(product, relatedOffers), sku);
+      await this.syncMarketplaceProfile(catalogProduct.id, this.buildAllegroMarketplaceProfile(product, relatedOffers, catalogData), sku);
 
       this.recordMapping({
         source: 'Product',
@@ -754,6 +927,7 @@ class ProductMigrationService {
       const quantity = this.getAllegroProductStock(allegroProduct);
       await this.syncWarehouseStock(catalogProduct.id, quantity, sku, 'allegro AllegroProduct');
       await this.syncCatalogMedia(catalogProduct.id, this.extractMedia(allegroProduct, relatedOffers), sku);
+      await this.syncMarketplaceProfile(catalogProduct.id, this.buildAllegroMarketplaceProfile(allegroProduct, relatedOffers, catalogData), sku);
       await this.syncRelatedOfferCatalogProducts(relatedOffers, catalogProduct.id, allegroProduct);
 
       this.recordMapping({
@@ -798,6 +972,7 @@ class ProductMigrationService {
       const catalogProduct = await this.createOrUpdateProduct(catalogData, existing);
       await this.syncWarehouseStock(catalogProduct.id, Number(offer.stockQuantity || 0), sku, 'allegro AllegroOffer');
       await this.syncCatalogMedia(catalogProduct.id, this.extractMedia(offer, [offer]), sku);
+      await this.syncMarketplaceProfile(catalogProduct.id, this.buildAllegroMarketplaceProfile(offer, [offer], catalogData), sku);
 
       this.recordMapping({
         source: 'AllegroOffer',
@@ -845,6 +1020,7 @@ class ProductMigrationService {
         catalogData.sku = existing.sku;
         const catalogProduct = await this.createOrUpdateProduct(catalogData, existing);
         await this.syncCatalogMedia(catalogProduct.id, this.extractMedia(offer, [offer]), sku);
+        await this.syncMarketplaceProfile(catalogProduct.id, this.buildAllegroMarketplaceProfile(productSource || offer, [offer], catalogData), sku);
         this.stats.updated++;
         const action = this.dryRun ? 'Would update' : 'Updated';
         console.log(`✅ ${action} related AllegroOffer catalog product: ${sku} (${offer.title || offer.allegroOfferId})`);
@@ -962,6 +1138,8 @@ class ProductMigrationService {
     console.log(`📦 Stock skipped: ${this.stats.stockSkipped}`);
     console.log(`🖼️  Media created: ${this.stats.mediaCreated}`);
     console.log(`🖼️  Media skipped: ${this.stats.mediaSkipped}`);
+    console.log(`🧩 Marketplace profiles synced: ${this.stats.marketplaceProfilesSynced}`);
+    console.log(`🧩 Marketplace profiles skipped: ${this.stats.marketplaceProfilesSkipped}`);
     console.log('='.repeat(60));
 
     if (this.stats.errorDetails.length > 0) {
