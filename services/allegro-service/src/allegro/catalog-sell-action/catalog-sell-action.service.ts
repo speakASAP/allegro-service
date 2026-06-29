@@ -1,5 +1,5 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
-import { CatalogClientService, LoggerService, PrismaService } from '@allegro/shared';
+import { CatalogClientService, LoggerService, PrismaService, WarehouseClientService } from '@allegro/shared';
 import { OffersService } from '../offers/offers.service';
 import { PublishLifecycleService } from '../publish-lifecycle/publish-lifecycle.service';
 import { BulkPrepareCatalogSellActionDto, PrepareCatalogSellActionDto } from './catalog-sell-action.dto';
@@ -12,6 +12,7 @@ export class CatalogSellActionService {
     private readonly offersService: OffersService,
     private readonly publishLifecycleService: PublishLifecycleService,
     private readonly catalogClient: CatalogClientService,
+    private readonly warehouseClient: WarehouseClientService,
   ) {
     this.logger.setContext('CatalogSellActionService');
   }
@@ -28,6 +29,8 @@ export class CatalogSellActionService {
 
     if (!draft) {
       draft = await this.createDraftFromCatalog(dto, catalogProduct, selectedAccountId, requestedByUserId);
+    } else {
+      draft = await this.enforceDraftWarehouseQuantity(draft, catalogProduct);
     }
 
     const attempt = await this.publishLifecycleService.prepare(
@@ -159,6 +162,13 @@ export class CatalogSellActionService {
     }
 
     const updatePayload = this.toDraftUpdatePayload(dto);
+    if (dto.quantity !== undefined) {
+      const catalogProduct = await this.loadCatalogProduct(catalogProductId);
+      const requestedQuantity = this.toNonNegativeNumber(dto.quantity, 0);
+      const safeQuantity = this.capQuantityToWarehouse(requestedQuantity, catalogProduct.warehouseAvailable);
+      updatePayload.quantity = safeQuantity;
+      updatePayload.stockQuantity = safeQuantity;
+    }
     if (Object.keys(updatePayload).length > 0) {
       await this.offersService.updateOffer(draftId, { ...updatePayload, syncToAllegro: false }, requestedByUserId);
     }
@@ -217,6 +227,7 @@ export class CatalogSellActionService {
       });
     }
 
+    const warehouseAvailable = await this.getWarehouseAvailable(catalogProduct.id);
     const profile = marketplaceFields?.profile || null;
     const overrides = profile?.overrides || {};
     const overridePrice = overrides.price !== undefined && overrides.price !== null ? Number(overrides.price) : null;
@@ -224,6 +235,10 @@ export class CatalogSellActionService {
       ? overridePrice
       : this.toNonNegativeNumber(currentPricing?.salePrice, currentPricing?.basePrice, catalogProduct?.price?.gross, catalogProduct?.price);
     const overrideQuantity = overrides.quantity !== undefined && overrides.quantity !== null ? Number(overrides.quantity) : undefined;
+    const requestedQuantity = Number.isFinite(overrideQuantity)
+      ? Number(overrideQuantity)
+      : this.toNonNegativeNumber(catalogProduct?.stockQuantity, catalogProduct?.quantity, catalogProduct?.stock, warehouseAvailable, 0);
+    const safeQuantity = this.capQuantityToWarehouse(requestedQuantity, warehouseAvailable);
 
     return {
       ...catalogProduct,
@@ -233,8 +248,15 @@ export class CatalogSellActionService {
         currency: String(overrides.currency || currentPricing?.currency || catalogProduct?.currency || 'CZK').toUpperCase(),
       } : catalogProduct?.price,
       currency: String(overrides.currency || currentPricing?.currency || catalogProduct?.currency || 'CZK').toUpperCase(),
-      quantity: Number.isFinite(overrideQuantity) ? overrideQuantity : catalogProduct?.quantity,
-      stockQuantity: Number.isFinite(overrideQuantity) ? overrideQuantity : catalogProduct?.stockQuantity,
+      quantity: safeQuantity,
+      stockQuantity: safeQuantity,
+      warehouseAvailable,
+      warehouseStock: {
+        source: 'warehouse-microservice',
+        totalAvailable: warehouseAvailable,
+        requestedQuantity,
+        capped: safeQuantity < requestedQuantity,
+      },
       images: Array.isArray(overrides.images) && overrides.images.length > 0 ? overrides.images : catalogProduct?.images,
       marketplaceProfiles: {
         ...(catalogProduct?.marketplaceProfiles || {}),
@@ -306,6 +328,31 @@ export class CatalogSellActionService {
     return draft;
   }
 
+  private async enforceDraftWarehouseQuantity(draft: any, catalogProduct: any): Promise<any> {
+    if (!draft) return draft;
+    const warehouseAvailable = Number.isFinite(Number(catalogProduct?.warehouseAvailable)) ? Number(catalogProduct.warehouseAvailable) : 0;
+    const requestedQuantity = this.toNonNegativeNumber(draft.stockQuantity, draft.quantity, 0);
+    const safeQuantity = this.capQuantityToWarehouse(requestedQuantity, warehouseAvailable);
+    if (safeQuantity === requestedQuantity && draft.rawData?.warehouseStock?.totalAvailable === warehouseAvailable) {
+      return draft;
+    }
+
+    const rawData = {
+      ...(draft.rawData || {}),
+      warehouseStock: {
+        source: 'warehouse-microservice',
+        totalAvailable: warehouseAvailable,
+        requestedQuantity,
+        capped: safeQuantity < requestedQuantity,
+      },
+    };
+
+    return (this.prisma as any).allegroOffer.update({
+      where: { id: draft.id },
+      data: { quantity: safeQuantity, stockQuantity: safeQuantity, rawData },
+    });
+  }
+
   private mapCatalogProductToLocalDraft(
     dto: PrepareCatalogSellActionDto,
     catalogProduct: any,
@@ -317,7 +364,9 @@ export class CatalogSellActionService {
     const title = dto.title || catalogProduct?.title || catalogProduct?.name || `Catalog product ${dto.catalogProductId}`;
     const description = dto.description || catalogProduct?.description || catalogProduct?.shortDescription || null;
     const categoryId = dto.categoryId || allegroOverrides.categoryId || catalogProduct?.allegroCategoryId || catalogProduct?.categoryId || 'UNASSIGNED';
-    const quantity = this.toNonNegativeNumber(dto.quantity, allegroOverrides.quantity, catalogProduct?.stockQuantity, catalogProduct?.quantity, catalogProduct?.stock, 0);
+    const requestedQuantity = this.toNonNegativeNumber(dto.quantity, allegroOverrides.quantity, catalogProduct?.stockQuantity, catalogProduct?.quantity, catalogProduct?.stock, 0);
+    const warehouseAvailable = Number.isFinite(Number(catalogProduct?.warehouseAvailable)) ? Number(catalogProduct.warehouseAvailable) : requestedQuantity;
+    const quantity = this.capQuantityToWarehouse(requestedQuantity, warehouseAvailable);
     const price = this.toNonNegativeNumber(dto.price, allegroOverrides.price, catalogProduct?.price?.gross, catalogProduct?.price, catalogProduct?.salePrice, 0);
     const currency = allegroOverrides.currency || catalogProduct?.price?.currency || catalogProduct?.currency || 'PLN';
 
@@ -350,9 +399,26 @@ export class CatalogSellActionService {
           quantity,
           imageCount: images.length,
           selectedCategoryId: categoryId,
+          warehouseStock: {
+            source: 'warehouse-microservice',
+            totalAvailable: warehouseAvailable,
+            requestedQuantity,
+            capped: quantity < requestedQuantity,
+          },
         },
       },
     };
+  }
+
+  private async getWarehouseAvailable(catalogProductId: string): Promise<number> {
+    const available = Number(await this.warehouseClient.getTotalAvailable(catalogProductId));
+    return Number.isFinite(available) && available > 0 ? Math.floor(available) : 0;
+  }
+
+  private capQuantityToWarehouse(quantity: number, warehouseAvailable: number): number {
+    const safeQuantity = Number.isFinite(Number(quantity)) && Number(quantity) > 0 ? Math.floor(Number(quantity)) : 0;
+    const safeAvailable = Number.isFinite(Number(warehouseAvailable)) && Number(warehouseAvailable) > 0 ? Math.floor(Number(warehouseAvailable)) : 0;
+    return Math.min(safeQuantity, safeAvailable);
   }
 
   private extractImageUrls(catalogProduct: any): string[] {

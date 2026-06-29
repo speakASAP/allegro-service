@@ -9,6 +9,7 @@ import { strict as assert } from 'assert';
           const accounts = overrides.accounts || [
             { id: '22222222-2222-2222-2222-222222222222', name: 'Primary', isActive: true, tokenExpiresAt: null },
           ];
+          const warehouseAvailable = overrides.warehouseAvailable === undefined ? 5 : overrides.warehouseAvailable;
 
           const prisma = {
             allegroAccount: {
@@ -65,6 +66,8 @@ import { strict as assert } from 'assert';
                 price: dto.price,
                 currency: dto.currency,
                 quantity: dto.quantity,
+                stockQuantity: dto.stockQuantity,
+                rawData: dto.rawData,
                 publicationStatus: dto.publicationStatus,
                 status: dto.status,
                 updatedAt: '2026-06-19T00:00:00Z',
@@ -93,6 +96,10 @@ import { strict as assert } from 'assert';
             }),
           };
 
+          const warehouseClient = {
+            getTotalAvailable: async () => warehouseAvailable,
+          };
+
           return {
             service: new CatalogSellActionService(
               prisma as any,
@@ -100,8 +107,10 @@ import { strict as assert } from 'assert';
               offersService as any,
               publishLifecycleService as any,
               catalogClient as any,
+              warehouseClient as any,
             ),
             createdOffers,
+            updatedOffers,
           };
         }
 
@@ -117,6 +126,50 @@ import { strict as assert } from 'assert';
           assert.equal(result.draftCreated, true);
           assert.equal(result.nextAction, 'confirm_publish');
           assert.equal(result.draft.accountId, '22222222-2222-2222-2222-222222222222');
+        }
+
+        async function testPrepareCapsRequestedQuantityToWarehouseAvailability() {
+          const { service, createdOffers } = createHarness({ warehouseAvailable: 3 });
+          const result = await service.prepare(
+            { catalogProductId: '33333333-3333-3333-3333-333333333333', quantity: 99 },
+            'user-1',
+          );
+
+          assert.equal(createdOffers.length, 1);
+          assert.equal(createdOffers[0].quantity, 3);
+          assert.equal(createdOffers[0].stockQuantity, 3);
+          assert.equal(createdOffers[0].rawData.catalogSnapshot.warehouseStock.totalAvailable, 3);
+          assert.equal(createdOffers[0].rawData.catalogSnapshot.warehouseStock.requestedQuantity, 99);
+          assert.equal(createdOffers[0].rawData.catalogSnapshot.warehouseStock.capped, true);
+          assert.equal(result.draft.stockQuantity, 3);
+        }
+
+        async function testPrepareCapsReusableDraftToWarehouseAvailability() {
+          const existingDraft = {
+            id: 'existing-offer',
+            accountId: '22222222-2222-2222-2222-222222222222',
+            catalogProductId: '33333333-3333-3333-3333-333333333333',
+            title: 'Existing draft',
+            categoryId: 'cat-123',
+            price: 109,
+            currency: 'PLN',
+            quantity: 10,
+            stockQuantity: 10,
+            publicationStatus: 'INACTIVE',
+            status: 'DRAFT',
+            updatedAt: '2026-06-19T00:00:00Z',
+          };
+          const { service, updatedOffers } = createHarness({ existingDraft, warehouseAvailable: 4 });
+          const result = await service.prepare(
+            { catalogProductId: existingDraft.catalogProductId },
+            'user-1',
+          );
+
+          assert.equal(result.draftCreated, false);
+          assert.equal(result.draft.quantity, 4);
+          assert.equal(result.draft.stockQuantity, 4);
+          assert.equal(updatedOffers.get('existing-offer').rawData.warehouseStock.totalAvailable, 4);
+          assert.equal(updatedOffers.get('existing-offer').rawData.warehouseStock.capped, true);
         }
 
         async function testPrepareReusesExistingDraft() {
@@ -256,6 +309,8 @@ import { strict as assert } from 'assert';
 
         export async function runCatalogSellActionSpec(): Promise<void> {
           await testPrepareCreatesNewDraftAndReturnsConfirmAction();
+          await testPrepareCapsRequestedQuantityToWarehouseAvailability();
+          await testPrepareCapsReusableDraftToWarehouseAvailability();
           await testPrepareReusesExistingDraft();
           await testBulkPrepareAssignsSequentialRateLimitSlots();
           await testConfirmQueuesWithoutExecuting();
