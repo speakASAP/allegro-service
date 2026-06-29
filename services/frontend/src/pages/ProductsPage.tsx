@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import {
+  allegroAccountApi,
   catalogProductsApi,
   catalogSellActionApi,
   PrepareCatalogSellActionPayload,
@@ -86,6 +87,17 @@ interface AccountChoice {
   name?: string;
   isActive?: boolean;
   tokenExpiresAt?: string | null;
+}
+
+interface AllegroAccount {
+  id: string;
+  name: string;
+  isActive: boolean;
+  oauthStatus?: {
+    authorized?: boolean;
+    expiresAt?: string;
+    scopes?: string;
+  };
 }
 
 interface CatalogSellStatus {
@@ -280,6 +292,8 @@ const ProductsPage: React.FC = () => {
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [accountSelectionLoaded, setAccountSelectionLoaded] = useState(false);
+  const [hasPublishReadyAccount, setHasPublishReadyAccount] = useState(false);
 
   const selectedProduct = useMemo(
     () => products.find((product) => product.id === selectedId) || products[0] || null,
@@ -319,6 +333,19 @@ const ProductsPage: React.FC = () => {
     }
   }, []);
 
+  const loadAccountReadiness = useCallback(async () => {
+    try {
+      const res = await allegroAccountApi.getAccounts();
+      const accounts = unwrapData<AllegroAccount[]>(res.data);
+      setHasPublishReadyAccount(accounts.some((account) => account.isActive && Boolean(account.oauthStatus?.authorized)));
+    } catch (err) {
+      console.warn('Failed to load Allegro account readiness', err);
+      setHasPublishReadyAccount(false);
+    } finally {
+      setAccountSelectionLoaded(true);
+    }
+  }, []);
+
   const loadProducts = useCallback(async (page = 1) => {
     setLoading(true);
     setError(null);
@@ -344,6 +371,10 @@ const ProductsPage: React.FC = () => {
       setLoading(false);
     }
   }, [loadStatus, pagination.limit, search]);
+
+  useEffect(() => {
+    loadAccountReadiness();
+  }, [loadAccountReadiness]);
 
   useEffect(() => {
     loadProducts(1);
@@ -465,8 +496,9 @@ const ProductsPage: React.FC = () => {
         </Button>
       </div>
 
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        <p className="font-semibold">OAuth account readiness is required before publish confirmation.</p>
+      {accountSelectionLoaded && !hasPublishReadyAccount && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-semibold">OAuth account readiness is required before publish confirmation.</p>
         <ol className="mt-2 list-decimal space-y-2 pl-5">
           <li>
             Open{' '}
@@ -483,14 +515,15 @@ const ProductsPage: React.FC = () => {
             <span className="font-medium">Confirm publish</span>.
           </li>
         </ol>
-        <p className="mt-2 text-xs">
-          The app starts OAuth through{' '}
-          <code className="break-all rounded bg-white/70 px-1 py-0.5 text-xs">
-            {'/api/allegro/oauth/authorize?accountId=<account id>'}
-          </code>{' '}
-          and redirects you to Allegro automatically. A pasted raw API URL is not the manual login link.
-        </p>
-      </div>
+          <p className="mt-2 text-xs">
+            The app starts OAuth through{' '}
+            <code className="break-all rounded bg-white/70 px-1 py-0.5 text-xs">
+              {'/api/allegro/oauth/authorize?accountId=<account id>'}
+            </code>{' '}
+            and redirects you to Allegro automatically. A pasted raw API URL is not the manual login link.
+          </p>
+        </div>
+      )}
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
       {success && <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{success}</div>}

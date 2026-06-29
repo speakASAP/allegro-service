@@ -3104,17 +3104,23 @@ export class OffersService {
         : null;
       const productDetails = this.extractCatalogProductDetails(allegroOffer, offerData, allegroProduct);
       const sku = `ALLEGRO-OFFER-${allegroOfferId}`;
-      const existing = await this.findCatalogProductForImportedOffer(sku, existingCatalogProductId);
+      const existing = await this.findCatalogProductForImportedOffer(sku, existingCatalogProductId, productDetails.ean, logContext);
+      const preserveCatalogIdentity = Boolean(existing && existing.sku !== sku && productDetails.ean);
+      const mergedTags = Array.from(new Set([
+        ...(Array.isArray(existing?.tags) ? existing.tags : []),
+        'source:allegro',
+        `allegro-offer:${allegroOfferId}`,
+      ]));
       const productPayload = {
-        sku,
-        title: productDetails.title,
-        description: productDetails.description || undefined,
-        brand: productDetails.brand || undefined,
-        manufacturer: productDetails.manufacturer || undefined,
+        sku: preserveCatalogIdentity ? existing.sku || sku : sku,
+        title: preserveCatalogIdentity && existing.title ? existing.title : productDetails.title,
+        description: preserveCatalogIdentity && existing.description ? existing.description : productDetails.description || undefined,
+        brand: preserveCatalogIdentity && existing.brand ? existing.brand : productDetails.brand || undefined,
+        manufacturer: preserveCatalogIdentity && existing.manufacturer ? existing.manufacturer : productDetails.manufacturer || undefined,
         ean: productDetails.ean || undefined,
         isActive: productDetails.isActive,
         lifecycle: productDetails.isActive ? 'active' : 'archived',
-        tags: ['source:allegro', `allegro-offer:${allegroOfferId}`],
+        tags: mergedTags,
       };
 
       const catalogProduct = existing
@@ -3155,21 +3161,97 @@ export class OffersService {
     }
   }
 
-  private async findCatalogProductForImportedOffer(sku: string, existingCatalogProductId?: string | null): Promise<any | null> {
+  private async findCatalogProductForImportedOffer(
+    sku: string,
+    existingCatalogProductId?: string | null,
+    ean?: string | null,
+    logContext = '[imported-offer]',
+  ): Promise<any | null> {
     const bySku = await this.catalogClient.getProductBySku(sku);
     if (bySku) {
-      return bySku;
+      return await this.findBestCatalogProductByEan(ean, bySku, sku, logContext) || bySku;
     }
 
-    if (!existingCatalogProductId) {
+    if (existingCatalogProductId) {
+      try {
+        const byExistingId = await this.catalogClient.getProductById(existingCatalogProductId);
+        return await this.findBestCatalogProductByEan(ean, byExistingId, sku, logContext) || byExistingId;
+      } catch {
+        // Fall through to EAN matching.
+      }
+    }
+
+    return await this.findBestCatalogProductByEan(ean, null, sku, logContext);
+  }
+
+  private async findBestCatalogProductByEan(
+    ean: string | null | undefined,
+    fallback: any | null,
+    sku: string,
+    logContext: string,
+  ): Promise<any | null> {
+    const normalizedEan = String(ean || '').trim();
+    if (!normalizedEan) {
       return null;
     }
 
     try {
-      return await this.catalogClient.getProductById(existingCatalogProductId);
-    } catch {
+      const searchResults = await this.catalogClient.searchProducts({ search: normalizedEan, page: 1, limit: 25 });
+      const candidates = searchResults.items.filter((product: any) => String(product?.ean || '').trim() === normalizedEan);
+      const fallbackMatches = fallback && String(fallback?.ean || '').trim() === normalizedEan;
+      const allCandidates = [
+        ...(fallbackMatches ? [fallback] : []),
+        ...candidates.filter((candidate: any) => !fallback || candidate.id !== fallback.id),
+      ];
+
+      if (!allCandidates.length) {
+        return null;
+      }
+
+      const [best] = allCandidates.sort((left: any, right: any) =>
+        this.catalogImportCandidateScore(right, sku) - this.catalogImportCandidateScore(left, sku),
+      );
+
+      if (best && fallback && best.id !== fallback.id) {
+        this.logger.log(`${logContext} Matched imported Allegro offer to existing Catalog product by EAN`, {
+          sku,
+          ean: normalizedEan,
+          previousCatalogProductId: fallback.id,
+          catalogProductId: best.id,
+          existingSku: best.sku,
+        });
+      }
+
+      return best || null;
+    } catch (error: any) {
+      this.logger.warn(`${logContext} Failed to search Catalog product by EAN`, {
+        sku,
+        ean: normalizedEan,
+        error: error?.response?.data?.message || error?.message || String(error),
+      });
       return null;
     }
+  }
+
+  private catalogImportCandidateScore(product: any, preferredSku: string): number {
+    let score = this.catalogCandidateMediaCount(product) * 10;
+
+    if (product?.allegroCategoryId || product?.categoryId) score += 5;
+    if (product?.description || product?.shortDescription) score += 4;
+    if (String(product?.sku || '') === preferredSku) score += 2;
+    if (product?.brand) score += 1;
+    if (product?.title || product?.name) score += 1;
+
+    return score;
+  }
+
+  private catalogCandidateMediaCount(product: any): number {
+    const imageGroups = [
+      product?.images,
+      product?.media,
+    ];
+
+    return imageGroups.reduce((total, images) => total + (Array.isArray(images) ? images.length : 0), 0);
   }
 
   private extractCatalogProductDetails(allegroOffer: any, offerData: any, allegroProduct: any): any {

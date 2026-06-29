@@ -104,6 +104,68 @@ export class ProductsService {
     return Number.isFinite(amount) && amount > 0 ? amount : null;
   }
 
+  private productMediaCount(product: any): number {
+    const imageGroups = [
+      product?.images,
+      product?.media,
+      product?.catalogProduct?.images,
+      product?.catalogProduct?.media,
+      product?.rawData?.images,
+      product?.rawData?.media,
+      product?.allegroProduct?.rawData?.images,
+      product?.allegroProduct?.rawData?.media,
+    ];
+
+    return imageGroups.reduce((total, images) => total + (Array.isArray(images) ? images.length : 0), 0);
+  }
+
+  private productCompletenessScore(product: any): number {
+    const catalogProduct = product?.catalogProduct || {};
+    const price = catalogProduct.price;
+    let score = this.productMediaCount(product) * 10;
+
+    if (catalogProduct.allegroCategoryId || catalogProduct.categoryId) score += 5;
+    if (catalogProduct.description || catalogProduct.shortDescription) score += 4;
+    if (this.priceAmount(price) || catalogProduct.salePrice) score += 3;
+    if (catalogProduct.stockQuantity !== undefined || catalogProduct.quantity !== undefined || catalogProduct.stock !== undefined) score += 2;
+    if (product?.brand || catalogProduct.brand) score += 1;
+    if (product?.name || catalogProduct.title || catalogProduct.name) score += 1;
+
+    return score;
+  }
+
+  private productIdentityKey(product: any): string {
+    const ean = String(product?.ean || product?.catalogProduct?.ean || '').trim();
+    if (ean) {
+      return `ean:${ean}`;
+    }
+
+    return `id:${product?.id || product?.allegroProductId || 'unknown'}`;
+  }
+
+  private dedupeCatalogProductsForPublish(products: any[]): any[] {
+    const deduped = new Map<string, any>();
+
+    for (const product of products) {
+      const key = this.productIdentityKey(product);
+      const current = deduped.get(key);
+
+      if (!current || this.productCompletenessScore(product) > this.productCompletenessScore(current)) {
+        deduped.set(key, product);
+      }
+    }
+
+    const dedupedProducts = Array.from(deduped.values());
+    if (dedupedProducts.length < products.length) {
+      this.logger.log('[getProducts] Deduplicated Catalog products for Allegro publish list', {
+        before: products.length,
+        after: dedupedProducts.length,
+      });
+    }
+
+    return dedupedProducts;
+  }
+
   private extractSummaryFromRaw(
     rawData: any,
     payload: ProductPayload = {},
@@ -295,25 +357,30 @@ export class ProductsService {
         })
       );
 
+      const dedupedItems = this.dedupeCatalogProductsForPublish(enrichedItems);
+      const deduplicatedCount = enrichedItems.length - dedupedItems.length;
+      const adjustedTotal = Math.max(dedupedItems.length, catalogResult.total - deduplicatedCount);
       const duration = Date.now() - startTime;
       this.logger.log(`[${requestId}] [getProducts] Products fetched successfully`, {
         page,
         limit,
-        total: catalogResult.total,
-        itemsCount: enrichedItems.length,
-        totalPages: Math.ceil(catalogResult.total / limit),
+        total: adjustedTotal,
+        sourceTotal: catalogResult.total,
+        itemsCount: dedupedItems.length,
+        deduplicatedCount,
+        totalPages: Math.ceil(adjustedTotal / limit),
         duration: `${duration}ms`,
         hasSearch: !!search,
         timestamp: new Date().toISOString(),
       });
 
       return {
-        items: enrichedItems,
+        items: dedupedItems,
         pagination: {
           page: catalogResult.page,
           limit: catalogResult.limit,
-          total: catalogResult.total,
-          totalPages: Math.ceil(catalogResult.total / limit),
+          total: adjustedTotal,
+          totalPages: Math.ceil(adjustedTotal / limit),
         },
       };
     } catch (error: any) {
