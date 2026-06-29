@@ -39,6 +39,32 @@ export class ImportController {
     this.logger.setContext('ImportController');
   }
 
+
+  @Post('csv/preview')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  async previewCsv(@UploadedFile() file: MulterFile | undefined) {
+    if (!file) {
+      throw new Error('No file uploaded');
+    }
+
+    const uploadsDir = path.join(process.cwd(), 'uploads', 'previews');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const safeName = `${Date.now()}-${file.originalname}`;
+    const filePath = path.join(uploadsDir, safeName);
+    fs.writeFileSync(filePath, file.buffer);
+
+    try {
+      const result = await this.importService.previewCsv(filePath, file.originalname);
+      return { success: true, data: result };
+    } finally {
+      fs.unlink(filePath, () => undefined);
+    }
+  }
+
   @Post('csv')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('file'))

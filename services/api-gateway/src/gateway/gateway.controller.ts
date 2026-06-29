@@ -119,6 +119,22 @@ export class GatewayController {
   }
 
 
+
+  /**
+   * Route BizBox stock CSV previews (requires auth, does not mutate Warehouse)
+   */
+  @Post('import/csv/preview')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  async importCsvPreview(
+    @Req() req: ExpressRequest,
+    @Res() res: ExpressResponse,
+    @UploadedFile() file: GatewayUploadedFile | undefined,
+  ) {
+    const path = req.url.replace('/api/import', '');
+    return this.routeMultipartFileRequest('import', `/import${path}`, req, res, file);
+  }
+
   /**
    * Route BizBox stock CSV uploads (requires auth)
    */

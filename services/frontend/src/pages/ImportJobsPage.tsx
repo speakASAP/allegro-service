@@ -23,6 +23,19 @@ interface ImportJob {
   skippedRows: number;
 }
 
+interface BizboxCsvPreview {
+  fileName: string;
+  totalRows: number;
+  rowsWithStock: number;
+  rowsMissingCode: number;
+  totalStock: number;
+  primaryWarehouse: string;
+  stockFieldTotals: Record<string, number>;
+  sampleRows: Array<{ row: number; code: string | null; name: string | null; ean: string | null; stockQuantity: number }>;
+  issues: Array<{ row: number; code: string | null; issue: string }>;
+  mutatesWarehouse: boolean;
+}
+
 interface PreviewOffer {
   allegroOfferId: string;
   title: string;
@@ -44,6 +57,8 @@ const ImportJobsPage: React.FC = () => {
   const [selectedCsvFile, setSelectedCsvFile] = useState<File | null>(null);
   const [csvInputKey, setCsvInputKey] = useState(0);
   const [uploadingCsv, setUploadingCsv] = useState(false);
+  const [previewingCsv, setPreviewingCsv] = useState(false);
+  const [csvPreview, setCsvPreview] = useState<BizboxCsvPreview | null>(null);
 
   // Import preview states
   const [showImportPreview, setShowImportPreview] = useState(false);
@@ -130,6 +145,51 @@ const ImportJobsPage: React.FC = () => {
     setSelectedCsvFile(file);
     setError(null);
     setSuccess(null);
+    setCsvPreview(null);
+  };
+
+
+  const handlePreviewBizboxCsv = async () => {
+    if (!selectedCsvFile) {
+      setError('Select a BizBox CSV file before previewing.');
+      return;
+    }
+
+    setPreviewingCsv(true);
+    setError(null);
+    setSuccess(null);
+    setCsvPreview(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedCsvFile);
+
+      const response = await api.post('/import/csv/preview', formData, {
+        timeout: 180000,
+      });
+
+      if (response.data.success) {
+        setCsvPreview(response.data.data);
+        setSuccess(`BizBox CSV preview ready: ${response.data.data.totalRows} rows, ${response.data.data.totalStock} total stock. No Warehouse stock was changed.`);
+      }
+    } catch (err) {
+      console.error('Failed to preview BizBox CSV', err);
+      if (err instanceof AxiosError) {
+        if (err.response?.status === 401) {
+          return;
+        }
+        const axiosError = err as AxiosError & { isConnectionError?: boolean; serviceErrorMessage?: string };
+        if (axiosError.isConnectionError && axiosError.serviceErrorMessage) {
+          setError(axiosError.serviceErrorMessage);
+        } else {
+          setError(err.response?.data?.error?.message || 'Failed to preview BizBox CSV');
+        }
+      } else {
+        setError('Failed to preview BizBox CSV');
+      }
+    } finally {
+      setPreviewingCsv(false);
+    }
   };
 
   const handleUploadBizboxCsv = async () => {
@@ -157,6 +217,7 @@ const ImportJobsPage: React.FC = () => {
         const failedRows = job?.failedRows ?? 0;
         setSuccess(`BizBox stock CSV imported: ${selectedCsvFile.name} (${successfulRows}/${processedRows} rows successful, ${failedRows} failed).`);
         setSelectedCsvFile(null);
+        setCsvPreview(null);
         setCsvInputKey((value) => value + 1);
         await loadJobs();
       }
@@ -622,7 +683,7 @@ const ImportJobsPage: React.FC = () => {
             <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
               <Button
                 onClick={handleImportAllOffers}
-                disabled={loadingImportAll || loadingImportAndFix || loadingImportAllegro || loadingImportSalesCenter || processingImport || uploadingCsv}
+                disabled={loadingImportAll || loadingImportAndFix || loadingImportAllegro || loadingImportSalesCenter || processingImport || uploadingCsv || previewingCsv}
                 variant="primary"
                 size="medium"
                 className="flex-1"
@@ -631,7 +692,7 @@ const ImportJobsPage: React.FC = () => {
               </Button>
               <Button
                 onClick={handleImportAndFixTitles}
-                disabled={loadingImportAll || loadingImportAndFix || loadingImportAllegro || loadingImportSalesCenter || processingImport || uploadingCsv}
+                disabled={loadingImportAll || loadingImportAndFix || loadingImportAllegro || loadingImportSalesCenter || processingImport || uploadingCsv || previewingCsv}
                 variant="secondary"
                 size="medium"
                 className="flex-1"
@@ -640,7 +701,7 @@ const ImportJobsPage: React.FC = () => {
               </Button>
               <Button
                 onClick={() => handlePreviewImport('allegro')}
-                disabled={loadingImportAll || loadingImportAndFix || loadingImportAllegro || loadingImportSalesCenter || processingImport || uploadingCsv}
+                disabled={loadingImportAll || loadingImportAndFix || loadingImportAllegro || loadingImportSalesCenter || processingImport || uploadingCsv || previewingCsv}
                 variant="secondary"
                 size="medium"
                 className="flex-1"
@@ -668,12 +729,21 @@ const ImportJobsPage: React.FC = () => {
                 type="file"
                 accept=".csv,text/csv"
                 onChange={handleCsvFileChange}
-                disabled={uploadingCsv}
+                disabled={uploadingCsv || previewingCsv}
                 className="block w-full text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:bg-gray-200 file:px-4 file:py-2 file:text-sm file:font-medium file:text-gray-800 hover:file:bg-gray-300 disabled:opacity-60"
               />
               <Button
+                onClick={handlePreviewBizboxCsv}
+                disabled={!selectedCsvFile || uploadingCsv || previewingCsv}
+                variant="secondary"
+                size="medium"
+                className="lg:w-48"
+              >
+                {previewingCsv ? 'Previewing...' : 'Preview CSV'}
+              </Button>
+              <Button
                 onClick={handleUploadBizboxCsv}
-                disabled={!selectedCsvFile || uploadingCsv}
+                disabled={!selectedCsvFile || uploadingCsv || previewingCsv || !csvPreview}
                 variant="primary"
                 size="medium"
                 className="lg:w-56"
@@ -686,8 +756,23 @@ const ImportJobsPage: React.FC = () => {
                 Selected file: <span className="font-medium text-gray-900">{selectedCsvFile.name}</span>
               </p>
             )}
+            {csvPreview && (
+              <div className="rounded border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+                <div className="font-semibold">Preview summary</div>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  <div>Rows: <span className="font-medium">{csvPreview.totalRows}</span></div>
+                  <div>Rows with stock: <span className="font-medium">{csvPreview.rowsWithStock}</span></div>
+                  <div>Total stock: <span className="font-medium">{csvPreview.totalStock}</span></div>
+                  <div>Missing codes: <span className="font-medium">{csvPreview.rowsMissingCode}</span></div>
+                </div>
+                <div className="mt-2">Primary warehouse: <span className="font-medium">{csvPreview.primaryWarehouse}</span></div>
+                {csvPreview.issues.length > 0 && (
+                  <div className="mt-2 text-amber-800">First issue: row {csvPreview.issues[0].row} - {csvPreview.issues[0].issue}</div>
+                )}
+              </div>
+            )}
             <p className="text-sm text-gray-600">
-              Uploads a BizBox CSV and updates Warehouse stock from the stock:minimumRequiredLevel:* columns.
+              Preview parses the BizBox CSV without changing Warehouse stock. Upload updates Warehouse stock from the stock:minimumRequiredLevel:* columns.
             </p>
           </div>
         </Card>
@@ -696,7 +781,7 @@ const ImportJobsPage: React.FC = () => {
         <div className="flex justify-end space-x-2">
           <Button
             onClick={() => handlePreviewImport('sales-center')}
-            disabled={loadingImportAll || loadingImportAndFix || loadingImportAllegro || loadingImportSalesCenter || processingImport || uploadingCsv}
+            disabled={loadingImportAll || loadingImportAndFix || loadingImportAllegro || loadingImportSalesCenter || processingImport || uploadingCsv || previewingCsv}
             variant="secondary"
             size="small"
           >

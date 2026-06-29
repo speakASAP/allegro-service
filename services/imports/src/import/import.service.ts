@@ -189,6 +189,73 @@ export class ImportService {
     }
   }
 
+
+  /**
+   * Preview BizBox CSV without creating Catalog products or mutating Warehouse stock.
+   */
+  async previewCsv(filePath: string, fileName: string, source: string = 'BIZBOX') {
+    this.logger.log('Starting CSV preview', { filePath, fileName, source });
+
+    const records = await this.bizboxParser.parseBizBoxCsv(filePath);
+    const stockFieldTotals: Record<string, number> = {};
+    const sampleRows: any[] = [];
+    const issues: any[] = [];
+    let totalStock = 0;
+    let rowsWithStock = 0;
+    let rowsMissingCode = 0;
+
+    records.forEach((record, index) => {
+      const rowNumber = index + 1;
+      const stockQuantity = this.calculateStock(record);
+      const stockFields: Record<string, number> = {};
+
+      for (const key of Object.keys(record)) {
+        if (key.startsWith('stock:minimumRequiredLevel:')) {
+          const value = parseInt(record[key], 10) || 0;
+          stockFields[key] = value;
+          stockFieldTotals[key] = (stockFieldTotals[key] || 0) + value;
+        }
+      }
+
+      if (stockQuantity > 0) {
+        rowsWithStock++;
+      }
+      if (!record.code) {
+        rowsMissingCode++;
+        issues.push({ row: rowNumber, code: null, issue: 'Missing required field code' });
+      }
+
+      totalStock += stockQuantity;
+
+      if (sampleRows.length < 10) {
+        sampleRows.push({
+          row: rowNumber,
+          code: record.code || null,
+          name: record['name:cs'] || record.name || null,
+          ean: record.ean || null,
+          stockQuantity,
+          stockFields,
+        });
+      }
+    });
+
+    const primaryWarehouse = this.configService.get<string>('STOCK_PRIMARY_WAREHOUSE') || 'sklad-internet';
+
+    return {
+      fileName,
+      source,
+      totalRows: records.length,
+      rowsWithStock,
+      rowsMissingCode,
+      totalStock,
+      primaryWarehouse,
+      stockFieldTotals,
+      sampleRows,
+      issues: issues.slice(0, 50),
+      mutatesWarehouse: false,
+    };
+  }
+
   /**
    * Calculate stock from warehouse fields
    */
