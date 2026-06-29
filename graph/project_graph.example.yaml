@@ -47,6 +47,10 @@ nodes:
     type: feature
     path: 10_features/FEAT-008-operations-trust-and-scale.md
     title: Operations Trust And Scale
+  - id: FEAT-009
+    type: feature
+    path: 10_features/FEAT-009-public-client-ui.md
+    title: Public Client UI
   - id: FEAT-010
     type: feature
     path: 10_features/FEAT-010-allegro-primary-channel-foundation.md
@@ -83,6 +87,10 @@ nodes:
     type: task
     path: 11_tasks/TASK-008-plan-operations-trust-and-scale.md
     title: Plan Operations Trust And Scale
+  - id: TASK-009
+    type: task
+    path: 11_tasks/TASK-009-public-client-landing-dashboard.md
+    title: Public Client Landing And Dashboard
   - id: TASK-010
     type: task
     path: 11_tasks/TASK-010-allegro-primary-channel-foundation.md
@@ -119,6 +127,10 @@ nodes:
     type: execution_plan
     path: 21_execution_plans/EP-TASK-008-plan-operations-trust-and-scale.md
     title: Operations Trust And Scale
+  - id: EP-TASK-009
+    type: execution_plan
+    path: 21_execution_plans/EP-TASK-009-public-client-landing-dashboard.md
+    title: Public Client Landing And Dashboard
   - id: EP-TASK-010
     type: execution_plan
     path: 21_execution_plans/EP-TASK-010-allegro-primary-channel-foundation.md
@@ -155,6 +167,10 @@ nodes:
     type: coding_prompt
     path: 14_prompts/PROMPT-TASK-008-operations-trust-and-scale.md
     title: Operations Trust And Scale Prompt
+  - id: PROMPT-TASK-009-public-client-landing-dashboard
+    type: coding_prompt
+    path: 14_prompts/PROMPT-TASK-009-public-client-landing-dashboard.md
+    title: Public Client Landing And Dashboard Prompt
   - id: PROMPT-TASK-010-allegro-primary-channel-foundation
     type: coding_prompt
     path: 14_prompts/PROMPT-TASK-010-allegro-primary-channel-foundation.md
@@ -191,6 +207,10 @@ nodes:
     type: context_package
     path: 13_context_packages/CP-TASK-008-operations-trust-and-scale.md
     title: Operations Trust And Scale Context Package
+  - id: CP-TASK-009-public-client-landing-dashboard
+    type: context_package
+    path: 13_context_packages/CP-TASK-009-public-client-landing-dashboard.md
+    title: Public Client Landing And Dashboard Context Package
   - id: CP-TASK-010-allegro-primary-channel-foundation
     type: context_package
     path: 13_context_packages/CP-TASK-010-allegro-primary-channel-foundation.md
@@ -231,6 +251,10 @@ nodes:
     type: validation_report
     path: 12_validation/VAL-TASK-008-validation-report.md
     title: Operations Trust And Scale Validation
+  - id: VAL-TASK-009-public-client-landing-dashboard
+    type: validation_report
+    path: 12_validation/VAL-TASK-009-public-client-landing-dashboard.md
+    title: Public Client Landing And Dashboard Validation
   - id: VAL-TASK-010-allegro-primary-channel-foundation
     type: validation_report
     path: 12_validation/VAL-TASK-010-allegro-primary-channel-foundation.md
@@ -269,6 +293,9 @@ edges:
   - from: SYS-001
     type: enables
     to: FEAT-008
+  - from: SYS-001
+    type: enables
+    to: FEAT-009
   - from: SYS-001
     type: enables
     to: FEAT-010
@@ -462,6 +489,30 @@ edges:
     type: validates
     to: TASK-008
   - from: EP-TASK-008
+    type: constrained_by
+    to: ADR-001
+  - from: TASK-009
+    type: impacts_goal
+    to: VG-REVENUE
+  - from: TASK-009
+    type: implements
+    to: FEAT-009
+  - from: EP-TASK-009
+    type: derives_from
+    to: TASK-009
+  - from: EP-TASK-009
+    type: generates
+    to: PROMPT-TASK-009-public-client-landing-dashboard
+  - from: PROMPT-TASK-009-public-client-landing-dashboard
+    type: derives_from
+    to: EP-TASK-009
+  - from: PROMPT-TASK-009-public-client-landing-dashboard
+    type: included_in_context
+    to: CP-TASK-009-public-client-landing-dashboard
+  - from: VAL-TASK-009-public-client-landing-dashboard
+    type: validates
+    to: TASK-009
+  - from: EP-TASK-009
     type: constrained_by
     to: ADR-001
   - from: TASK-010

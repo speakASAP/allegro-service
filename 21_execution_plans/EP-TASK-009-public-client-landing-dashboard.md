@@ -2,12 +2,12 @@
 
 ```yaml
 id: EP-TASK-009
-status: active
+status: validated
 source_task: ../11_tasks/TASK-009-public-client-landing-dashboard.md
 owner: Project Owner
 created: 2026-06-27
-last_updated: 2026-06-27
-completeness_level: complete
+last_updated: 2026-06-29
+completeness_level: validated
 vision: ../01_vision/VISION.md
 constitution: ../00_constitution/CONSTITUTION.md
 feature: ../10_features/FEAT-009-public-client-ui.md
@@ -17,7 +17,7 @@ goal_impact: ../22_goal_impact/GOAL-IMPACT-TASK-009.md
 ## Metadata
 
 - Source task: ../11_tasks/TASK-009-public-client-landing-dashboard.md
-- Lifecycle state: active implementation, split into parallel frontend lanes plus integration ownership.
+- Lifecycle state: live validated; TASK-009 implementation and deployment are complete, and this plan is retained as the auditable implementation record.
 - Reference service: `/home/ssf/Documents/Github/bazos-service`
 
 ## Upstream Traceability
@@ -46,6 +46,14 @@ Make the Allegro service visible and usable at `allegro.alfares.cz` for register
 ## Sensitive-Data Handling
 
 Classification: synthetic. Use synthetic product names and UI examples only. Do not record real token values, user identifiers, order payloads, account credentials, or raw logs.
+
+## Contract Validation Plan
+
+TASK-009 consumes existing Auth, Catalog product search, API gateway, and Allegro catalog-sell-action contracts. Validation must prove the public frontend routes, protected API route wiring, and guarded prepare/status/edit/confirm UI semantics without adding a new backend mutation contract.
+
+## Replay/Determinism Plan
+
+Public route smokes and frontend builds are deterministic. Publish-like UI actions must remain split into prepare, draft edit, status, and explicit confirm states so authenticated smoke tests can be repeated without autonomous publication or hidden state changes.
 
 ## Scope
 
@@ -110,6 +118,14 @@ Classification: synthetic. Use synthetic product names and UI examples only. Do 
 | TASK-009-B | Ready now | Client dashboard and Catalog publish lane | Add dashboard/product workflow for Catalog selection, draft preparation, status, edit, and explicit confirm where existing endpoints support it. | `services/frontend/src/pages/Dashboard.tsx`, `services/frontend/src/pages/ProductsPage.tsx`, `services/frontend/src/services/api.ts`, optional product-flow component. | Landing page, backend, k8s. | Customer dashboard flow and clear unsupported-state blockers. | Existing backend product-scoped endpoints may be incomplete or dirty. |
 | TASK-009-C | Final integration | Runtime route and validation lane | Integrate worker outputs, decide frontend serving approach, build, smoke, and document evidence. | Task docs, validation docs, deployment/runtime files if needed. | Secrets, unrelated backend. | `allegro.alfares.cz` serves frontend and API health remains available. | Depends on A/B completion. |
 
+## Implementation Steps
+
+1. Create the IPS scaffold for FEAT-009, TASK-009, GOAL-IMPACT-TASK-009, this execution plan, validation, context, and coding-prompt traceability.
+2. Implement the public Allegro landing route using the Bazos public-client pattern as reference while preserving Allegro-specific Catalog, OAuth, account, rate-limit, and guarded publish language.
+3. Implement the authenticated dashboard and products workflow for Catalog product selection, draft preparation, status, draft edit, and explicit publish confirmation where existing backend endpoints support the flow.
+4. Integrate frontend serving, API gateway routing, backend health routing, Kubernetes manifests, image build/push steps, and deploy-script rollout order so `https://allegro.alfares.cz` serves the frontend while `/api` and `/health` keep their intended owners.
+5. Validate build, backend contract spec, Kubernetes dry-run, deploy rollout, endpoint readiness, public routes, protected API route wiring, and frontend bundle content; record evidence in the TASK-009 validation report.
+
 ## Test Plan
 
 - `git diff --check`
@@ -119,7 +135,7 @@ Classification: synthetic. Use synthetic product names and UI examples only. Do 
 
 ## Validation Plan
 
-Validation succeeds when frontend build passes, route smokes prove public serving works, UI states preserve guarded publish semantics, sensitive-data constraints are intact, and blockers are documented with `[MISSING: ...]` or `[UNKNOWN: ...]`.
+Validation succeeds when frontend build passes, route smokes prove public serving works, UI states preserve guarded publish semantics, sensitive-data constraints are intact, and unresolved blockers are recorded explicitly without fabricating missing contracts.
 
 ## Gate Commands
 
@@ -129,6 +145,11 @@ cd services/frontend && npm run build
 curl -fsS https://allegro.alfares.cz/health
 curl -I https://allegro.alfares.cz/
 ```
+
+## Documentation Updates
+
+- Update `10_features/FEAT-009-public-client-ui.md`, `11_tasks/TASK-009-public-client-landing-dashboard.md`, `21_execution_plans/EP-TASK-009-public-client-landing-dashboard.md`, `22_goal_impact/GOAL-IMPACT-TASK-009.md`, `13_context_packages/CP-TASK-009-public-client-landing-dashboard.md`, `14_prompts/PROMPT-TASK-009-public-client-landing-dashboard.md`, `12_validation/VAL-TASK-009-public-client-landing-dashboard.md`, `graph/project_graph.example.yaml`, `TASKS.md`, and `STATE.json` when TASK-009 status or evidence changes.
+- Keep deployment evidence synthetic and route/status focused; do not paste credentials, JWTs, OAuth tokens, customer data, raw orders, or raw production logs.
 
 ## Rollback Plan
 

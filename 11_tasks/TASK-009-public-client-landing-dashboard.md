@@ -5,7 +5,7 @@ id: TASK-009
 status: approved
 owner: Project Owner
 created: 2026-06-27
-last_updated: 2026-06-27
+last_updated: 2026-06-29
 completeness_level: complete
 upstream:
   - ../10_features/FEAT-009-public-client-ui.md
@@ -76,7 +76,7 @@ Publish-like actions remain idempotent through the existing governed lifecycle. 
 
 ## Required Context
 
-- `bazos-service` docs: `implementation-goals/GOAL-06-landing-admin-client-ui.md`, `GOAL-08-hosted-auth-ui.md`, `GOAL-12-client-catalog-publishing-flow.md`
+- External `bazos-service` reference docs: GOAL-06 landing/admin/client UI, GOAL-08 hosted auth UI, and GOAL-12 client catalog publishing flow on the alfares host. These are intentionally external reference artifacts, not local IPS paths in this repository.
 - Allegro frontend: `services/frontend/src`
 - Allegro sell-action backend: `services/allegro-service/src/allegro/catalog-sell-action`
 - Catalog microservice protected product flow

@@ -4,14 +4,14 @@
   "stage": "production",
   "health": "ok",
   "cycle": 7,
-  "last_cycle_at": "2026-06-29T20:55:00Z",
+  "last_cycle_at": "2026-06-29T21:55:00Z",
   "tasks_active": 1,
   "tasks_failed_last_cycle": 0,
   "open_task_ids": [
     "TASK-010"
   ],
-  "last_milestone": "task009-public-client-landing-dashboard-live-validated",
-  "next_focus": "TASK-010 P1/P2/P7 implemented: order sync defaults local-only with explicit central-forward confirmation; order-derived and active-offer import scripts have dry-run/local/Catalog apply guards; operations API/UI read surfaces expose sync/projection evidence. Next focus: preview-token governed controller import approvals, durable central order replay/equality storage, and governed Allegro quantity-command write-back.",
+  "last_milestone": "task010-order-forwarding-attempt-storage",
+  "next_focus": "TASK-010 durable central order forwarding attempt/status storage implemented for local projection and explicit forwarding paths. Continue TASK-010 next: confirm orders.create.v1 duplicate/equality behavior from orders-microservice, preview-token governed controller import approvals, and governed Allegro quantity-command write-back.",
   "blockers": [],
   "budget_units_used": 0,
   "metrics": {

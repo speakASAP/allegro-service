@@ -53,4 +53,4 @@ The operations raw-payload endpoint returns metadata only and does not select ra
 - `[MISSING: orders.create.v1 duplicate/equality confirmation from orders-microservice]`
 - `[MISSING: preview-token governed service/controller import approval routes]`
 - `[MISSING: governed recurring stock sync and Allegro quantity command write-back]`
-- Pre-existing TASK-009 IPS audit debt remains outside TASK-010 scope.
+- TASK-009 IPS audit/pre-coding debt repaired and validated on 2026-06-29; strict audit, pre-coding, and TASK-009 readiness gates passed.
