@@ -19,9 +19,10 @@ Validator: AI agent
 ## Summary
 
 TASK-010 opens the Allegro primary-channel foundation implementation. This
-validation report covers W0/W1, W2, and W3 foundation work: IPS traceability,
-script-safety guardrails, additive Prisma sync/projection models, opt-in local
-sync evidence recording, and no-mutation checks.
+validation report covers W0/W1, W2, W3, and W4 foundation work: IPS
+traceability, script-safety guardrails, additive Prisma sync/projection models,
+opt-in local sync evidence recording, publish preview-token binding, and
+no-mutation checks.
 
 ## Upstream goal
 
@@ -37,8 +38,10 @@ plan by turning Allegro import and export mapping into safe implementation lanes
 | Script foundation scope is bounded | Pass | W1 added `services/allegro-service/src/scripts/lib/script-safety.ts` and integrated only `import-checkout-forms-local.ts` plus `audit-current-stock-source.ts`. |
 | Additive schema foundation is bounded | Pass | W2 added only new Prisma models and a new migration for `AllegroSyncRun`, `AllegroSyncCursor`, `AllegroRawPayload`, `AllegroProjectionAuditLog`, and `AllegroOfferStockSnapshot`; no existing fields were renamed or dropped. |
 | Opt-in sync evidence wiring is bounded | Pass | W3 added `services/allegro-service/src/scripts/lib/sync-recording.ts` and explicit `--record-sync-run --confirm-sync-recording ALLEGRO_SYNC_RECORDING_LOCAL_ONLY` gates to checkout-form import and current-stock audit scripts. Default script behavior remains no sync-evidence DB writes. |
+| Publish preview-token binding is bounded | Pass | W4 added `previewToken` confirmation contracts to publish lifecycle and Catalog sell-action confirm routes. `prepare` returns the token, `confirm` requires it, and only token hashes/confirmation metadata are persisted. |
 | Migration was not applied to live database | Pass | W2 ran Prisma validate/generate and service build only. It did not run `migrate deploy`, direct migration runners, import scripts, or live data mutation commands. |
 | Migration was not applied to live database in W3 | Pass | W3 ran Prisma validate/generate and service build only. It did not run `migrate deploy`, direct migration runners, import scripts, live data mutation commands, or deploy. |
+| Live publish was not executed in W4 validation | Pass | W4 validation used build and synthetic unit specs only. It did not run live publish/update, Allegro write endpoints, migration apply, deploy, Warehouse stock mutation, or BizBox apply. |
 | Stock apply remains owner-gated | Pass | `services/allegro-service/src/scripts/import-current-allegro-stock-to-warehouse.ts` was not edited or executed in TASK-010 follow-up validation. |
 | TASK-009 audit debt remains separate | Pass with debt | Strict audit and pre-coding failures name TASK-009 documentation/graph issues; TASK-010-specific strict-audit findings were corrected. |
 
@@ -83,6 +86,14 @@ plan by turning Allegro import and export mapping into safe implementation lanes
   FAIL on 2026-06-29 after W3 because strict audit and pre-coding gate inherit
   TASK-009 debt. Protected-file checks and target validation-report discovery
   passed.
+- `git diff --check`: PASS on 2026-06-29 after W4 preview-token binding.
+- `cd services/allegro-service && npm run build`: PASS on 2026-06-29 after W4
+  preview-token binding.
+- `npx ts-node services/allegro-service/src/allegro/publish-lifecycle/publish-lifecycle.update-terminal.spec.ts`:
+  PASS on 2026-06-29. Synthetic tests cover missing preview-token rejection and
+  preview-token-confirmed update execution.
+- `npx ts-node services/allegro-service/src/allegro/catalog-sell-action/catalog-sell-action.spec.ts`:
+  PASS on 2026-06-29 after Catalog sell-action confirm pass-through updates.
 
 ## Invariant evidence
 
@@ -92,8 +103,8 @@ plan by turning Allegro import and export mapping into safe implementation lanes
 - ALG-INV-003: Pass. TASK-010 did not forward or own central orders.
 - ALG-INV-004: Pass. `npm run ips:pre-coding` reported no sensitive-data
   findings. W3 validation did not print raw Allegro payloads, buyer fields,
-  tokens, account secrets, addresses, emails, or live order/offer identifiers in
-  this report.
+  raw preview tokens, token hashes, account secrets, addresses, emails, or live
+  order/offer identifiers in this report.
 - ALG-INV-005: Pass. TASK-010 did not change runtime service ownership
   boundaries; W2 added channel projection tables only.
 - ALG-INV-006: Pass. TASK-010 traceability exists across feature, task,
@@ -128,11 +139,21 @@ recording. `import-checkout-forms-local.ts` can record `order.checkout-forms`
 sync runs, cursors, hashed raw checkout-form payloads, and projection audit logs
 without forwarding orders to another service. `audit-current-stock-source.ts`
 can record `sale.product-offers.stock` sync runs, cursors, raw detail payload
-hashes, projection audit logs, and `AllegroOfferStockSnapshot` rows from
-`/sale/product-offers/{offerId}` detail payloads. `/sale/offers` remains
-comparison/listing evidence only; Warehouse remains the physical stock owner.
+hashes, projection audit logs, and `AllegroOfferStockSnapshot` rows from the
+Allegro sale product-offers detail endpoint. The Allegro sale offers listing
+endpoint remains comparison/listing evidence only; Warehouse remains the
+physical stock owner.
 `script-safety` now reports `mutatesLocalSyncEvidence` separately from local
 projection writes.
+
+W4 adds preview-token binding to publish confirmation. `prepare` returns a
+deterministic token bound to the redacted command payload, action, idempotency
+key, requester, target, and stale window. `confirm` requires that token before
+queueing a publish/update attempt and stores only token hashes and confirmation
+metadata in `policySnapshot.previewTokenBinding`. Catalog sell-action confirm
+routes pass this token through to the governed lifecycle. This is a fail-closed
+foundation; full offer export remains gated by category/parameter validation,
+owner approval, and live write procedure.
 
 ## Issues found
 
@@ -152,12 +173,16 @@ projection writes.
   explicitly confirmed operator scripts.
 - W3 did not apply the W2 migration to any live database, so the new recording
   flags require the target database to already have W2 tables deployed.
+- W4 intentionally makes confirmation token-bound. Direct convenience routes
+  that still use one-step prepare/confirm/execute must either accept and forward
+  preview tokens or remain blocked/fail-closed before production use.
 
 ## Recommendation
 
-Accept TASK-010-W0, W1, W2, and W3 as implemented with validation debt noted. Do
-not claim full deployment readiness until TASK-009 audit debt is repaired or the
-readiness gates are made task-scoped enough to ignore unrelated historical debt.
+Accept TASK-010-W0, W1, W2, W3, and W4 preview-token binding as implemented with
+validation debt noted. Do not claim full deployment readiness until TASK-009
+audit debt is repaired or the readiness gates are made task-scoped enough to
+ignore unrelated historical debt.
 
 ## Traceability confirmation
 

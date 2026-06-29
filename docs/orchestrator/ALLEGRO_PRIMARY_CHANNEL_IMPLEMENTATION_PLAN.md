@@ -1669,7 +1669,7 @@ Merge order:
 
 ### W4: Catalog offer export and publish lifecycle
 
-Status: dependency_gated by category/parameter contract and W2
+Status: partially_implemented; full export remains dependency_gated by category/parameter contract and W2
 Owner role: Catalog/Allegro publish agent
 Objective: Centralize offer publish/update/activate and make Catalog export
 auditable.
@@ -1697,6 +1697,24 @@ Dependencies:
 
 - W2 schema;
 - Catalog contract lane.
+
+Implemented foundation:
+
+- Publish lifecycle `prepare` returns a deterministic preview token bound to the
+  redacted command payload, target, idempotency key, requester, and stale window.
+- Publish lifecycle `confirm` requires the preview token and stores only token
+  hash/confirmation metadata in `policySnapshot.previewTokenBinding`.
+- Catalog sell-action confirm routes pass the preview token through to the
+  governed publish lifecycle.
+
+Remaining gated work:
+
+- direct update/publish convenience routes need explicit preview-token request
+  body propagation or must remain fail-closed;
+- category/parameter completeness evidence is still required before broad offer
+  export apply;
+- live publish/update execution remains prohibited without owner approval and
+  preview-token confirmation.
 
 Validation:
 

@@ -4,14 +4,14 @@
   "stage": "production",
   "health": "ok",
   "cycle": 6,
-  "last_cycle_at": "2026-06-29T18:25:00Z",
+  "last_cycle_at": "2026-06-29T18:45:00Z",
   "tasks_active": 1,
   "tasks_failed_last_cycle": 0,
   "open_task_ids": [
     "TASK-010"
   ],
   "last_milestone": "task009-public-client-landing-dashboard-live-validated",
-  "next_focus": "TASK-010 W3 complete after commit: continue with W4 importer/service boundary design for order/offers/stock sync APIs, preview-token binding, retention policy, and migration/deploy coordination; stock apply remains owner-gated.",
+  "next_focus": "TASK-010 W4 preview-token confirmation gate complete after commit: continue with direct route preview-token propagation, raw payload retention policy, category/parameter export evidence, and migration/deploy coordination; stock apply remains owner-gated.",
   "blockers": [],
   "budget_units_used": 0,
   "metrics": {
