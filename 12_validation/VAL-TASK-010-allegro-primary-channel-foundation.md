@@ -40,10 +40,12 @@ plan by turning Allegro import and export mapping into safe implementation lanes
 | Opt-in sync evidence wiring is bounded | Pass | W3 added `services/allegro-service/src/scripts/lib/sync-recording.ts` and explicit `--record-sync-run --confirm-sync-recording ALLEGRO_SYNC_RECORDING_LOCAL_ONLY` gates to checkout-form import and current-stock audit scripts. Default script behavior remains no sync-evidence DB writes. |
 | Publish preview-token binding is bounded | Pass | W4 added `previewToken` confirmation contracts to publish lifecycle and Catalog sell-action confirm routes. `prepare` returns the token, `confirm` requires it, and only token hashes/confirmation metadata are persisted. |
 | Direct offer routes can pass preview-token controls | Pass | W4b added `previewToken` and `lifecycleIdempotencyKey` controls to direct offer update and sync-to-Allegro routes, strips those controls from command payloads, and forwards the token to the governed lifecycle. |
+| Bulk publish can pass preview-token controls | Pass | W4c added bulk publish `lifecycleIdempotencyKeyPrefix`, `previewTokensByIdempotencyKey`, and `previewTokensByOfferId` controls, forwards token maps to `executeMany`, and redacts preview-token maps from request logs. |
 | Migration was not applied to live database | Pass | W2 ran Prisma validate/generate and service build only. It did not run `migrate deploy`, direct migration runners, import scripts, or live data mutation commands. |
 | Migration was not applied to live database in W3 | Pass | W3 ran Prisma validate/generate and service build only. It did not run `migrate deploy`, direct migration runners, import scripts, live data mutation commands, or deploy. |
 | Live publish was not executed in W4 validation | Pass | W4 validation used build and synthetic unit specs only. It did not run live publish/update, Allegro write endpoints, migration apply, deploy, Warehouse stock mutation, or BizBox apply. |
 | Live publish was not executed in W4b validation | Pass | W4b validation used diff, build, and synthetic publish lifecycle spec only. It did not run live publish/update, Allegro write endpoints, migration apply, deploy, Warehouse stock mutation, or BizBox apply. |
+| Live publish was not executed in W4c validation | Pass | W4c validation used diff, build, and synthetic publish lifecycle spec only. It did not run live publish/update, Allegro write endpoints, migration apply, deploy, Warehouse stock mutation, or BizBox apply. |
 | Stock apply remains owner-gated | Pass | `services/allegro-service/src/scripts/import-current-allegro-stock-to-warehouse.ts` was not edited or executed in TASK-010 follow-up validation. |
 | TASK-009 audit debt remains separate | Pass with debt | Strict audit and pre-coding failures name TASK-009 documentation/graph issues; TASK-010-specific strict-audit findings were corrected. |
 
@@ -102,6 +104,12 @@ plan by turning Allegro import and export mapping into safe implementation lanes
   direct route preview-token pass-through.
 - `npx ts-node services/allegro-service/src/allegro/publish-lifecycle/publish-lifecycle.update-terminal.spec.ts`:
   PASS on 2026-06-29 after W4b direct route preview-token pass-through.
+- `git diff --check`: PASS on 2026-06-29 after W4c bulk publish
+  preview-token pass-through.
+- `cd services/allegro-service && npm run build`: PASS on 2026-06-29 after W4c
+  bulk publish preview-token pass-through.
+- `npx ts-node services/allegro-service/src/allegro/publish-lifecycle/publish-lifecycle.update-terminal.spec.ts`:
+  PASS on 2026-06-29 after W4c bulk publish preview-token pass-through.
 
 ## Invariant evidence
 
@@ -170,6 +178,11 @@ command payloads. The sync-to-Allegro route accepts the same controls in its
 request body. Existing one-step routes without a token remain fail-closed under
 the W4 confirmation gate.
 
+W4c propagates preview-token controls into the bulk publish route. The route now
+accepts a stable lifecycle idempotency prefix plus tokens keyed either by
+idempotency key or offer id, forwards the resolved token map to `executeMany`,
+and redacts token maps from request-body logs.
+
 ## Issues found
 
 - Known pre-existing issue: TASK-009 documentation/graph audit debt existed
@@ -191,9 +204,9 @@ the W4 confirmation gate.
 - W4 intentionally makes confirmation token-bound. Direct convenience routes
   that still use one-step prepare/confirm/execute must either accept and forward
   preview tokens or remain blocked/fail-closed before production use.
-- W4b covers direct single-offer update and sync-to-Allegro route propagation.
-  Bulk publish/execute-many token propagation remains follow-up work before
-  production use.
+- W4b/W4c cover direct single-offer update, sync-to-Allegro, and bulk publish
+  token propagation. Retention policy, category/parameter export evidence, and
+  migration/deploy coordination remain follow-up work before production use.
 
 ## Recommendation
 

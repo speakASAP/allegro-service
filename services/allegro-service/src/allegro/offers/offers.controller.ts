@@ -70,6 +70,14 @@ export class OffersController {
     return commandPayload;
   }
 
+  private redactLifecycleControlsForLog(payload: unknown): Record<string, unknown> {
+    const redacted = { ...((payload || {}) as Record<string, unknown>) };
+    if (redacted.previewToken) redacted.previewToken = '[REDACTED]';
+    if (redacted.previewTokensByIdempotencyKey) redacted.previewTokensByIdempotencyKey = '[REDACTED]';
+    if (redacted.previewTokensByOfferId) redacted.previewTokensByOfferId = '[REDACTED]';
+    return redacted;
+  }
+
   @Get()
   @UseGuards(JwtAuthGuard)
   async getOffers(@Query() query: OfferQueryDto, @Request() req: any): Promise<{ success: boolean; data: any }> {
@@ -812,9 +820,15 @@ export class OffersController {
   @UseGuards(JwtAuthGuard)
   async publishAllOffers(
     @Request() req: any,
-    @Body() body: { offerIds?: string[] },
+    @Body() body: {
+      offerIds?: string[];
+      lifecycleIdempotencyKeyPrefix?: string;
+      previewTokensByIdempotencyKey?: Record<string, string>;
+      previewTokensByOfferId?: Record<string, string>;
+    },
     @Query() query: OfferQueryDto,
   ): Promise<{ success: boolean; data: any }> {
+    const safeBodyForLog = this.redactLifecycleControlsForLog(body);
     // Log immediately when method is called - before any processing
     console.log('[publishAllOffers] ========== METHOD CALLED ==========', {
       timestamp: new Date().toISOString(),
@@ -857,7 +871,7 @@ export class OffersController {
         hasFilters: !!(query.status || query.search || query.categoryId),
         queryParams: query,
         bodyKeys: Object.keys(body),
-        bodyContent: JSON.stringify(body, null, 2),
+        bodyContent: JSON.stringify(safeBodyForLog, null, 2),
         queryContent: JSON.stringify(query, null, 2),
         timestamp: new Date().toISOString(),
         step: 'CONTROLLER_ENTRY',
@@ -951,14 +965,24 @@ export class OffersController {
         console.log('[publishAllOffers] logger.log for SERVICE_CALL_START called (non-blocking)');
         
         console.log('[publishAllOffers] About to call governed publish lifecycle executor');
+        const lifecycleIdempotencyKeyPrefix = body.lifecycleIdempotencyKeyPrefix || requestId;
+        const publishAttempts = offerIds.map((offerId) => ({
+          action: 'PUBLISH' as const,
+          offerId,
+          idempotencyKey: `${lifecycleIdempotencyKeyPrefix}:${offerId}`,
+        }));
+        const previewTokensByIdempotencyKey = { ...(body.previewTokensByIdempotencyKey || {}) };
+        for (const attempt of publishAttempts) {
+          const tokenByOfferId = body.previewTokensByOfferId?.[attempt.offerId];
+          if (tokenByOfferId && !previewTokensByIdempotencyKey[attempt.idempotencyKey]) {
+            previewTokensByIdempotencyKey[attempt.idempotencyKey] = tokenByOfferId;
+          }
+        }
         const result = await this.publishLifecycleService.executeMany(
-          offerIds.map((offerId) => ({
-            action: 'PUBLISH' as const,
-            offerId,
-            idempotencyKey: `${requestId}:${offerId}`,
-          })),
+          publishAttempts,
           userId,
           requestId,
+          previewTokensByIdempotencyKey,
         );
         console.log('[publishAllOffers] governed publish lifecycle executor completed', { hasResult: !!result });
         
