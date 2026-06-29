@@ -51,15 +51,19 @@
 
 ## Constraints
 
+These constraints are active for every TASK-010 worker and are not optional
+guidance.
+
 - Work in the remote repository only.
 - Do not use Chrome/browser-control.
-- Do not run live import/export/stock mutations.
+- Do not run live import and export/stock mutations.
 - Do not run the current-stock Warehouse import apply path.
 - Do not mutate Warehouse stock or BizBox/current supplier data.
 - Do not forward central orders at scale.
 - Do not perform Allegro publish, update, activation, stock command, refund,
   invoice, issue, return, claim, fulfillment, or shipment write-back.
-- Keep unavailable facts as `[MISSING: ...]` or `[UNKNOWN: ...]`.
+- Keep unavailable facts explicit and do not invent missing contracts,
+  approvals, source evidence, or validation results.
 - Treat pre-existing TASK-009 documentation audit failures as validation debt
   unless TASK-010 changes introduce or touch the failing artifact.
 

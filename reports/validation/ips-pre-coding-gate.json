@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-06-29T08:40:48Z",
+  "created_at": "2026-06-29T16:47:12Z",
   "execution_plans": {
-    "execution_plan_count": 9,
+    "execution_plan_count": 10,
     "execution_plan_files": [
       "21_execution_plans/EP-TASK-001-apply-ips-baseline.md",
       "21_execution_plans/EP-TASK-002-design-governed-publish-lifecycle.md",
@@ -11,7 +11,8 @@
       "21_execution_plans/EP-TASK-006-plan-stock-order-profit-loop.md",
       "21_execution_plans/EP-TASK-007-plan-growth-analytics-and-demand-loops.md",
       "21_execution_plans/EP-TASK-008-plan-operations-trust-and-scale.md",
-      "21_execution_plans/EP-TASK-009-public-client-landing-dashboard.md"
+      "21_execution_plans/EP-TASK-009-public-client-landing-dashboard.md",
+      "21_execution_plans/EP-TASK-010-allegro-primary-channel-foundation.md"
     ],
     "missing_validation_plan": [
       "21_execution_plans/EP-TASK-009-public-client-landing-dashboard.md"
@@ -47,7 +48,7 @@
   "status": "fail",
   "tasks": {
     "missing_upstream_traceability": [],
-    "task_count": 9,
+    "task_count": 10,
     "task_files": [
       "11_tasks/TASK-001-apply-ips-baseline.md",
       "11_tasks/TASK-002-design-governed-publish-lifecycle.md",
@@ -57,7 +58,8 @@
       "11_tasks/TASK-006-plan-stock-order-profit-loop.md",
       "11_tasks/TASK-007-plan-growth-analytics-and-demand-loops.md",
       "11_tasks/TASK-008-plan-operations-trust-and-scale.md",
-      "11_tasks/TASK-009-public-client-landing-dashboard.md"
+      "11_tasks/TASK-009-public-client-landing-dashboard.md",
+      "11_tasks/TASK-010-allegro-primary-channel-foundation.md"
     ]
   }
 }

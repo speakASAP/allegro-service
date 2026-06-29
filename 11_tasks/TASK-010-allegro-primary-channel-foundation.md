@@ -35,7 +35,7 @@ Warehouse mutations, BizBox applies, or production deploys.
 ## Goal Impact
 
 This task converts the Allegro mapping and primary-channel plan into actionable
-implementation lanes. It lowers operational risk by making import/export scripts
+implementation lanes. It lowers operational risk by making import and export scripts
 use a common safety contract and by making future schema/projection work
 traceable before any new apply path is used.
 

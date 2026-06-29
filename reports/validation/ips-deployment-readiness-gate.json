@@ -1,10 +1,10 @@
 {
-  "created_at": "2026-06-24T16:48:34Z",
+  "created_at": "2026-06-29T16:47:01Z",
   "gate": "deployment_readiness",
-  "next_step": "ready_for_deployment_review",
+  "next_step": "fix_deployment_readiness_findings",
   "pre_coding_gate": {
     "report_path": "reports/validation/ips-pre-coding-gate.json",
-    "status": "pass"
+    "status": "fail"
   },
   "protected_files": {
     "changed_files": [],
@@ -13,13 +13,13 @@
   },
   "root": "/home/ssf/Documents/Github/allegro-service",
   "schema_version": "1.0.0",
-  "status": "pass",
+  "status": "fail",
   "strict_doc_audit": {
-    "findings_count": 0,
-    "score": 100,
-    "status": "PASS"
+    "findings_count": 17,
+    "score": 0,
+    "status": "FAIL"
   },
-  "target": "TASK-008",
+  "target": "TASK-010",
   "unresolved_markers": [
     {
       "line": 39,
@@ -80,6 +80,16 @@
       "line": 123,
       "marker": "[UNKNOWN: ...]",
       "path": "21_execution_plans/EP-TASK-008-plan-operations-trust-and-scale.md"
+    },
+    {
+      "line": 122,
+      "marker": "[MISSING: ...]",
+      "path": "21_execution_plans/EP-TASK-009-public-client-landing-dashboard.md"
+    },
+    {
+      "line": 122,
+      "marker": "[UNKNOWN: ...]",
+      "path": "21_execution_plans/EP-TASK-009-public-client-landing-dashboard.md"
     },
     {
       "line": 16,
@@ -145,12 +155,256 @@
       "line": 60,
       "marker": "[UNKNOWN: ...]",
       "path": "AGENT_OPERATIONS.md"
+    },
+    {
+      "line": 77,
+      "marker": "[MISSING: local schema/client]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 78,
+      "marker": "[MISSING: local schema/client]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 79,
+      "marker": "[MISSING: local schema/client]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 80,
+      "marker": "[MISSING: local schema/client]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 81,
+      "marker": "[MISSING: local schema/client]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 83,
+      "marker": "[MISSING: local schema/client]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 85,
+      "marker": "[MISSING: local schema/client]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 86,
+      "marker": "[MISSING: local schema/client]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 188,
+      "marker": "[MISSING: billing client/module/schema]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 189,
+      "marker": "[MISSING: payment operations model/client and payments-microservice runtime client]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 190,
+      "marker": "[MISSING: normalized payment.id, paidAmount, payment.reconciliation, delivery.cost columns]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 191,
+      "marker": "[UNKNOWN: current OAuth scopes/tokens available in production for billing/payment endpoints]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 229,
+      "marker": "[MISSING: local Prisma models for returns, payment refunds, refund claims, sale issues, cancellations, invoices, billing entries]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 230,
+      "marker": "[MISSING: local controllers/services/API wrappers for customer returns, payments/refunds, refund-claims, sale/issues, invoices, billing entries]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 240,
+      "marker": "[UNKNOWN: exact customer return item to local line item mapping when Allegro return item exposes offer id but not checkout lineItem.id]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 258,
+      "marker": "[MISSING: shipment/fulfillment client/module/schema]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 259,
+      "marker": "[MISSING: durable shipmentId/package/label/protocol tables]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 260,
+      "marker": "[MISSING: deterministic shipping-cost source for margin/profit]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 269,
+      "marker": "[UNKNOWN: seller setting for automatic SENT after tracking number]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 301,
+      "marker": "[MISSING: shipment-management implementation]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 302,
+      "marker": "[MISSING: One Fulfillment implementation]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 303,
+      "marker": "[UNKNOWN: current production token scopes/accounts for shipment and fulfillment read endpoints]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 312,
+      "marker": "[UNKNOWN: whether shipment-management create always registers an order waybill in all carrier paths]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 450,
+      "marker": "[MISSING: PublishLifecycle END execution]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 624,
+      "marker": "[MISSING: local wrapper/UI validation for GET /sale/categories/{categoryId}/parameters and required parameter constraints]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 625,
+      "marker": "[MISSING: explicit contract splitting productSet product parameters from offer-level parameters for Catalog-to-Allegro creation]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 642,
+      "marker": "[UNKNOWN: current account/marketplace support for PATCHing description/images without 422]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 661,
+      "marker": "[MISSING: governed stock write-back implementation using /sale/offer-quantity-change-commands/{commandId}, polling, terminal state, and rate-limit handling]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 662,
+      "marker": "[UNKNOWN: whether Warehouse getTotalAvailable includes reservations or only physical available stock]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 663,
+      "marker": "[UNKNOWN: whether zero Warehouse availability should block draft confirmation or allow publish with stock.available=0]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 720,
+      "marker": "[UNKNOWN: current production OAuth scopes for billing, payments, returns, invoices, issues, shipment, and fulfillment endpoints]",
+      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
+    },
+    {
+      "line": 103,
+      "marker": "[MISSING: ...]",
+      "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
+    },
+    {
+      "line": 103,
+      "marker": "[UNKNOWN: ...]",
+      "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
+    },
+    {
+      "line": 2143,
+      "marker": "[MISSING: ...]",
+      "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
+    },
+    {
+      "line": 2143,
+      "marker": "[UNKNOWN: ...]",
+      "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
+    },
+    {
+      "line": 2146,
+      "marker": "[MISSING: confirmed Allegro OAuth scopes for billing, payments, returns, claims, invoices, issues, shipments, and fulfillment]",
+      "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
+    },
+    {
+      "line": 2147,
+      "marker": "[MISSING: Warehouse sellable stock semantics and reservation policy]",
+      "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
+    },
+    {
+      "line": 2148,
+      "marker": "[MISSING: stock orchestration approval for live Allegro quantity commands]",
+      "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
+    },
+    {
+      "line": 2149,
+      "marker": "[MISSING: category and parameter mapping completeness for publish]",
+      "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
+    },
+    {
+      "line": 2150,
+      "marker": "[MISSING: finance owner decision for payment/refund/settlement writes]",
+      "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
+    },
+    {
+      "line": 2151,
+      "marker": "[MISSING: customer service owner decision for return/claim/issue write-back]",
+      "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
+    },
+    {
+      "line": 2152,
+      "marker": "[MISSING: fulfillment owner decision for shipment label/document creation]",
+      "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
+    },
+    {
+      "line": 2153,
+      "marker": "[MISSING: production account rate-limit policy]",
+      "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
+    },
+    {
+      "line": 2154,
+      "marker": "[MISSING: raw payload retention policy]",
+      "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
+    },
+    {
+      "line": 2155,
+      "marker": "[MISSING: central order duplicate/idempotency behavior confirmation]",
+      "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
+    },
+    {
+      "line": 2156,
+      "marker": "[UNKNOWN: whether One Fulfillment is enabled for the current account]",
+      "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
+    },
+    {
+      "line": 2157,
+      "marker": "[UNKNOWN: whether all 60 visible Sales Center orders are represented in the current local projection snapshot]",
+      "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
+    },
+    {
+      "line": 2214,
+      "marker": "[MISSING: ...]",
+      "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
+    },
+    {
+      "line": 2214,
+      "marker": "[UNKNOWN: ...]",
+      "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
     }
   ],
   "validation_reports": {
     "matching_reports": [
-      "12_validation/VAL-TASK-007-validation-report.md",
-      "12_validation/VAL-TASK-008-validation-report.md"
+      "12_validation/VAL-TASK-010-allegro-primary-channel-foundation.md"
     ],
     "reports": [
       "12_validation/VAL-TASK-001-ips-baseline.md",
@@ -160,9 +414,11 @@
       "12_validation/VAL-TASK-005-validation-report.md",
       "12_validation/VAL-TASK-006-validation-report.md",
       "12_validation/VAL-TASK-007-validation-report.md",
-      "12_validation/VAL-TASK-008-validation-report.md"
+      "12_validation/VAL-TASK-008-validation-report.md",
+      "12_validation/VAL-TASK-009-public-client-landing-dashboard.md",
+      "12_validation/VAL-TASK-010-allegro-primary-channel-foundation.md"
     ],
     "status": "pass",
-    "target": "TASK-008"
+    "target": "TASK-010"
   }
 }

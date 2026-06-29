@@ -10,8 +10,8 @@ secondary_goals:
   - VG-REVENUE
   - VG-004
 impact_level: critical
-impact_description: Turns Allegro import/export research into owner-gated implementation lanes for production data exchange.
-success_metric: Allegro import/export scripts and projections can run through dry-run, preview, apply, idempotency, and validation gates without violating Catalog, Warehouse, Orders, Payments, Imports, or Auth ownership.
+impact_description: Allegro data exchange research is converted into owner-gated implementation lanes for production use.
+success_metric: Allegro import and export scripts plus projections can run through dry-run, preview, apply, idempotency, and validation gates without violating Catalog, Warehouse, Orders, Payments, Imports, or Auth ownership.
 upstream_links:
   - docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md
   - docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md
@@ -33,7 +33,7 @@ future sales channels.
 ## Evidence
 
 - `docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md` defines the current data
-  structure, existing projections, and import/export boundaries.
+  structure, existing projections, and import and export boundaries.
 - `docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md` defines the
   phased roadmap and agent-ready implementation lanes.
 - `services/allegro-service/src/scripts/*` contains the current guarded and

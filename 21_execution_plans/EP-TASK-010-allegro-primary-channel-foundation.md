@@ -8,6 +8,7 @@ owner: Allegro Integration Owner
 created: 2026-06-29
 last_updated: 2026-06-29
 completeness_level: complete
+constitution: ../00_constitution/CONSTITUTION.md
 vision: ../01_vision/VISION.md
 system: ../04_systems/SYS-001-allegro-marketplace-integration.md
 feature: ../10_features/FEAT-010-allegro-primary-channel-foundation.md
@@ -98,7 +99,7 @@ or implemented only if it does not race another schema owner.
 ## Non-Goals
 
 - No production deploy.
-- No live import/export apply.
+- No live import and export apply.
 - No Warehouse stock mutation.
 - No BizBox/current supplier apply.
 - No live Allegro stock quantity apply.
@@ -183,7 +184,7 @@ or implemented only if it does not race another schema owner.
 | TASK-010-W1 | Ready after W0 | Shared script guard framework | Create `src/scripts/lib/*`; convert safe read-only/local-only scripts. | script lib, safe scripts, service package metadata | Warehouse apply script, live mutation execution | Guard framework, stable summaries, build evidence | W0 |
 | TASK-010-W2 | Dependency-gated | Additive sync/projection schema foundation | Add `AllegroSyncRun`, cursor, raw payload, audit, stock snapshot planning or schema. | `prisma/schema.prisma`, migrations, schema docs | destructive migration, data backfill apply | Additive schema and migration review | Integration owner must prevent schema races |
 | TASK-010-W3 | Ready now | Validation and operations evidence | Maintain validation report and no-mutation evidence. | validation docs, reports | implementation code unless separately assigned | Gate evidence and debt classification | W0 |
-| TASK-010-W4 | Blocked | Warehouse-backed stock apply | Durable quantity command attempts and owner-approved stock apply. | none in this task | Warehouse mutation, Allegro stock apply | blocked handoff only | `[MISSING: Warehouse/stock orchestration approval]` |
+| TASK-010-W4 | Blocked | Warehouse-backed stock apply | Durable quantity command attempts and owner-approved stock apply. | none in this task | Warehouse mutation, Allegro stock apply | blocked handoff only | Warehouse and stock orchestration approval is not granted for this task. |
 
 Integration owner: current Allegro integration owner.
 Validation owner: current Allegro integration owner until W3 is assigned.
@@ -201,7 +202,7 @@ Merge order: W0, W3, W1, W2, then any owner-approved write lanes.
 
 Validation succeeds when TASK-010 artifacts are traceable, diff hygiene passes,
 documentation audit findings are classified correctly, code changes build, and
-the validation report records that no live import/export/stock/Warehouse/BizBox
+the validation report records that no live import and export/stock/Warehouse/BizBox
 mutation was executed.
 
 ## Gate Commands
@@ -235,18 +236,37 @@ not run data rollback because this task must not mutate live data.
 
 ## Agent Handoff Prompt
 
-You are a TASK-010 worker for allegro-service. Preserve Vision -> Goal Impact ->
-System -> Feature -> Task -> Execution Plan -> Coding Prompt -> Code ->
-Validation. Work only in the remote repository on `alfares`. Do not use
-Chrome/browser-control. Do not run live import/export/stock mutations. Do not
-mutate Warehouse, BizBox, Allegro, Orders, Payments, Catalog, or Auth unless a
-future owner-approved prompt explicitly allows that exact apply lane.
+Worker role: implement one bounded TASK-010 slice for `allegro-service`.
 
-Read the TASK-010 context package, execution plan, mapping doc, primary-channel
-master plan, invariants, sensitive-data policy, and validation debt ledger
-before editing. Start with the smallest allowed slice. Return files changed,
-validation commands/results, deviations, known debt, and blockers. Mark missing
-facts as `[MISSING: ...]` or `[UNKNOWN: ...]`.
+Required chain: Vision -> Goal Impact -> System -> Feature -> Task -> Execution
+Plan -> Coding Prompt -> Code -> Validation.
+
+Required setup:
+
+1. Work only in `/home/ssf/Documents/Github/allegro-service` on `alfares`.
+2. Read the TASK-010 context package, execution plan, mapping document,
+   primary-channel master plan, invariants, sensitive-data policy, and
+   validation debt ledger before editing.
+3. Confirm `git status --short --branch` before changes.
+
+Allowed first slice:
+
+- create or refine shared script guard utilities;
+- convert only read-only or local-only safe scripts;
+- update TASK-010 validation evidence.
+
+Forbidden in this task:
+
+- Chrome/browser-control;
+- deploy;
+- live import, export, stock, Warehouse, BizBox, Orders, Payments, Catalog, or
+  Allegro mutations;
+- editing the current-stock Warehouse apply script unless a separate stock-owner
+  prompt approves that exact lane.
+
+Return files changed, validation commands and results, deviations, known
+validation debt, and any blocked facts without inventing missing approvals or
+contracts.
 
 ## Completion Checklist
 

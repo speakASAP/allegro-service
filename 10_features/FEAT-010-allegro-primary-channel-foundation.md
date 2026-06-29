@@ -20,7 +20,7 @@ related_adrs:
 
 Make Allegro the primary Alfares sales channel through a reusable foundation for
 guarded script execution, channel projections, sync runs, raw-payload evidence,
-owner-gated write paths, and validation-ready import/export workflows.
+owner-gated write paths, and validation-ready import and export workflows.
 
 ## User Story
 
@@ -32,7 +32,7 @@ Warehouse, Orders, Payments, or Auth responsibilities.
 
 ## Acceptance Criteria
 
-- Allegro import/export scripts share a common guard and run-summary framework.
+- Allegro import and export scripts share a common guard and run-summary framework.
 - New Allegro sync/projection work has additive schema planning before data
   writes.
 - Orders, offers, stock snapshots, billing, payments, returns, claims, invoices,

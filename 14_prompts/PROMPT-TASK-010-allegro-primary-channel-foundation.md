@@ -12,13 +12,19 @@ sensitive_data_classification: synthetic
 approval_status: foundation_only_no_live_mutations
 ```
 
-## Task Summary
+## Role
+
+You are a TASK-010 worker for `allegro-service`. Preserve the chain Vision ->
+Goal Impact -> System -> Feature -> Task -> Execution Plan -> Coding Prompt ->
+Code -> Validation, and keep all work in the remote repository on `alfares`.
+
+## Task
 
 Implement the first safe Allegro primary-channel foundation slice. Start with
 TASK-010 IPS traceability and then work only on guarded script framework or
 additive projection groundwork. Do not run or enable live mutation flows.
 
-## Required Context
+## Context
 
 - `13_context_packages/CP-TASK-010-allegro-primary-channel-foundation.md`
 - `21_execution_plans/EP-TASK-010-allegro-primary-channel-foundation.md`
@@ -30,6 +36,19 @@ additive projection groundwork. Do not run or enable live mutation flows.
 - `services/allegro-service/package.json`
 - `services/allegro-service/src/scripts/*`
 - `prisma/schema.prisma`
+
+## Constraints
+
+- Work only in `/home/ssf/Documents/Github/allegro-service` on `alfares`.
+- Do not use Chrome/browser-control.
+- Do not deploy.
+- Do not run live import and export apply, Warehouse stock mutation, BizBox apply,
+  Allegro stock quantity apply, central order replay apply, payment/refund
+  writes, after-sale write-back, or shipment/label write-back.
+- Do not commit secrets, tokens, raw production payloads, raw customer records,
+  or private identifiers.
+- Treat existing TASK-009 strict-audit findings as validation debt unless a
+  TASK-010 change directly touches those files.
 
 ## Allowed Changes
 
@@ -47,7 +66,7 @@ additive projection groundwork. Do not run or enable live mutation flows.
 
 - No Chrome/browser-control.
 - No deploy.
-- No live import/export apply.
+- No live import and export apply.
 - No Warehouse stock mutation.
 - No BizBox/current supplier apply.
 - No live Allegro stock quantity apply.
@@ -98,6 +117,13 @@ Run only the commands relevant to files changed. If a command fails because of
 pre-existing TASK-009 documentation debt, record the exact failure in
 `VAL-TASK-010` and continue only if TASK-010 artifacts are not implicated.
 
+## Validation
+
+Validation for this prompt requires `git diff --check` and the Allegro service
+build for code changes. Strict documentation audit and task readiness must be
+run or explicitly classified when they fail due to known TASK-009 validation
+debt. No live mutation command is part of validation for this prompt.
+
 ## Expected Output
 
 The coding agent must return:
@@ -107,4 +133,4 @@ The coding agent must return:
 - Validation evidence.
 - Deviations from scope.
 - Known validation debt used or created.
-- Remaining blockers and `[MISSING: ...]` facts.
+- Remaining blockers and unavailable facts.

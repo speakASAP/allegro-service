@@ -25,66 +25,86 @@ be updated with exact command evidence as W1/W2 code lanes are implemented.
 ## Upstream goal
 
 TASK-010 supports FEAT-010, GOAL-IMPACT-TASK-010, and the primary-channel master
-plan by turning Allegro import/export mapping into safe implementation lanes.
+plan by turning Allegro import and export mapping into safe implementation lanes.
 
 ## Criteria checked
 
 | Criterion | Result | Evidence |
 |---|---|---|
-| TASK-010 IPS spine exists | Pending | Feature, task, goal-impact, context package, execution plan, prompt, validation report, graph, `TASKS.md`, and `STATE.json` must be present in the TASK-010 commit. |
-| Live mutation paths were not executed | Pending | No live Allegro import/export, Warehouse stock mutation, BizBox apply, central order replay apply, payment/refund write, or deploy should be run in this task. |
-| Script foundation scope is bounded | Pending | W1 may create shared script guard utilities and convert safe read-only/local-only scripts only. |
-| Stock apply remains owner-gated | Pending | Current-stock Warehouse apply paths must not be run or edited unless a stock owner-approved prompt opens the lane. |
-| TASK-009 audit debt remains separate | Pending | Strict audit failures in TASK-009 must be classified as pre-existing debt unless TASK-010 changes touch those files. |
+| TASK-010 IPS spine exists | Pass | `FEAT-010`, `TASK-010`, `GOAL-IMPACT-TASK-010`, context package, execution plan, prompt, validation report, graph nodes/edges, `TASKS.md`, and `STATE.json` are present at commit `ef315a2`. |
+| Live mutation paths were not executed | Pass | Validation used diff, build, and documentation gates only. No live Allegro import or export apply, Warehouse stock mutation, BizBox apply, central order replay apply, payment/refund write, or deploy was run. |
+| Script foundation scope is bounded | Pass | W1 added `services/allegro-service/src/scripts/lib/script-safety.ts` and integrated only `import-checkout-forms-local.ts` plus `audit-current-stock-source.ts`. |
+| Stock apply remains owner-gated | Pass | `services/allegro-service/src/scripts/import-current-allegro-stock-to-warehouse.ts` was not edited or executed in TASK-010 follow-up validation. |
+| TASK-009 audit debt remains separate | Pass with debt | Strict audit and pre-coding failures name TASK-009 documentation/graph issues; TASK-010-specific strict-audit findings were corrected. |
 
 ## Gate evidence
 
-- `git diff --check`: `[MISSING: run after TASK-010 edits]`
-- `npm run ips:audit`: `[MISSING: run after TASK-010 edits; expected pre-existing TASK-009 debt may remain]`
-- `npm run ips:pre-coding`: `[MISSING: run when report generation is intended]`
-- `cd services/allegro-service && npm run build`: `[MISSING: required after code changes]`
-- `python3 scripts/deployment_readiness_gate.py --root . --target TASK-010`: `[MISSING: required before closure or deploy-readiness claim]`
+- `git diff --check`: PASS on 2026-06-29 during W0/W1 validation.
+- `cd services/allegro-service && npm run build`: PASS on 2026-06-29 after
+  script safety helper integration.
+- `npm run ips:audit`: FAIL on 2026-06-29 with 17 findings, all tied to
+  pre-existing TASK-009 documentation/graph debt plus the audit heuristic that
+  treats the active TASK-009 plan as blocking prompt use. TASK-010-specific
+  heading, metadata, and placeholder findings were corrected before this report
+  update.
+- `npm run ips:pre-coding`: FAIL on 2026-06-29 because
+  `21_execution_plans/EP-TASK-009-public-client-landing-dashboard.md` still
+  lacks a validation plan. TASK count, upstream traceability, project
+  invariants, shared principles, and sensitive-data checks passed.
+- `python3 scripts/deployment_readiness_gate.py --root . --target TASK-010`:
+  FAIL on 2026-06-29 because strict audit and pre-coding gate inherit TASK-009
+  debt. Protected-file checks and target validation-report discovery passed.
 
 ## Invariant evidence
 
-- ALG-INV-001: Pending. TASK-010 must not bypass Catalog validation for offer
-  mutation.
-- ALG-INV-002: Pending. Allegro API behavior must remain account-aware and
-  rate-limit sensitive.
-- ALG-INV-003: Pending. Orders remain central-owner gated.
-- ALG-INV-004: Pending. Sensitive-data scan and review must show no secrets or
-  raw production data added.
-- ALG-INV-005: Pending. No service ownership boundary change is approved in
-  TASK-010.
-- ALG-INV-006: Pending. TASK-010 traceability must exist before coding.
-- ALG-INV-007: Pending. Validation evidence must be recorded before closure.
+- ALG-INV-001: Pass. TASK-010 did not add offer mutation or bypass Catalog
+  validation.
+- ALG-INV-002: Pass. TASK-010 did not change Allegro API rate-limit behavior.
+- ALG-INV-003: Pass. TASK-010 did not forward or own central orders.
+- ALG-INV-004: Pass. `npm run ips:pre-coding` reported no sensitive-data
+  findings.
+- ALG-INV-005: Pass. TASK-010 did not change runtime service ownership
+  boundaries.
+- ALG-INV-006: Pass. TASK-010 traceability exists across feature, task,
+  goal-impact, context, execution plan, prompt, validation, graph, `TASKS.md`,
+  and `STATE.json`.
+- ALG-INV-007: Partial. TASK-010 validation evidence is recorded, but full
+  readiness closure remains blocked by pre-existing TASK-009 documentation debt.
 
 ## Sensitive-data scan evidence
 
-Pending. TASK-010 artifacts must use synthetic or aggregate evidence only. Do
-not add raw buyer data, emails, phone numbers, addresses, payment payloads,
-OAuth tokens, Authorization headers, service credentials, raw order payloads, or
-unmasked production screenshots.
+`npm run ips:pre-coding` reported no sensitive-data findings. TASK-010 artifacts
+use synthetic or aggregate evidence only and do not add raw buyer data, emails,
+phone numbers, addresses, payment payloads, OAuth tokens, Authorization headers,
+service credentials, raw order payloads, or unmasked production screenshots.
 
 ## Replay and determinism evidence
 
-Pending. W1 must make dry-run summaries deterministic enough to compare across
-runs. Future apply paths must be preview-token-bound and idempotent.
+W1 adds a shared `script-safety` helper so safe scripts report mutation scope,
+mode, task id, allowed writes, forbidden writes, forwarding status, and
+confirmation status consistently. Future apply paths still need preview-token
+binding and idempotency before production use.
 
 ## Issues found
 
 - Known pre-existing issue: TASK-009 documentation/graph audit debt existed
-  before TASK-010 and must remain out of scope unless a TASK-010 edit touches
-  those files.
-- `[MISSING: Warehouse/stock orchestration approval for live Allegro quantity command apply]`
-- `[MISSING: finance owner approval for refunds, captures, payouts, and settlement writes]`
-- `[MISSING: customer service owner approval for returns, claims, invoices, and issues write-back]`
-- `[MISSING: fulfillment owner approval for shipment and label write-back]`
+  before TASK-010 and remains out of scope because TASK-010 did not edit
+  TASK-009 files.
+- Warehouse and stock orchestration approval for live Allegro quantity command
+  apply is not granted in TASK-010.
+- Finance owner approval for refunds, captures, payouts, and settlement writes
+  is not granted in TASK-010.
+- Customer service owner approval for returns, claims, invoices, and issues
+  write-back is not granted in TASK-010.
+- Fulfillment owner approval for shipment and label write-back is not granted in
+  TASK-010.
 
 ## Recommendation
 
-Proceed with TASK-010-W0 and TASK-010-W1 only. Do not close TASK-010 until
-validation evidence is updated and code changes, if any, build successfully.
+Accept TASK-010-W0 and TASK-010-W1 as implemented with validation debt noted.
+Do not claim full deployment readiness until TASK-009 audit debt is repaired or
+the readiness gates are made task-scoped enough to ignore unrelated historical
+debt.
 
 ## Traceability confirmation
 
