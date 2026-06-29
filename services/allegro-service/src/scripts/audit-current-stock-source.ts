@@ -24,6 +24,9 @@ type AccountReport = {
   isActive: boolean;
   tokenState: string;
   listedOffers: number;
+  unfilteredListedOffers: number;
+  unfilteredListedByStatus: Record<string, number>;
+  unfilteredListedStockTotal: number;
   listedByStatus: Record<string, number>;
   duplicateListedOffers: number;
   detailChecked: number;
@@ -36,6 +39,7 @@ type AccountReport = {
   localMappedOffers: number;
   localMappedStockTotal: number;
   stockAuthoritativeOfferIds: string[];
+  stockAuthoritativeStockByOfferId: Record<string, number>;
   samples: any[];
   errors: any[];
 };
@@ -177,6 +181,9 @@ async function auditAccount(account: any, args: Args): Promise<AccountAuditResul
     isActive: Boolean(account.isActive),
     tokenState: tokenState(account),
     listedOffers: 0,
+    unfilteredListedOffers: 0,
+    unfilteredListedByStatus: {},
+    unfilteredListedStockTotal: 0,
     listedByStatus: {},
     duplicateListedOffers: 0,
     detailChecked: 0,
@@ -189,6 +196,7 @@ async function auditAccount(account: any, args: Args): Promise<AccountAuditResul
     localMappedOffers: 0,
     localMappedStockTotal: 0,
     stockAuthoritativeOfferIds: [],
+    stockAuthoritativeStockByOfferId: {},
     samples: [],
     errors: [],
   };
@@ -216,6 +224,19 @@ async function auditAccount(account: any, args: Args): Promise<AccountAuditResul
 
   const seen = new Map<string, any>();
   const detailPayloads: any[] = [];
+  try {
+    const unfilteredOffers = await listOffers(token, args);
+    report.unfilteredListedOffers = unfilteredOffers.size;
+    for (const offer of unfilteredOffers.values()) {
+      const status = String(offer?.publication?.status || 'UNKNOWN');
+      report.unfilteredListedByStatus[status] = (report.unfilteredListedByStatus[status] || 0) + 1;
+      const listedStock = nonNegative(offer?.stock?.available);
+      if (listedStock !== null) report.unfilteredListedStockTotal += listedStock;
+    }
+  } catch (error: any) {
+    report.errors.push({ source: 'sale.offers.unfiltered', httpStatus: error.status || null, message: error.message });
+  }
+
   for (const status of PUBLICATION_STATUSES) {
     let offset = 0;
     let statusCount = 0;
@@ -280,6 +301,7 @@ async function auditAccount(account: any, args: Args): Promise<AccountAuditResul
         report.stockAuthoritativeOffers += 1;
         report.stockAuthoritativeTotal += stock;
         report.stockAuthoritativeOfferIds.push(offerId);
+        report.stockAuthoritativeStockByOfferId[offerId] = stock;
       }
       if (report.samples.length < 12) {
         report.samples.push({
@@ -299,6 +321,29 @@ async function auditAccount(account: any, args: Args): Promise<AccountAuditResul
   }
 
   return { report, detailPayloads };
+}
+
+async function listOffers(token: string, args: Args, publicationStatus?: string): Promise<Map<string, any>> {
+  const seen = new Map<string, any>();
+  let offset = 0;
+  while (true) {
+    const params: Record<string, string> = {
+      limit: String(args.listLimit),
+      offset: String(offset),
+    };
+    if (publicationStatus) params['publication.status'] = publicationStatus;
+
+    const url = `${ALLEGRO_API_URL}/sale/offers?${new URLSearchParams(params).toString()}`;
+    const data = (await requestJson(url, token)).data;
+    const offers = Array.isArray(data?.offers) ? data.offers : [];
+    for (const offer of offers) {
+      const offerId = String(offer?.id || '').trim();
+      if (offerId && !seen.has(offerId)) seen.set(offerId, offer);
+    }
+    if (offers.length < args.listLimit) break;
+    offset += args.listLimit;
+  }
+  return seen;
 }
 
 async function main(): Promise<void> {
@@ -324,15 +369,15 @@ async function main(): Promise<void> {
 
   const uniqueStockByOfferId = new Map<string, number>();
   for (const report of reports) {
-    for (const sample of report.samples) {
-      if (report.stockAuthoritativeOfferIds.includes(sample.offerId) && sample.currentStock !== null && sample.currentStock !== undefined) {
-        uniqueStockByOfferId.set(sample.offerId, Number(sample.currentStock));
-      }
+    for (const [offerId, stock] of Object.entries(report.stockAuthoritativeStockByOfferId)) {
+      uniqueStockByOfferId.set(offerId, Number(stock));
     }
   }
 
   const totals = reports.reduce((acc, item) => {
     acc.listedOffers += item.listedOffers;
+    acc.unfilteredListedOffers += item.unfilteredListedOffers;
+    acc.unfilteredListedStockTotal += item.unfilteredListedStockTotal;
     acc.detailChecked += item.detailChecked;
     acc.detailOk += item.detailOk;
     acc.detail404 += item.detail404;
@@ -344,6 +389,8 @@ async function main(): Promise<void> {
     return acc;
   }, {
     listedOffers: 0,
+    unfilteredListedOffers: 0,
+    unfilteredListedStockTotal: 0,
     detailChecked: 0,
     detailOk: 0,
     detail404: 0,
@@ -406,6 +453,7 @@ async function main(): Promise<void> {
     interpretation: {
       stockAuthoritative: 'Only successful /sale/product-offers/{offerId}.stock.available rows are treated as current physical stock evidence.',
       listedStock: '/sale/offers stock is listed for comparison only; final import should use product-offers current stock or owner-approved external stock source.',
+      unfilteredListing: 'unfilteredListedOffers reports /sale/offers without publication.status so status filters cannot hide offer-count mismatches.',
       tokenRefresh: 'This audit does not refresh OAuth tokens or activate accounts.',
     },
   }, null, 2));
