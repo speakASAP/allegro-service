@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-06-29T21:43:06Z",
+  "created_at": "2026-06-29T22:04:53Z",
   "gate": "deployment_readiness",
   "next_step": "ready_for_deployment_review",
   "pre_coding_gate": {
@@ -19,18 +19,8 @@
     "score": 100,
     "status": "PASS"
   },
-  "target": "TASK-009",
+  "target": "TASK-010",
   "unresolved_markers": [
-    {
-      "line": 333,
-      "marker": "[MISSING: durable central order forwarding attempt/status storage]",
-      "path": "12_validation/VAL-TASK-010-allegro-primary-channel-foundation.md"
-    },
-    {
-      "line": 334,
-      "marker": "[MISSING: confirmed orders.create.v1 duplicate response and payload-equality procedure]",
-      "path": "12_validation/VAL-TASK-010-allegro-primary-channel-foundation.md"
-    },
     {
       "line": 335,
       "marker": "[MISSING: governed preview-token policy for OffersController import approval routes]",
@@ -322,16 +312,6 @@
       "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
     },
     {
-      "line": 793,
-      "marker": "[MISSING: durable central order forwarding attempt/status storage]",
-      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
-    },
-    {
-      "line": 794,
-      "marker": "[MISSING: confirmed orders.create.v1 duplicate response and payload-equality procedure]",
-      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
-    },
-    {
       "line": 103,
       "marker": "[MISSING: ...]",
       "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
@@ -417,29 +397,18 @@
       "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
     },
     {
-      "line": 52,
-      "marker": "[MISSING: durable central order forwarding attempt/status storage]",
-      "path": "docs/orchestrator/STATUS.md"
-    },
-    {
-      "line": 53,
-      "marker": "[MISSING: orders.create.v1 duplicate/equality confirmation from orders-microservice]",
-      "path": "docs/orchestrator/STATUS.md"
-    },
-    {
-      "line": 54,
+      "line": 55,
       "marker": "[MISSING: preview-token governed service/controller import approval routes]",
       "path": "docs/orchestrator/STATUS.md"
     },
     {
-      "line": 55,
+      "line": 56,
       "marker": "[MISSING: governed recurring stock sync and Allegro quantity command write-back]",
       "path": "docs/orchestrator/STATUS.md"
     }
   ],
   "validation_reports": {
     "matching_reports": [
-      "12_validation/VAL-TASK-009-public-client-landing-dashboard.md",
       "12_validation/VAL-TASK-010-allegro-primary-channel-foundation.md"
     ],
     "reports": [
@@ -455,6 +424,6 @@
       "12_validation/VAL-TASK-010-allegro-primary-channel-foundation.md"
     ],
     "status": "pass",
-    "target": "TASK-009"
+    "target": "TASK-010"
   }
 }

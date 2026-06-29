@@ -43,6 +43,12 @@ export class OperationsController {
     return { success: true, data: result };
   }
 
+  @Get('order-forwarding-attempts')
+  async orderForwardingAttempts(@Query() query: any): Promise<{ success: boolean; data: any }> {
+    const result = await this.operationsService.listOrderForwardingAttempts(query);
+    return { success: true, data: result };
+  }
+
   @Get('stock-snapshots')
   async stockSnapshots(@Query() query: any): Promise<{ success: boolean; data: any }> {
     const result = await this.operationsService.listStockSnapshots(query);

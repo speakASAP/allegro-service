@@ -2,13 +2,96 @@
  * Orders Service
  */
 
+import { createHash } from 'crypto';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService, LoggerService, OrderClientService } from '@allegro/shared';
 import { AllegroApiService } from '../allegro-api.service';
-import { AllegroForwardingOffer, buildOrderForwardingPayload, getAllegroLineOfferIds } from './order-forwarding.mapper';
+import { AllegroForwardingOffer, ForwardedOrderPayload, buildOrderForwardingPayload, getAllegroLineOfferIds } from './order-forwarding.mapper';
 
 export const ALLEGRO_ORDER_FORWARDING_CONFIRMATION = 'ALLEGRO_ORDER_FORWARDING_TO_ORDERS_MICROSERVICE';
+
+const ORDER_CREATE_CONTRACT_VERSION = 'orders.create.v1';
+const DEFAULT_CHANNEL_ACCOUNT_ID = 'default';
+
+type ForwardingAttemptStatus = 'DISABLED' | 'BLOCKED' | 'FORWARDED' | 'FAILED';
+
+function normalizeChannelAccountId(channelAccountId?: string | null): string {
+  const normalized = channelAccountId?.trim();
+  return normalized || DEFAULT_CHANNEL_ACCOUNT_ID;
+}
+
+function stableForHash(value: any): any {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => stableForHash(item));
+  }
+  if (value && typeof value === 'object') {
+    return Object.keys(value)
+      .sort()
+      .reduce((acc: any, key) => {
+        const nested = stableForHash(value[key]);
+        if (nested !== undefined) {
+          acc[key] = nested;
+        }
+        return acc;
+      }, {});
+  }
+  return value;
+}
+
+function hashPayload(value: any): string {
+  return createHash('sha256').update(JSON.stringify(stableForHash(value))).digest('hex');
+}
+
+function buildOrderForwardingIdempotencyKey(payload: ForwardedOrderPayload): string {
+  return [
+    ORDER_CREATE_CONTRACT_VERSION,
+    payload.channel,
+    normalizeChannelAccountId(payload.channelAccountId),
+    payload.externalOrderId,
+  ].join(':');
+}
+
+function summarizeForwardingRequest(payload: ForwardedOrderPayload): any {
+  return {
+    contractVersion: ORDER_CREATE_CONTRACT_VERSION,
+    channel: payload.channel,
+    channelAccountId: normalizeChannelAccountId(payload.channelAccountId),
+    externalOrderId: payload.externalOrderId,
+    itemCount: payload.items.length,
+    productIds: payload.items.map((item) => item.productId).sort(),
+    currency: payload.currency,
+    total: payload.total,
+    paymentStatus: payload.paymentStatus || null,
+    orderedAt: payload.orderedAt instanceof Date ? payload.orderedAt.toISOString() : payload.orderedAt,
+  };
+}
+
+function summarizeForwardingResponse(response: any): any {
+  if (!response || typeof response !== 'object') {
+    return response ? { accepted: true } : null;
+  }
+  return {
+    id: response.id || response.orderId || null,
+    externalOrderId: response.externalOrderId || null,
+    channel: response.channel || null,
+    status: response.status || null,
+    createdAt: response.createdAt || null,
+    updatedAt: response.updatedAt || null,
+  };
+}
+
+function summarizeForwardingError(error: any): any {
+  return {
+    message: error?.message || 'Unknown error',
+    status: error?.status || error?.response?.status || null,
+    name: error?.name || null,
+  };
+}
+
 
 export type SyncOrdersFromAllegroOptions = {
   forwardToOrdersMicroservice?: boolean;
@@ -206,6 +289,110 @@ export class OrdersService {
     return order;
   }
 
+  private async recordOrderForwardingAttempt(params: {
+    savedOrder: any;
+    allegroOrder: any;
+    forwardingEnabled: boolean;
+    status: ForwardingAttemptStatus;
+    orderData?: ForwardedOrderPayload | null;
+    blockedReasons: string[];
+    missingOfferIds: string[];
+    missingCatalogOfferIds: string[];
+    response?: any;
+    error?: any;
+  }): Promise<void> {
+    const prisma = this.prisma as any;
+    const orderData = params.orderData || null;
+    const channel = orderData?.channel || 'allegro';
+    const channelAccountId = normalizeChannelAccountId(orderData?.channelAccountId || null);
+    const externalOrderId = orderData?.externalOrderId || String(params.allegroOrder?.id || params.savedOrder.allegroOrderId);
+    const accountId = channelAccountId !== DEFAULT_CHANNEL_ACCOUNT_ID ? channelAccountId : null;
+    const idempotencyKey = orderData
+      ? buildOrderForwardingIdempotencyKey(orderData)
+      : [ORDER_CREATE_CONTRACT_VERSION, channel, channelAccountId, externalOrderId, params.status.toLowerCase()].join(':');
+    const payloadHash = orderData ? hashPayload(orderData) : null;
+    const currentAttempt = orderData
+      ? await prisma.allegroOrderForwardingAttempt.findUnique({
+        where: { idempotencyKey },
+        select: { id: true, payloadHash: true },
+      })
+      : null;
+    const previousAttempt = orderData
+      ? currentAttempt || await prisma.allegroOrderForwardingAttempt.findFirst({
+        where: {
+          channel,
+          channelAccountId,
+          externalOrderId,
+          payloadHash: { not: null },
+          NOT: { idempotencyKey },
+        },
+        orderBy: { attemptedAt: 'desc' },
+        select: { id: true, payloadHash: true },
+      })
+      : null;
+    const payloadEqualityStatus = payloadHash && previousAttempt
+      ? previousAttempt.payloadHash === payloadHash ? 'MATCHED_PREVIOUS' : 'MISMATCHED_PREVIOUS'
+      : payloadHash ? 'FIRST_SEEN' : 'NOT_APPLICABLE';
+    const previousAttemptId = currentAttempt ? null : previousAttempt?.id || null;
+    const completedAt = params.status === 'FORWARDED' || params.status === 'FAILED' || params.status === 'BLOCKED'
+      ? new Date()
+      : null;
+
+    await prisma.allegroOrderForwardingAttempt.upsert({
+      where: { idempotencyKey },
+      update: {
+        localOrderId: params.savedOrder.id,
+        accountId,
+        allegroOrderId: String(params.allegroOrder?.id || params.savedOrder.allegroOrderId),
+        payloadHash,
+        payloadEqualityStatus,
+        previousAttemptId,
+        status: params.status,
+        blockedReasons: params.blockedReasons,
+        missingOfferIds: params.missingOfferIds,
+        missingCatalogOfferIds: params.missingCatalogOfferIds,
+        requestSummary: orderData ? summarizeForwardingRequest(orderData) : { forwardingEnabled: params.forwardingEnabled },
+        responseSummary: summarizeForwardingResponse(params.response),
+        errorSummary: params.error ? summarizeForwardingError(params.error) : null,
+        attemptedAt: new Date(),
+        completedAt,
+      },
+      create: {
+        localOrderId: params.savedOrder.id,
+        accountId,
+        allegroOrderId: String(params.allegroOrder?.id || params.savedOrder.allegroOrderId),
+        channel,
+        channelAccountId,
+        externalOrderId,
+        contractVersion: ORDER_CREATE_CONTRACT_VERSION,
+        idempotencyKey,
+        payloadHash,
+        payloadEqualityStatus,
+        previousAttemptId,
+        status: params.status,
+        blockedReasons: params.blockedReasons,
+        missingOfferIds: params.missingOfferIds,
+        missingCatalogOfferIds: params.missingCatalogOfferIds,
+        requestSummary: orderData ? summarizeForwardingRequest(orderData) : { forwardingEnabled: params.forwardingEnabled },
+        responseSummary: summarizeForwardingResponse(params.response),
+        errorSummary: params.error ? summarizeForwardingError(params.error) : null,
+        completedAt,
+      },
+    });
+  }
+
+  private async safeRecordOrderForwardingAttempt(params: Parameters<OrdersService['recordOrderForwardingAttempt']>[0]): Promise<void> {
+    try {
+      await this.recordOrderForwardingAttempt(params);
+    } catch (error: any) {
+      this.logger.error('Failed to record Allegro order forwarding attempt', {
+        allegroOrderId: params.allegroOrder?.id,
+        status: params.status,
+        error: error.message,
+      });
+    }
+  }
+
   /**
    * Fetch orders from Allegro API and sync to database
    */
@@ -327,32 +514,63 @@ export class OrdersService {
 
             // Central order forwarding is an explicit replay/apply action. Local projection remains the default.
             if (savedOrder) {
-              try {
-                const forwarding = buildOrderForwardingPayload(allegroOrder, offersByAllegroOfferId);
+              const forwarding = buildOrderForwardingPayload(allegroOrder, offersByAllegroOfferId);
 
-                if (!forwardingEnabled) {
-                  forwardingSkipped += 1;
-                  this.logger.log('Projected Allegro order locally; central orders forwarding is disabled', {
-                    allegroOrderId: allegroOrder.id,
-                    localOrderId: savedOrder.id,
-                    forwardingReady: Boolean(forwarding.orderData),
-                    blockedReasons: forwarding.blockedReasons,
-                    missingOfferIds: forwarding.missingOfferIds,
-                    missingCatalogOfferIds: forwarding.missingCatalogOfferIds,
-                    lineOfferIds: forwarding.lineOfferIds,
+              if (!forwardingEnabled) {
+                forwardingSkipped += 1;
+                await this.safeRecordOrderForwardingAttempt({
+                  savedOrder,
+                  allegroOrder,
+                  forwardingEnabled,
+                  status: 'DISABLED',
+                  orderData: forwarding.orderData,
+                  blockedReasons: forwarding.blockedReasons,
+                  missingOfferIds: forwarding.missingOfferIds,
+                  missingCatalogOfferIds: forwarding.missingCatalogOfferIds,
+                });
+                this.logger.log('Projected Allegro order locally; central orders forwarding is disabled', {
+                  allegroOrderId: allegroOrder.id,
+                  localOrderId: savedOrder.id,
+                  forwardingReady: Boolean(forwarding.orderData),
+                  blockedReasons: forwarding.blockedReasons,
+                  missingOfferIds: forwarding.missingOfferIds,
+                  missingCatalogOfferIds: forwarding.missingCatalogOfferIds,
+                  lineOfferIds: forwarding.lineOfferIds,
+                });
+              } else if (!forwarding.orderData) {
+                forwardingSkipped += 1;
+                await this.safeRecordOrderForwardingAttempt({
+                  savedOrder,
+                  allegroOrder,
+                  forwardingEnabled,
+                  status: 'BLOCKED',
+                  orderData: null,
+                  blockedReasons: forwarding.blockedReasons,
+                  missingOfferIds: forwarding.missingOfferIds,
+                  missingCatalogOfferIds: forwarding.missingCatalogOfferIds,
+                });
+                this.logger.warn('Skipped forwarding Allegro order to orders-microservice because catalog mapping is incomplete', {
+                  allegroOrderId: allegroOrder.id,
+                  localOrderId: savedOrder.id,
+                  blockedReasons: forwarding.blockedReasons,
+                  missingOfferIds: forwarding.missingOfferIds,
+                  missingCatalogOfferIds: forwarding.missingCatalogOfferIds,
+                  lineOfferIds: forwarding.lineOfferIds,
+                });
+              } else {
+                try {
+                  const centralOrder = await this.orderClient.createOrder(forwarding.orderData);
+                  await this.safeRecordOrderForwardingAttempt({
+                    savedOrder,
+                    allegroOrder,
+                    forwardingEnabled,
+                    status: 'FORWARDED',
+                    orderData: forwarding.orderData,
+                    blockedReasons: [],
+                    missingOfferIds: [],
+                    missingCatalogOfferIds: [],
+                    response: centralOrder,
                   });
-                } else if (!forwarding.orderData) {
-                  forwardingSkipped += 1;
-                  this.logger.warn('Skipped forwarding Allegro order to orders-microservice because catalog mapping is incomplete', {
-                    allegroOrderId: allegroOrder.id,
-                    localOrderId: savedOrder.id,
-                    blockedReasons: forwarding.blockedReasons,
-                    missingOfferIds: forwarding.missingOfferIds,
-                    missingCatalogOfferIds: forwarding.missingCatalogOfferIds,
-                    lineOfferIds: forwarding.lineOfferIds,
-                  });
-                } else {
-                  await this.orderClient.createOrder(forwarding.orderData);
                   forwarded += 1;
                   this.logger.log('Order forwarded to orders-microservice', {
                     allegroOrderId: allegroOrder.id,
@@ -360,14 +578,25 @@ export class OrdersService {
                     lineOfferIds: forwarding.lineOfferIds,
                     itemCount: forwarding.orderData.items.length,
                   });
+                } catch (error: any) {
+                  forwardingFailed += 1;
+                  await this.safeRecordOrderForwardingAttempt({
+                    savedOrder,
+                    allegroOrder,
+                    forwardingEnabled,
+                    status: 'FAILED',
+                    orderData: forwarding.orderData,
+                    blockedReasons: forwarding.blockedReasons,
+                    missingOfferIds: forwarding.missingOfferIds,
+                    missingCatalogOfferIds: forwarding.missingCatalogOfferIds,
+                    error,
+                  });
+                  // Log error but don't fail the sync
+                  this.logger.error('Failed to forward order to orders-microservice', {
+                    allegroOrderId: allegroOrder.id,
+                    error: error.message,
+                  });
                 }
-              } catch (error: any) {
-                forwardingFailed += 1;
-                // Log error but don't fail the sync
-                this.logger.error('Failed to forward order to orders-microservice', {
-                  allegroOrderId: allegroOrder.id,
-                  error: error.message,
-                });
               }
             }
 

@@ -10,11 +10,12 @@ type OfferFixture = {
   title?: string | null;
 };
 
-function createServiceFixture(orders: any[], offers: OfferFixture[]) {
+function createServiceFixture(orders: any[], offers: OfferFixture[], options: { failForwardingAttemptWrites?: boolean } = {}) {
   const orderClientCalls: any[] = [];
   const warnings: any[] = [];
   const errors: any[] = [];
   const logs: any[] = [];
+  const forwardingAttempts: any[] = [];
   const captured: any = {};
 
   const prisma = {
@@ -29,6 +30,35 @@ function createServiceFixture(orders: any[], offers: OfferFixture[]) {
       upsert: async (args: any) => {
         captured.orderUpsert = args;
         return { id: 'local-' + args.where.allegroOrderId };
+      },
+    },
+    allegroOrderForwardingAttempt: {
+      findUnique: async (args: any) => {
+        captured.forwardingAttemptFindUnique = args;
+        return forwardingAttempts.find((attempt) => attempt.idempotencyKey === args.where.idempotencyKey) || null;
+      },
+      findFirst: async (args: any) => {
+        captured.forwardingAttemptFindFirst = args;
+        return forwardingAttempts.find((attempt) =>
+          attempt.channel === args.where.channel
+          && attempt.channelAccountId === args.where.channelAccountId
+          && attempt.externalOrderId === args.where.externalOrderId
+          && attempt.payloadHash,
+        ) || null;
+      },
+      upsert: async (args: any) => {
+        captured.forwardingAttemptUpsert = args;
+        if (options.failForwardingAttemptWrites) {
+          throw new Error('synthetic audit write failure');
+        }
+        const existingIndex = forwardingAttempts.findIndex((attempt) => attempt.idempotencyKey === args.where.idempotencyKey);
+        if (existingIndex >= 0) {
+          forwardingAttempts[existingIndex] = { ...forwardingAttempts[existingIndex], ...args.update };
+          return forwardingAttempts[existingIndex];
+        }
+        const created = { id: 'attempt-' + (forwardingAttempts.length + 1), ...args.create };
+        forwardingAttempts.push(created);
+        return created;
       },
     },
     allegroOrderLineItem: {
@@ -72,8 +102,10 @@ function createServiceFixture(orders: any[], offers: OfferFixture[]) {
     orderClient as any,
   );
 
-  return { service, orderClientCalls, warnings, errors, logs, captured };
+  return { service, orderClientCalls, warnings, errors, logs, captured, forwardingAttempts };
 }
+
+const ACCOUNT_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
 function buildAllegroOrder(lineItems: any[]) {
   return {
@@ -100,7 +132,7 @@ async function testDefaultSyncProjectsLocallyWithoutCentralForwarding() {
     { offer: { id: 'offer-1', name: 'Mapped line' }, quantity: 1, price: { amount: '10.00' } },
   ]);
   const fixture = createServiceFixture([order], [
-    { id: 'db-offer-1', allegroOfferId: 'offer-1', accountId: 'account-a', catalogProductId: 'catalog-a', title: 'Stored first' },
+    { id: 'db-offer-1', allegroOfferId: 'offer-1', accountId: ACCOUNT_ID, catalogProductId: 'catalog-a', title: 'Stored first' },
   ]);
 
   const result = await fixture.service.syncOrdersFromAllegro();
@@ -111,6 +143,10 @@ async function testDefaultSyncProjectsLocallyWithoutCentralForwarding() {
   assert.equal(result.forwarding.skipped, 1);
   assert.equal(fixture.orderClientCalls.length, 0);
   assert.equal(fixture.logs.some((entry) => entry[0] === 'Projected Allegro order locally; central orders forwarding is disabled'), true);
+  assert.equal(fixture.forwardingAttempts.length, 1);
+  assert.equal(fixture.forwardingAttempts[0].status, 'DISABLED');
+  assert.equal(fixture.forwardingAttempts[0].payloadEqualityStatus, 'FIRST_SEEN');
+  assert.equal(fixture.forwardingAttempts[0].requestSummary.itemCount, 1);
 }
 
 async function testMultiLineOrderForwardsEachLineCatalogProductId() {
@@ -119,8 +155,8 @@ async function testMultiLineOrderForwardsEachLineCatalogProductId() {
     { offer: { id: 'offer-2', name: 'Second line' }, quantity: 1, price: { amount: '5.00' } },
   ]);
   const fixture = createServiceFixture([order], [
-    { id: 'db-offer-1', allegroOfferId: 'offer-1', accountId: 'account-a', catalogProductId: 'catalog-a', title: 'Stored first' },
-    { id: 'db-offer-2', allegroOfferId: 'offer-2', accountId: 'account-a', catalogProductId: 'catalog-b', title: 'Stored second' },
+    { id: 'db-offer-1', allegroOfferId: 'offer-1', accountId: ACCOUNT_ID, catalogProductId: 'catalog-a', title: 'Stored first' },
+    { id: 'db-offer-2', allegroOfferId: 'offer-2', accountId: ACCOUNT_ID, catalogProductId: 'catalog-b', title: 'Stored second' },
   ]);
 
   const result = await fixture.service.syncOrdersFromAllegro({
@@ -142,7 +178,7 @@ async function testMultiLineOrderForwardsEachLineCatalogProductId() {
   assert.equal(fixture.orderClientCalls.length, 1);
   assert.equal(fixture.orderClientCalls[0].externalOrderId, 'allegro-order-1');
   assert.equal(fixture.orderClientCalls[0].channel, 'allegro');
-  assert.equal(fixture.orderClientCalls[0].channelAccountId, 'account-a');
+  assert.equal(fixture.orderClientCalls[0].channelAccountId, ACCOUNT_ID);
   assert.equal(fixture.orderClientCalls[0].items.length, 2);
   assert.equal(fixture.orderClientCalls[0].items[0].productId, 'catalog-a');
   assert.equal(fixture.orderClientCalls[0].items[0].quantity, 2);
@@ -151,6 +187,14 @@ async function testMultiLineOrderForwardsEachLineCatalogProductId() {
   assert.equal(fixture.orderClientCalls[0].items[1].quantity, 1);
   assert.equal(fixture.orderClientCalls[0].items[1].totalPrice, 5);
   assert.equal(fixture.orderClientCalls[0].total, 25);
+  assert.equal(fixture.forwardingAttempts.length, 1);
+  assert.equal(fixture.forwardingAttempts[0].status, 'FORWARDED');
+  assert.equal(fixture.forwardingAttempts[0].idempotencyKey, 'orders.create.v1:allegro:aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:allegro-order-1');
+  assert.equal(fixture.forwardingAttempts[0].accountId, ACCOUNT_ID);
+  assert.equal(fixture.forwardingAttempts[0].payloadEqualityStatus, 'FIRST_SEEN');
+  assert.equal(typeof fixture.forwardingAttempts[0].payloadHash, 'string');
+  assert.equal(fixture.forwardingAttempts[0].requestSummary.itemCount, 2);
+  assert.equal(fixture.forwardingAttempts[0].responseSummary.id, 'central-order-1');
   assert.equal(fixture.warnings.length, 0);
 }
 
@@ -160,7 +204,7 @@ async function testMissingPrimaryOfferStillPersistsCheckoutFormButSkipsCentralFo
     { offer: { id: 'offer-2', name: 'Mapped second line' }, quantity: 1, price: { amount: '15.00' } },
   ]);
   const fixture = createServiceFixture([order], [
-    { id: 'db-offer-2', allegroOfferId: 'offer-2', accountId: 'account-a', catalogProductId: 'catalog-b' },
+    { id: 'db-offer-2', allegroOfferId: 'offer-2', accountId: ACCOUNT_ID, catalogProductId: 'catalog-b' },
   ]);
 
   const result = await fixture.service.syncOrdersFromAllegro({
@@ -180,6 +224,9 @@ async function testMissingPrimaryOfferStillPersistsCheckoutFormButSkipsCentralFo
   assert.equal(fixture.warnings.length, 1);
   assert.equal(fixture.warnings[0][0], 'Skipped forwarding Allegro order to orders-microservice because catalog mapping is incomplete');
   assert.deepEqual(fixture.warnings[0][1].missingOfferIds, ['offer-missing']);
+  assert.equal(fixture.forwardingAttempts.length, 1);
+  assert.equal(fixture.forwardingAttempts[0].status, 'BLOCKED');
+  assert.deepEqual(fixture.forwardingAttempts[0].missingOfferIds, ['offer-missing']);
 }
 
 async function testMissingCatalogProductSkipsMalformedCentralForward() {
@@ -188,8 +235,8 @@ async function testMissingCatalogProductSkipsMalformedCentralForward() {
     { offer: { id: 'offer-2', name: 'Unmapped catalog line' }, quantity: 1, price: { amount: '15.00' } },
   ]);
   const fixture = createServiceFixture([order], [
-    { id: 'db-offer-1', allegroOfferId: 'offer-1', accountId: 'account-a', catalogProductId: 'catalog-a' },
-    { id: 'db-offer-2', allegroOfferId: 'offer-2', accountId: 'account-a', catalogProductId: null },
+    { id: 'db-offer-1', allegroOfferId: 'offer-1', accountId: ACCOUNT_ID, catalogProductId: 'catalog-a' },
+    { id: 'db-offer-2', allegroOfferId: 'offer-2', accountId: ACCOUNT_ID, catalogProductId: null },
   ]);
 
   await fixture.service.syncOrdersFromAllegro({
@@ -201,6 +248,29 @@ async function testMissingCatalogProductSkipsMalformedCentralForward() {
   assert.equal(fixture.warnings.length, 1);
   assert.ok(fixture.warnings[0][1].blockedReasons.includes('missing_catalog_product:line_1_missing_catalog_product_id'));
   assert.deepEqual(fixture.warnings[0][1].missingCatalogOfferIds, ['offer-2']);
+  assert.equal(fixture.forwardingAttempts[0].status, 'BLOCKED');
+  assert.deepEqual(fixture.forwardingAttempts[0].missingCatalogOfferIds, ['offer-2']);
+}
+
+
+async function testForwardedOrderStillSucceedsWhenAuditWriteFails() {
+  const order = buildAllegroOrder([
+    { offer: { id: 'offer-1', name: 'Mapped line' }, quantity: 1, price: { amount: '10.00' } },
+  ]);
+  const fixture = createServiceFixture([order], [
+    { id: 'db-offer-1', allegroOfferId: 'offer-1', accountId: ACCOUNT_ID, catalogProductId: 'catalog-a' },
+  ], { failForwardingAttemptWrites: true });
+
+  const result = await fixture.service.syncOrdersFromAllegro({
+    forwardToOrdersMicroservice: true,
+    confirmForwarding: ALLEGRO_ORDER_FORWARDING_CONFIRMATION,
+  });
+
+  assert.equal(result.forwarding.forwarded, 1);
+  assert.equal(result.forwarding.failed, 0);
+  assert.equal(fixture.orderClientCalls.length, 1);
+  assert.equal(fixture.errors.some((entry) => entry[0] === 'Failed to record Allegro order forwarding attempt'), true);
+  assert.equal(fixture.errors.some((entry) => entry[0] === 'Failed to forward order to orders-microservice'), false);
 }
 
 export async function runOrdersServiceSpec(): Promise<void> {
@@ -208,6 +278,7 @@ export async function runOrdersServiceSpec(): Promise<void> {
   await testMultiLineOrderForwardsEachLineCatalogProductId();
   await testMissingPrimaryOfferStillPersistsCheckoutFormButSkipsCentralForward();
   await testMissingCatalogProductSkipsMalformedCentralForward();
+  await testForwardedOrderStillSucceedsWhenAuditWriteFails();
 }
 
 if (require.main === module) {

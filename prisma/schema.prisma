@@ -390,6 +390,7 @@ model AllegroOrder {
   // Relations
   offer     AllegroOffer? @relation(fields: [allegroOfferId], references: [id], onDelete: SetNull)
   lineItems AllegroOrderLineItem[]
+  forwardingAttempts AllegroOrderForwardingAttempt[]
   // NOTE: catalogProductId references catalog-microservice product ID (no foreign key constraint)
 
   @@index([allegroOrderId])
@@ -399,6 +400,47 @@ model AllegroOrder {
   @@index([orderDate])
   @@index([marketplaceId])
   @@map("allegro_orders")
+}
+
+
+model AllegroOrderForwardingAttempt {
+  id                     String    @id @default(uuid()) @db.Uuid
+  localOrderId           String    @db.Uuid
+  accountId              String?   @db.Uuid
+  allegroOrderId         String    @db.VarChar(100)
+  channel                String    @default("allegro") @db.VarChar(50)
+  channelAccountId       String    @default("default") @db.VarChar(100)
+  externalOrderId        String    @db.VarChar(100)
+  contractVersion        String    @default("orders.create.v1") @db.VarChar(50)
+  idempotencyKey         String    @db.VarChar(180)
+  payloadHash            String?   @db.VarChar(128)
+  payloadEqualityStatus  String    @default("NOT_APPLICABLE") @db.VarChar(50)
+  previousAttemptId      String?   @db.Uuid
+  status                 String    @db.VarChar(50)
+  blockedReasons         Json?
+  missingOfferIds        Json?
+  missingCatalogOfferIds Json?
+  requestSummary         Json?
+  responseSummary        Json?
+  errorSummary           Json?
+  attemptedAt            DateTime  @default(now()) @db.Timestamp(6)
+  completedAt            DateTime? @db.Timestamp(6)
+  createdAt              DateTime  @default(now()) @db.Timestamp(6)
+  updatedAt              DateTime  @updatedAt @db.Timestamp(6)
+
+  order   AllegroOrder    @relation(fields: [localOrderId], references: [id], onDelete: Cascade)
+  account AllegroAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@unique([idempotencyKey])
+  @@index([localOrderId])
+  @@index([accountId])
+  @@index([allegroOrderId])
+  @@index([channel, channelAccountId, externalOrderId])
+  @@index([payloadHash])
+  @@index([payloadEqualityStatus])
+  @@index([status])
+  @@index([attemptedAt])
+  @@map("allegro_order_forwarding_attempts")
 }
 
 model AllegroOrderLineItem {
@@ -640,6 +682,7 @@ model AllegroAccount {
   rawPayloads     AllegroRawPayload[]
   projectionAuditLogs AllegroProjectionAuditLog[]
   stockSnapshots  AllegroOfferStockSnapshot[]
+  orderForwardingAttempts AllegroOrderForwardingAttempt[]
 
   @@index([userId])
   @@index([isActive])

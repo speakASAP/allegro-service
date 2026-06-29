@@ -34,6 +34,7 @@ Boundary: read-only Allegro/API probes and audit script deployment only; no Ware
 - `GET /api/allegro/operations/raw-payloads`
 - `GET /api/allegro/operations/projection-audit`
 - `GET /api/allegro/operations/stock-snapshots`
+- `GET /api/allegro/operations/order-forwarding-attempts`
 
 The operations raw-payload endpoint returns metadata only and does not select raw payload JSON.
 
@@ -49,8 +50,8 @@ The operations raw-payload endpoint returns metadata only and does not select ra
 
 ## Blockers
 
-- `[MISSING: durable central order forwarding attempt/status storage]`
-- `[MISSING: orders.create.v1 duplicate/equality confirmation from orders-microservice]`
+- Durable central order forwarding attempt/status storage is implemented in code and migration; live migration apply and deploy are pending for this slice.
+- `orders.create.v1` duplicate/equality behavior confirmed from orders-microservice source and verification scripts: exact replay returns existing order without duplicate side effects; mismatched same-key replay returns HTTP 409.
 - `[MISSING: preview-token governed service/controller import approval routes]`
 - `[MISSING: governed recurring stock sync and Allegro quantity command write-back]`
 - TASK-009 IPS audit/pre-coding debt repaired and validated on 2026-06-29; strict audit, pre-coding, and TASK-009 readiness gates passed.

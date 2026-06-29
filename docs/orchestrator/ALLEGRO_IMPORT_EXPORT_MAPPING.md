@@ -790,8 +790,8 @@ P1 order projection split is implemented in `OrdersService.syncOrdersFromAllegro
   `forwardToOrdersMicroservice=true` and exact confirmation
   `ALLEGRO_ORDER_FORWARDING_TO_ORDERS_MICROSERVICE`.
 - Mapping completeness still blocks malformed central order payloads.
-- `[MISSING: durable central order forwarding attempt/status storage]`
-- `[MISSING: confirmed orders.create.v1 duplicate response and payload-equality procedure]`
+- Durable forwarding attempts are stored in `AllegroOrderForwardingAttempt` with idempotency key, payload hash, status, blocked reasons, response/error summary, and replay equality status.
+- `orders.create.v1` duplicate/equality behavior confirmed from orders-microservice: exact same-key replay returns the existing order, mismatched same-key replay is rejected with HTTP 409, and the persisted key is `channel + channelAccountId + externalOrderId` with `contractVersion=orders.create.v1` validated at the API boundary.
 
 P2 offer/product import adapter guardrails are implemented for the script entrypoints:
 

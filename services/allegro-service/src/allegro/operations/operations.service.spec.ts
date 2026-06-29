@@ -4,6 +4,7 @@ import { OperationsService } from './operations.service';
 
 function createFixture() {
   const rawPayloadFindQueries: any[] = [];
+  const orderForwardingAttemptFindQueries: any[] = [];
   const prisma = {
     allegroSyncRun: {
       count: async () => 2,
@@ -29,10 +30,23 @@ function createFixture() {
       count: async () => 5,
       findMany: async () => [],
     },
+    allegroOrderForwardingAttempt: {
+      count: async () => 6,
+      findMany: async (query: any) => {
+        orderForwardingAttemptFindQueries.push(query);
+        return [{
+          id: 'attempt-1',
+          status: 'FORWARDED',
+          payloadHash: 'payload-hash-1',
+          requestSummary: { itemCount: 1 },
+          responseSummary: { id: 'central-order-1' },
+        }];
+      },
+    },
   };
   const logs: any[] = [];
   const logger = { log: (...args: any[]) => logs.push(args), warn: () => undefined, error: () => undefined };
-  return { service: new OperationsService(prisma as any, logger as any), rawPayloadFindQueries, logs };
+  return { service: new OperationsService(prisma as any, logger as any), rawPayloadFindQueries, orderForwardingAttemptFindQueries, logs };
 }
 
 async function testSummaryIsReadOnlyAndCountsEvidenceTables() {
@@ -45,6 +59,7 @@ async function testSummaryIsReadOnlyAndCountsEvidenceTables() {
   assert.equal(summary.counts.rawPayloads, 3);
   assert.equal(summary.counts.projectionAuditLogs, 4);
   assert.equal(summary.counts.stockSnapshots, 5);
+  assert.equal(summary.counts.orderForwardingAttempts, 6);
 }
 
 async function testRawPayloadListDoesNotSelectPayloadJson() {
@@ -61,9 +76,37 @@ async function testRawPayloadListDoesNotSelectPayloadJson() {
   });
 }
 
+async function testOrderForwardingAttemptsExposeSummariesOnly() {
+  const fixture = createFixture();
+  const result = await fixture.service.listOrderForwardingAttempts({
+    accountId: 'account-1',
+    allegroOrderId: 'allegro-order-1',
+    status: 'FORWARDED',
+    payloadEqualityStatus: 'FIRST_SEEN',
+    limit: 10,
+  });
+  const query = fixture.orderForwardingAttemptFindQueries[0];
+  const select = query.select;
+
+  assert.equal(result.items.length, 1);
+  assert.deepEqual(query.where, {
+    accountId: 'account-1',
+    allegroOrderId: 'allegro-order-1',
+    status: 'FORWARDED',
+    payloadEqualityStatus: 'FIRST_SEEN',
+  });
+  assert.equal(select.requestSummary, true);
+  assert.equal(select.responseSummary, true);
+  assert.equal(select.errorSummary, true);
+  assert.equal(select.payloadHash, true);
+  assert.equal(select.rawPayload, undefined);
+  assert.equal(select.payload, undefined);
+}
+
 export async function runOperationsServiceSpec(): Promise<void> {
   await testSummaryIsReadOnlyAndCountsEvidenceTables();
   await testRawPayloadListDoesNotSelectPayloadJson();
+  await testOrderForwardingAttemptsExposeSummariesOnly();
 }
 
 if (require.main === module) {

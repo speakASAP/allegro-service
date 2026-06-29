@@ -13,6 +13,9 @@ type PageQuery = {
   action?: string;
   authorityClass?: string;
   allegroOfferId?: string;
+  allegroOrderId?: string;
+  externalOrderId?: string;
+  payloadEqualityStatus?: string;
 };
 
 type PageParams = {
@@ -67,6 +70,7 @@ export class OperationsService {
       rawPayloads,
       projectionAuditLogs,
       stockSnapshots,
+      orderForwardingAttempts,
       latestSyncRuns,
       latestStockSnapshots,
       latestCursors,
@@ -76,6 +80,7 @@ export class OperationsService {
       prisma.allegroRawPayload.count({ where: accountFilter }),
       prisma.allegroProjectionAuditLog.count({ where: accountFilter }),
       prisma.allegroOfferStockSnapshot.count({ where: accountFilter }),
+      prisma.allegroOrderForwardingAttempt.count({ where: accountFilter }),
       prisma.allegroSyncRun.findMany({
         where: accountFilter,
         orderBy: { startedAt: 'desc' },
@@ -122,6 +127,7 @@ export class OperationsService {
         rawPayloads,
         projectionAuditLogs,
         stockSnapshots,
+        orderForwardingAttempts,
       },
       latest: {
         syncRuns: latestSyncRuns,
@@ -244,6 +250,29 @@ export class OperationsService {
     return paginated(items, total, page, limit);
   }
 
+  async listOrderForwardingAttempts(query: PageQuery = {}): Promise<any> {
+    const prisma = this.prisma as any;
+    const { page, limit, skip } = pageParams(query);
+    const where: any = {
+      ...(nonEmpty(query.accountId) ? { accountId: nonEmpty(query.accountId) } : {}),
+      ...(nonEmpty(query.allegroOrderId) ? { allegroOrderId: nonEmpty(query.allegroOrderId) } : {}),
+      ...(nonEmpty(query.externalOrderId) ? { externalOrderId: nonEmpty(query.externalOrderId) } : {}),
+      ...(nonEmpty(query.status) ? { status: nonEmpty(query.status) } : {}),
+      ...(nonEmpty(query.payloadEqualityStatus) ? { payloadEqualityStatus: nonEmpty(query.payloadEqualityStatus) } : {}),
+    };
+    const [items, total] = await Promise.all([
+      prisma.allegroOrderForwardingAttempt.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { attemptedAt: 'desc' },
+        select: this.orderForwardingAttemptSelect(),
+      }),
+      prisma.allegroOrderForwardingAttempt.count({ where }),
+    ]);
+    return paginated(items, total, page, limit);
+  }
+
   async listStockSnapshots(query: PageQuery = {}): Promise<any> {
     const prisma = this.prisma as any;
     const { page, limit, skip } = pageParams(query);
@@ -339,6 +368,35 @@ export class OperationsService {
       redactedContext: true,
       idempotencyKey: true,
       createdAt: true,
+      account: accountSelect(),
+    };
+  }
+
+  private orderForwardingAttemptSelect(): any {
+    return {
+      id: true,
+      localOrderId: true,
+      accountId: true,
+      allegroOrderId: true,
+      channel: true,
+      channelAccountId: true,
+      externalOrderId: true,
+      contractVersion: true,
+      idempotencyKey: true,
+      payloadHash: true,
+      payloadEqualityStatus: true,
+      previousAttemptId: true,
+      status: true,
+      blockedReasons: true,
+      missingOfferIds: true,
+      missingCatalogOfferIds: true,
+      requestSummary: true,
+      responseSummary: true,
+      errorSummary: true,
+      attemptedAt: true,
+      completedAt: true,
+      createdAt: true,
+      updatedAt: true,
       account: accountSelect(),
     };
   }

@@ -40,6 +40,8 @@ prisma/migrations/*
 !prisma/migrations/20260613213000_add_governed_publish_lifecycle/migration.sql
 !prisma/migrations/20260629143000_normalize_allegro_checkout_forms/
 !prisma/migrations/20260629143000_normalize_allegro_checkout_forms/migration.sql
+!prisma/migrations/20260629210000_add_allegro_order_forwarding_attempts/
+!prisma/migrations/20260629210000_add_allegro_order_forwarding_attempts/migration.sql
 
 # Docker
 docker-compose.override.yml

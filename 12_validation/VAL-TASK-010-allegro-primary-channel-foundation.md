@@ -330,10 +330,70 @@ Date: 2026-06-29
 
 ### Remaining blockers
 
-- `[MISSING: durable central order forwarding attempt/status storage]`
-- `[MISSING: confirmed orders.create.v1 duplicate response and payload-equality procedure]`
+- Durable central order forwarding attempt/status storage is implemented in the addendum below.
+- `orders.create.v1` duplicate/equality behavior is confirmed by orders-microservice source inspection and verification scripts.
 - `[MISSING: governed preview-token policy for OffersController import approval routes]`
 - `[MISSING: Catalog owner approval contract for broad active-offer Catalog import]`
 - `[MISSING: governed Allegro quantity command write-back with polling and terminal state checks]`
-- TASK-009 audit/pre-coding debt remains separate and can still make global IPS
-  readiness gates fail even when TASK-010-specific validation passes.
+- TASK-009 audit/pre-coding debt was repaired separately on 2026-06-29; TASK-010 strict audit, pre-coding, and readiness gates now pass for this slice.
+
+## Durable Order Replay/Equality Storage Addendum
+
+Date: 2026-06-29
+
+### Implemented scope
+
+- Added additive Prisma model and tracked migration `20260629210000_add_allegro_order_forwarding_attempts` for `AllegroOrderForwardingAttempt`.
+- `OrdersService.syncOrdersFromAllegro()` now records forwarding attempt evidence for disabled local-only projection, mapping-blocked forwarding, successful explicit forwarding, and failed explicit forwarding.
+- Forwarding attempt records include `orders.create.v1` idempotency key, channel/account/order identity, payload hash, replay equality status, blocked reasons, request summary, response summary, and error summary.
+- `GET /api/allegro/operations/order-forwarding-attempts` exposes read-only forwarding evidence through the existing authenticated operations surface.
+- Default order sync remains local projection only. Central forwarding still requires `forwardToOrdersMicroservice=true` and exact confirmation `ALLEGRO_ORDER_FORWARDING_TO_ORDERS_MICROSERVICE`.
+
+### Gate evidence
+
+- `git diff --check`: PASS after durable order forwarding storage changes.
+- `npx prisma validate --schema prisma/schema.prisma`: PASS.
+- `npx prisma generate --schema prisma/schema.prisma`: PASS.
+- `npx ts-node services/allegro-service/src/allegro/orders/order-forwarding.mapper.spec.ts`: PASS.
+- `npx ts-node services/allegro-service/src/allegro/orders/orders.service.spec.ts`: PASS. Synthetic coverage includes disabled, blocked, forwarded, and audit-write-failed durable attempt behavior.
+- `npx ts-node services/allegro-service/src/allegro/operations/operations.service.spec.ts`: PASS. Synthetic coverage includes summary counts and order-forwarding-attempt list selection without raw payload/body fields.
+- `cd services/allegro-service && npm run build`: PASS.
+- `npm run ips:audit`: PASS, 100/100, 73 files checked, 0 findings.
+- `npm run ips:pre-coding`: PASS.
+- `python3 scripts/deployment_readiness_gate.py --root . --target TASK-010`: PASS.
+
+### Boundaries
+
+- Migration file is tracked for deployment, but live database migration apply is pending until the deployment step.
+- No deploy was run before this pre-deploy validation addendum.
+- No live central order forwarding command was run.
+- No Warehouse, Catalog, BizBox, Allegro write, payment/refund, shipment, label, or fulfillment write-back path was run.
+- `orders.create.v1` duplicate/equality behavior is confirmed by orders-microservice source inspection and verification scripts. No live central forwarding command was run.
+
+## Orders-Microservice Duplicate/Equality Confirmation Addendum
+
+Date: 2026-06-29
+
+### Confirmed contract
+
+- Orders treats `contractVersion=orders.create.v1`, `channel`, `channelAccountId`, and `externalOrderId` as the create-order idempotency contract.
+- Runtime duplicate lookup uses persisted `channel`, `channelAccountId`, and `externalOrderId` after API contract-version validation.
+- Exact same-key replay returns the existing canonical order with existing item rows.
+- Mismatched same-key replay raises HTTP 409 Conflict before insert, event publish, Warehouse handoff, or other duplicate side effects.
+- Allegro shared `OrderClientService` sends `contractVersion: CREATE_ORDER_CONTRACT_VERSION`, normalizes `channelAccountId`, posts to orders API route /api/orders, and preserves `ORDER_IDEMPOTENCY_CONFLICT` as conflict semantics.
+
+### Evidence
+
+- `orders-microservice`: `npm run build`: PASS.
+- `orders-microservice`: `npm run verify:idempotency-contract`: PASS.
+- `orders-microservice`: `npm run verify:duplicate-order-protection`: PASS.
+- `orders-microservice`: `npm run verify:channel-adapter-idempotency`: FAIL outside this Allegro slice because the broad cross-repo script failed on `flipflop-service order client missing: default`; Allegro order client includes the required contract/version/default/conflict markers.
+- `allegro-service`: `npx ts-node services/allegro-service/src/allegro/orders/order-forwarding.mapper.spec.ts`: PASS.
+- `allegro-service`: `npx ts-node services/allegro-service/src/allegro/orders/orders.service.spec.ts`: PASS.
+- `allegro-service`: `cd services/allegro-service && npm run build`: PASS.
+
+### Boundaries
+
+- No live central order forwarding command was run.
+- No orders-microservice code or database state was changed.
+- No Allegro deploy or live migration apply was run before this pre-deploy validation addendum.
