@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import { buildRawPayloadPolicySnapshot, RAW_PAYLOAD_REDACTION_VERSION } from './raw-payload-policy';
 
 export const SYNC_RECORDING_CONFIRMATION = 'ALLEGRO_SYNC_RECORDING_LOCAL_ONLY';
 
@@ -110,6 +111,7 @@ export async function recordCheckoutFormSyncEvidence(prisma: any, input: Checkou
           lineItems: input.plan.lineItems?.length || 0,
           uniqueOfferIds: input.plan.lineOfferIds?.length || 0,
           missingOfferIds: input.plan.missingOfferIds || [],
+          rawPayloadPolicy: buildRawPayloadPolicySnapshot(),
         },
         createdByUserId: input.account.userId || null,
       },
@@ -141,7 +143,7 @@ export async function recordCheckoutFormSyncEvidence(prisma: any, input: Checkou
         payloadHash,
         payload: form,
         piiClass: 'sensitive_order_payload',
-        redactionVersion: 'v1',
+        redactionVersion: RAW_PAYLOAD_REDACTION_VERSION,
       });
       rawPayloads += 1;
 
@@ -265,6 +267,7 @@ export async function recordStockAuditSyncEvidence(prisma: any, input: StockAudi
             publicationStatuses: report.listedByStatus || {},
             stockAuthoritativeOffers: report.stockAuthoritativeOffers || 0,
             stockAuthoritativeTotal: report.stockAuthoritativeTotal || 0,
+            rawPayloadPolicy: buildRawPayloadPolicySnapshot(),
           },
           errorSummary: report.errors?.length ? { count: report.errors.length, errors: report.errors.slice(0, 20) } : null,
           createdByUserId: report.userId || null,
@@ -299,7 +302,7 @@ export async function recordStockAuditSyncEvidence(prisma: any, input: StockAudi
           payloadHash,
           payload: detailPayload.data,
           piiClass: 'offer_stock_payload',
-          redactionVersion: 'v1',
+          redactionVersion: RAW_PAYLOAD_REDACTION_VERSION,
         });
         summary.rawPayloads += 1;
         const availableQuantity = extractStockQuantity(detailPayload.data);

@@ -19,10 +19,11 @@ Validator: AI agent
 ## Summary
 
 TASK-010 opens the Allegro primary-channel foundation implementation. This
-validation report covers W0/W1, W2, W3, and W4 foundation work: IPS
+validation report covers W0/W1, W2, W3, W4, and W5 foundation work: IPS
 traceability, script-safety guardrails, additive Prisma sync/projection models,
-opt-in local sync evidence recording, publish preview-token binding, and
-no-mutation checks.
+opt-in local sync evidence recording, publish preview-token binding, raw payload
+retention metadata, category-parameter readiness evidence, and no-mutation
+checks.
 
 ## Upstream goal
 
@@ -41,11 +42,14 @@ plan by turning Allegro import and export mapping into safe implementation lanes
 | Publish preview-token binding is bounded | Pass | W4 added `previewToken` confirmation contracts to publish lifecycle and Catalog sell-action confirm routes. `prepare` returns the token, `confirm` requires it, and only token hashes/confirmation metadata are persisted. |
 | Direct offer routes can pass preview-token controls | Pass | W4b added `previewToken` and `lifecycleIdempotencyKey` controls to direct offer update and sync-to-Allegro routes, strips those controls from command payloads, and forwards the token to the governed lifecycle. |
 | Bulk publish can pass preview-token controls | Pass | W4c added bulk publish `lifecycleIdempotencyKeyPrefix`, `previewTokensByIdempotencyKey`, and `previewTokensByOfferId` controls, forwards token maps to `executeMany`, and redacts preview-token maps from request logs. |
+| Raw payload retention policy is explicit and report-only | Pass | W5 added `raw-payload-retention-v1` metadata, policy snapshots in opt-in sync run config, and a read-only retention audit script. No cleanup, delete, redaction, import, export, or live Allegro write path was added. |
+| Category-parameter export readiness has offline evidence | Pass | W5 added the category parameter API wrapper, authenticated read route, and a pure readiness evaluator with synthetic tests for required parameter coverage. Live UI enforcement and complete category mapping remain gated. |
 | Migration was not applied to live database | Pass | W2 ran Prisma validate/generate and service build only. It did not run `migrate deploy`, direct migration runners, import scripts, or live data mutation commands. |
 | Migration was not applied to live database in W3 | Pass | W3 ran Prisma validate/generate and service build only. It did not run `migrate deploy`, direct migration runners, import scripts, live data mutation commands, or deploy. |
 | Live publish was not executed in W4 validation | Pass | W4 validation used build and synthetic unit specs only. It did not run live publish/update, Allegro write endpoints, migration apply, deploy, Warehouse stock mutation, or BizBox apply. |
 | Live publish was not executed in W4b validation | Pass | W4b validation used diff, build, and synthetic publish lifecycle spec only. It did not run live publish/update, Allegro write endpoints, migration apply, deploy, Warehouse stock mutation, or BizBox apply. |
 | Live publish was not executed in W4c validation | Pass | W4c validation used diff, build, and synthetic publish lifecycle spec only. It did not run live publish/update, Allegro write endpoints, migration apply, deploy, Warehouse stock mutation, or BizBox apply. |
+| Live mutation paths were not executed in W5 validation | Pass | W5 validation used diff, build, synthetic category readiness tests, documentation review, and report-only code paths only. It did not run live Allegro reads/writes, import apply, export apply, migration apply, deploy, Warehouse stock mutation, or BizBox apply. |
 | Stock apply remains owner-gated | Pass | `services/allegro-service/src/scripts/import-current-allegro-stock-to-warehouse.ts` was not edited or executed in TASK-010 follow-up validation. |
 | TASK-009 audit debt remains separate | Pass with debt | Strict audit and pre-coding failures name TASK-009 documentation/graph issues; TASK-010-specific strict-audit findings were corrected. |
 
@@ -110,6 +114,16 @@ plan by turning Allegro import and export mapping into safe implementation lanes
   bulk publish preview-token pass-through.
 - `npx ts-node services/allegro-service/src/allegro/publish-lifecycle/publish-lifecycle.update-terminal.spec.ts`:
   PASS on 2026-06-29 after W4c bulk publish preview-token pass-through.
+- `git diff --check`: PASS on 2026-06-29 after W5 raw payload retention and
+  category-parameter readiness updates.
+- `npx ts-node services/allegro-service/src/allegro/categories/category-parameter-readiness.spec.ts`:
+  PASS on 2026-06-29. Synthetic tests cover ready, missing required parameter,
+  and missing category requirement cases.
+- `cd services/allegro-service && npm run build`: PASS on 2026-06-29 after W5
+  raw payload retention and category-parameter readiness updates.
+- `npm run ips:audit`: FAIL on 2026-06-29 after W5 with the same 17 TASK-009
+  documentation/graph findings; no new TASK-010 findings appeared in the gate
+  output.
 
 ## Invariant evidence
 
@@ -183,6 +197,19 @@ accepts a stable lifecycle idempotency prefix plus tokens keyed either by
 idempotency key or offer id, forwards the resolved token map to `executeMany`,
 and redacts token maps from request-body logs.
 
+W5 makes raw payload retention explicit without adding destructive cleanup.
+Opt-in sync recording snapshots `raw-payload-retention-v1` policy metadata, uses
+the shared redaction version constant, and exposes a report-only audit script
+that can count rows past their retention windows. The script is intentionally
+read-only: it reports retention debt but does not update, redact, delete, import,
+export, deploy, or call live Allegro.
+
+W5 also adds category-parameter readiness evidence before broader offer export.
+The Allegro category parameter wrapper and authenticated read route provide the
+missing local retrieval surface, while the pure readiness evaluator can validate
+whether a draft contains required category parameters using synthetic payloads.
+This does not yet claim full category coverage or live UI enforcement.
+
 ## Issues found
 
 - Known pre-existing issue: TASK-009 documentation/graph audit debt existed
@@ -196,24 +223,27 @@ and redacts token maps from request-body logs.
   write-back is not granted in TASK-010.
 - Fulfillment owner approval for shipment and label write-back is not granted in
   TASK-010.
-- Raw payload retention policy and full PII class taxonomy remain follow-up
-  design work before broad scheduled raw payload capture is enabled outside
-  explicitly confirmed operator scripts.
+- Raw payload cleanup/delete automation is not implemented. Retention is
+  metadata/report-only until a separate owner-approved maintenance job exists.
+- Full live category mapping coverage and UI/API enforcement of category
+  parameter readiness remain gated beyond the W5 offline helper.
 - W3 did not apply the W2 migration to any live database, so the new recording
   flags require the target database to already have W2 tables deployed.
 - W4 intentionally makes confirmation token-bound. Direct convenience routes
   that still use one-step prepare/confirm/execute must either accept and forward
   preview tokens or remain blocked/fail-closed before production use.
 - W4b/W4c cover direct single-offer update, sync-to-Allegro, and bulk publish
-  token propagation. Retention policy, category/parameter export evidence, and
-  migration/deploy coordination remain follow-up work before production use.
+  token propagation. W5 covers retention metadata and offline category-parameter
+  readiness evidence. Migration/deploy coordination, live category coverage, and
+  owner-approved stock apply remain follow-up work before production use.
 
 ## Recommendation
 
-Accept TASK-010-W0, W1, W2, W3, and W4 preview-token binding as implemented with
-validation debt noted. Do not claim full deployment readiness until TASK-009
-audit debt is repaired or the readiness gates are made task-scoped enough to
-ignore unrelated historical debt.
+Accept TASK-010-W0, W1, W2, W3, W4 preview-token binding, and W5
+retention/category-readiness foundation as implemented with validation debt
+noted. Do not claim full deployment readiness until TASK-009 audit debt is
+repaired or the readiness gates are made task-scoped enough to ignore unrelated
+historical debt, and do not run live apply paths without owner approval.
 
 ## Traceability confirmation
 

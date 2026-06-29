@@ -2123,6 +2123,12 @@ Rules:
 - Redact buyer and address fields in validation artifacts.
 - Limit raw payload access to trusted debug paths.
 - Record `piiClass` and `redactionVersion`.
+- Retain raw payloads according to `raw-payload-retention-v1`:
+  `sensitive_order_payload` for 90 days, `offer_stock_payload` and
+  `offer_catalog_payload` for 180 days, `category_parameter_payload` for 365
+  days, and unknown classes for 30 days.
+- Treat retention cleanup as report-only until a separate owner-approved delete
+  or redaction job is implemented.
 - Avoid storing binary invoice/shipment documents until storage policy exists.
 - Do not expose tokens, OAuth secrets, or account credentials in docs or logs.
 
@@ -2168,12 +2174,11 @@ resolved:
 - `[MISSING: confirmed Allegro OAuth scopes for billing, payments, returns, claims, invoices, issues, shipments, and fulfillment]`
 - `[MISSING: Warehouse sellable stock semantics and reservation policy]`
 - `[MISSING: stock orchestration approval for live Allegro quantity commands]`
-- `[MISSING: category and parameter mapping completeness for publish]`
+- `[MISSING: category and parameter mapping completeness for publish beyond offline readiness helper]`
 - `[MISSING: finance owner decision for payment/refund/settlement writes]`
 - `[MISSING: customer service owner decision for return/claim/issue write-back]`
 - `[MISSING: fulfillment owner decision for shipment label/document creation]`
 - `[MISSING: production account rate-limit policy]`
-- `[MISSING: raw payload retention policy]`
 - `[MISSING: central order duplicate/idempotency behavior confirmation]`
 - `[UNKNOWN: whether One Fulfillment is enabled for the current account]`
 - `[UNKNOWN: whether all 60 visible Sales Center orders are represented in the current local projection snapshot]`

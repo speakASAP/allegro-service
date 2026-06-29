@@ -23,6 +23,13 @@ export class CategoriesController {
     return { success: true, data: result };
   }
 
+  @Get(':id/parameters')
+  @UseGuards(JwtAuthGuard)
+  async getCategoryParameters(@Param('id') id: string) {
+    const parameters = await this.categoriesService.getCategoryParameters(id);
+    return { success: true, data: parameters };
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   async getCategory(@Param('id') id: string) {
@@ -30,4 +37,3 @@ export class CategoriesController {
     return { success: true, data: category };
   }
 }
-

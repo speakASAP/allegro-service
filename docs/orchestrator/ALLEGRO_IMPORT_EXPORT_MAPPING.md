@@ -469,6 +469,10 @@ These entities are official Allegro domains but are not implemented as first-cla
 Future model rules:
 
 - Store raw payloads for round-trip/reconciliation, but redact logs and docs.
+- Apply `raw-payload-retention-v1` as metadata-only policy until cleanup is
+  owner-approved: 90 days for sensitive order payloads, 180 days for offer stock
+  and catalog payloads, 365 days for category/parameter payloads, and 30 days
+  for unknown payload classes.
 - Add normalized join keys first: `accountId`, `marketplaceId`, `orderExternalId`, `offerExternalId`, `allegroLineItemId`, `paymentId`, `shipmentId`, `commandId`.
 - Preserve Allegro money signs and currencies. Do not convert currency without an approved FX source.
 - Use idempotent upsert keys from Allegro ids or command ids.
@@ -621,7 +625,9 @@ Required canonical inputs:
 - Stock target, capped to Warehouse availability. This is a publish draft input, not a stock synchronization proof.
 - Images with public URLs.
 - Delivery/payment/location policy.
-- `[MISSING: local wrapper/UI validation for GET /sale/categories/{categoryId}/parameters and required parameter constraints]`
+- Category-parameter wrapper exists through `CategoriesService.getCategoryParameters()`
+  and offline readiness evidence exists in `category-parameter-readiness.spec.ts`;
+  live UI enforcement and full category mapping coverage are still gated.
 - `[MISSING: explicit contract splitting productSet product parameters from offer-level parameters for Catalog-to-Allegro creation]`
 
 ### Offer Update
@@ -696,7 +702,9 @@ Offer/product gates:
 - PATCH must not include fields Allegro rejects.
 - Partial/order-only recovered offers remain marked partial.
 - Draft `quantity` and `stockQuantity` must not exceed Warehouse `getTotalAvailable()`.
-- Category parameter requirements must be validated before create/update; this wrapper/UI validation is still missing.
+- Category parameter requirements must be validated before create/update. The
+  local wrapper and offline readiness helper exist; live UI enforcement and full
+  category coverage are still gated.
 
 Stock gates:
 

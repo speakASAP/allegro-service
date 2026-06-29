@@ -1011,6 +1011,13 @@ export class AllegroApiService {
   }
 
   /**
+   * Get category parameters
+   */
+  async getCategoryParameters(categoryId: string) {
+    return this.request('GET', `/sale/categories/${categoryId}/parameters`);
+  }
+
+  /**
    * Update offer stock
    */
   async updateOfferStock(offerId: string, quantity: number) {

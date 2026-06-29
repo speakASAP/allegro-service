@@ -4,14 +4,14 @@
   "stage": "production",
   "health": "ok",
   "cycle": 6,
-  "last_cycle_at": "2026-06-29T19:10:00Z",
+  "last_cycle_at": "2026-06-29T19:45:00Z",
   "tasks_active": 1,
   "tasks_failed_last_cycle": 0,
   "open_task_ids": [
     "TASK-010"
   ],
   "last_milestone": "task009-public-client-landing-dashboard-live-validated",
-  "next_focus": "TASK-010 W4c bulk publish preview-token propagation complete after commit: continue with raw payload retention policy, category/parameter export evidence, and migration/deploy coordination; stock apply remains owner-gated.",
+  "next_focus": "TASK-010 W5 raw payload retention metadata and category-parameter offline readiness complete after commit: continue with W2 migration/deploy coordination, live category coverage enforcement, and remaining domain import/export adapters; stock apply remains owner-gated.",
   "blockers": [],
   "budget_units_used": 0,
   "metrics": {

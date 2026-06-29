@@ -48,5 +48,21 @@ export class CategoriesService {
       throw error;
     }
   }
-}
 
+  /**
+   * Get category parameter requirements from Allegro.
+   */
+  async getCategoryParameters(categoryId: string) {
+    this.logger.log('Fetching category parameters from Allegro', { categoryId });
+
+    try {
+      return await this.allegroApi.getCategoryParameters(categoryId);
+    } catch (error: any) {
+      this.logger.error('Failed to fetch category parameters', {
+        categoryId,
+        error: error.message,
+      });
+      throw error;
+    }
+  }
+}
