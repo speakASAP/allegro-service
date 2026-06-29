@@ -4,14 +4,14 @@
   "stage": "production",
   "health": "ok",
   "cycle": 6,
-  "last_cycle_at": "2026-06-29T18:45:00Z",
+  "last_cycle_at": "2026-06-29T19:00:00Z",
   "tasks_active": 1,
   "tasks_failed_last_cycle": 0,
   "open_task_ids": [
     "TASK-010"
   ],
   "last_milestone": "task009-public-client-landing-dashboard-live-validated",
-  "next_focus": "TASK-010 W4 preview-token confirmation gate complete after commit: continue with direct route preview-token propagation, raw payload retention policy, category/parameter export evidence, and migration/deploy coordination; stock apply remains owner-gated.",
+  "next_focus": "TASK-010 W4b direct single-offer preview-token propagation complete after commit: continue with bulk publish token propagation, raw payload retention policy, category/parameter export evidence, and migration/deploy coordination; stock apply remains owner-gated.",
   "blockers": [],
   "budget_units_used": 0,
   "metrics": {

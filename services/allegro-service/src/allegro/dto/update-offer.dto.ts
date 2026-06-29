@@ -70,5 +70,12 @@ export class UpdateOfferDto {
   @IsOptional()
   @IsBoolean()
   syncToAllegro?: boolean;
-}
 
+  @IsOptional()
+  @IsString()
+  previewToken?: string;
+
+  @IsOptional()
+  @IsString()
+  lifecycleIdempotencyKey?: string;
+}

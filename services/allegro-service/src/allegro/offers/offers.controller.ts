@@ -59,8 +59,15 @@ export class OffersController {
   }
 
   private buildLifecycleIdempotencyKey(prefix: string, userId: string, offerId: string, payload: unknown): string {
-    const digest = createHash('sha256').update(JSON.stringify(payload || {})).digest('hex').slice(0, 32);
+    const digest = createHash('sha256').update(JSON.stringify(this.toLifecycleCommandPayload(payload) || {})).digest('hex').slice(0, 32);
     return `${prefix}:${userId}:${offerId}:${digest}`;
+  }
+
+  private toLifecycleCommandPayload(payload: unknown): Record<string, unknown> {
+    const commandPayload = { ...((payload || {}) as Record<string, unknown>) };
+    delete commandPayload.previewToken;
+    delete commandPayload.lifecycleIdempotencyKey;
+    return commandPayload;
   }
 
   @Get()
@@ -566,15 +573,17 @@ export class OffersController {
         fields: Object.keys(dto),
       });
       if (this.isRemoteAffectingOfferUpdate(dto)) {
+        const commandPayload = this.toLifecycleCommandPayload(dto);
         const attempt = await this.publishLifecycleService.prepareConfirmAndExecute(
           {
             action: 'UPDATE',
             offerId: id,
-            idempotencyKey: this.buildLifecycleIdempotencyKey('offer-update', userId, id, dto),
-            commandPayload: dto as Record<string, unknown>,
+            idempotencyKey: dto.lifecycleIdempotencyKey || this.buildLifecycleIdempotencyKey('offer-update', userId, id, commandPayload),
+            commandPayload,
           },
           userId,
           `offer-update-${id}-${Date.now()}`,
+          dto.previewToken,
         );
         this.logger.log('Governed offer update completed', {
           userId,
@@ -653,7 +662,11 @@ export class OffersController {
 
   @Post(':id/sync-to-allegro')
   @UseGuards(JwtAuthGuard)
-  async syncToAllegro(@Param('id') id: string, @Request() req: any): Promise<{ success: boolean; data: any }> {
+  async syncToAllegro(
+    @Param('id') id: string,
+    @Body() body: { previewToken?: string; lifecycleIdempotencyKey?: string } = {},
+    @Request() req: any,
+  ): Promise<{ success: boolean; data: any }> {
     const userId = String(req.user?.id || 'unknown');
     this.logger.log('[syncToAllegro] Sync-to-Allegro endpoint called', {
       offerId: id,
@@ -662,9 +675,15 @@ export class OffersController {
     });
     try {
       const result = await this.publishLifecycleService.prepareConfirmAndExecute(
-        { action: 'UPDATE', offerId: id, idempotencyKey: `sync-to-allegro:${userId}:${id}:${Date.now()}` },
+        {
+          action: 'UPDATE',
+          offerId: id,
+          idempotencyKey: body.lifecycleIdempotencyKey || `sync-to-allegro:${userId}:${id}:${Date.now()}`,
+          commandPayload: { source: 'sync-to-allegro-route' },
+        },
         userId,
         `sync-to-allegro-${id}-${Date.now()}`,
+        body.previewToken,
       );
       this.logger.log('[syncToAllegro] Governed sync-to-Allegro completed', {
         offerId: id,
@@ -1162,4 +1181,3 @@ export class OffersController {
     }
   }
 }
-

@@ -1706,11 +1706,14 @@ Implemented foundation:
   hash/confirmation metadata in `policySnapshot.previewTokenBinding`.
 - Catalog sell-action confirm routes pass the preview token through to the
   governed publish lifecycle.
+- Direct single-offer update and sync-to-Allegro routes accept preview-token and
+  lifecycle idempotency controls, strip those controls from command payloads,
+  and forward the token to the governed lifecycle.
 
 Remaining gated work:
 
-- direct update/publish convenience routes need explicit preview-token request
-  body propagation or must remain fail-closed;
+- bulk publish/execute-many convenience routes need explicit preview-token
+  propagation or must remain fail-closed;
 - category/parameter completeness evidence is still required before broad offer
   export apply;
 - live publish/update execution remains prohibited without owner approval and
