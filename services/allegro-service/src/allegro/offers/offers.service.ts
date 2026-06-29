@@ -2023,6 +2023,8 @@ export class OffersService {
     const limit = 100;
     let hasMore = true;
     let totalImported = 0;
+    const publicationStatuses = ['ACTIVE', 'INACTIVE', 'ENDED', 'ACTIVATING'];
+    const seenOfferIds = new Set<string>();
 
     if (!userId) {
       throw new Error('OAuth authorization required. User context missing.');
@@ -2042,18 +2044,24 @@ export class OffersService {
       accountName: activeAccount?.name,
     });
 
-    while (hasMore) {
-      try {
-        const response = await this.allegroApi.getOffersWithOAuthToken(oauthToken, {
-          limit,
-          offset,
-        });
+    for (const publicationStatus of publicationStatuses) {
+      offset = 0;
+      hasMore = true;
+
+      while (hasMore) {
+        try {
+          const response = await this.allegroApi.getOffersWithOAuthToken(oauthToken, {
+            limit,
+            offset,
+            'publication.status': publicationStatus,
+          });
 
         const offers = response.offers || [];
         
         // Log after receiving data from Allegro API
         this.logger.log('[importAllOffers] Received data from Allegro API', {
           totalOffers: offers.length,
+          publicationStatus,
           offset,
           limit,
           responseKeys: Object.keys(response),
@@ -2066,6 +2074,7 @@ export class OffersService {
         // If no offers returned, log and exit
         if (offers.length === 0) {
           this.logger.warn('[importAllOffers] No offers returned from Allegro API', {
+            publicationStatus,
             offset,
             limit,
             responseCount: response.count,
@@ -2078,6 +2087,15 @@ export class OffersService {
         }
         
         for (const allegroOffer of offers) {
+          if (seenOfferIds.has(allegroOffer.id)) {
+            this.logger.log('[importAllOffers] Skipping duplicate offer returned by multiple publication-status queries', {
+              offerId: allegroOffer.id,
+              publicationStatus,
+            });
+            continue;
+          }
+          seenOfferIds.add(allegroOffer.id);
+
           try {
             // Log raw data received from Allegro API
             this.logger.log('[importAllOffers] Processing offer from Allegro API', {
@@ -2260,7 +2278,13 @@ export class OffersService {
       }
     }
 
-    this.logger.log('Finished importing offers', { totalImported, userId });
+    }
+    this.logger.log('Finished importing offers', {
+      totalImported,
+      uniqueOffersSeen: seenOfferIds.size,
+      publicationStatuses,
+      userId,
+    });
     return { totalImported };
   }
 
