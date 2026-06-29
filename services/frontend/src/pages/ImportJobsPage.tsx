@@ -41,6 +41,9 @@ const ImportJobsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [requiresOAuth, setRequiresOAuth] = useState(false);
+  const [selectedCsvFile, setSelectedCsvFile] = useState<File | null>(null);
+  const [csvInputKey, setCsvInputKey] = useState(0);
+  const [uploadingCsv, setUploadingCsv] = useState(false);
 
   // Import preview states
   const [showImportPreview, setShowImportPreview] = useState(false);
@@ -118,6 +121,62 @@ const ImportJobsPage: React.FC = () => {
       }
     } finally {
       setLoadingJobs(false);
+    }
+  };
+
+
+  const handleCsvFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    setSelectedCsvFile(file);
+    setError(null);
+    setSuccess(null);
+  };
+
+  const handleUploadBizboxCsv = async () => {
+    if (!selectedCsvFile) {
+      setError('Select a BizBox CSV file before uploading.');
+      return;
+    }
+
+    setUploadingCsv(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedCsvFile);
+
+      const response = await api.post('/import/csv', formData, {
+        timeout: 180000,
+      });
+
+      if (response.data.success) {
+        const job = response.data.data;
+        const processedRows = job?.processedRows ?? 0;
+        const successfulRows = job?.successfulRows ?? 0;
+        const failedRows = job?.failedRows ?? 0;
+        setSuccess(`BizBox stock CSV imported: ${selectedCsvFile.name} (${successfulRows}/${processedRows} rows successful, ${failedRows} failed).`);
+        setSelectedCsvFile(null);
+        setCsvInputKey((value) => value + 1);
+        await loadJobs();
+      }
+    } catch (err) {
+      console.error('Failed to upload BizBox CSV', err);
+      if (err instanceof AxiosError) {
+        if (err.response?.status === 401) {
+          return;
+        }
+        const axiosError = err as AxiosError & { isConnectionError?: boolean; serviceErrorMessage?: string };
+        if (axiosError.isConnectionError && axiosError.serviceErrorMessage) {
+          setError(axiosError.serviceErrorMessage);
+        } else {
+          setError(err.response?.data?.error?.message || 'Failed to upload BizBox CSV');
+        }
+      } else {
+        setError('Failed to upload BizBox CSV');
+      }
+    } finally {
+      setUploadingCsv(false);
     }
   };
 
@@ -563,7 +622,7 @@ const ImportJobsPage: React.FC = () => {
             <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
               <Button
                 onClick={handleImportAllOffers}
-                disabled={loadingImportAll || loadingImportAndFix || loadingImportAllegro || loadingImportSalesCenter || processingImport}
+                disabled={loadingImportAll || loadingImportAndFix || loadingImportAllegro || loadingImportSalesCenter || processingImport || uploadingCsv}
                 variant="primary"
                 size="medium"
                 className="flex-1"
@@ -572,7 +631,7 @@ const ImportJobsPage: React.FC = () => {
               </Button>
               <Button
                 onClick={handleImportAndFixTitles}
-                disabled={loadingImportAll || loadingImportAndFix || loadingImportAllegro || loadingImportSalesCenter || processingImport}
+                disabled={loadingImportAll || loadingImportAndFix || loadingImportAllegro || loadingImportSalesCenter || processingImport || uploadingCsv}
                 variant="secondary"
                 size="medium"
                 className="flex-1"
@@ -581,7 +640,7 @@ const ImportJobsPage: React.FC = () => {
               </Button>
               <Button
                 onClick={() => handlePreviewImport('allegro')}
-                disabled={loadingImportAll || loadingImportAndFix || loadingImportAllegro || loadingImportSalesCenter || processingImport}
+                disabled={loadingImportAll || loadingImportAndFix || loadingImportAllegro || loadingImportSalesCenter || processingImport || uploadingCsv}
                 variant="secondary"
                 size="medium"
                 className="flex-1"
@@ -600,11 +659,44 @@ const ImportJobsPage: React.FC = () => {
           </div>
         </Card>
 
+
+        <Card title="BizBox Stock CSV Import">
+          <div className="space-y-4">
+            <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
+              <input
+                key={csvInputKey}
+                type="file"
+                accept=".csv,text/csv"
+                onChange={handleCsvFileChange}
+                disabled={uploadingCsv}
+                className="block w-full text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:bg-gray-200 file:px-4 file:py-2 file:text-sm file:font-medium file:text-gray-800 hover:file:bg-gray-300 disabled:opacity-60"
+              />
+              <Button
+                onClick={handleUploadBizboxCsv}
+                disabled={!selectedCsvFile || uploadingCsv}
+                variant="primary"
+                size="medium"
+                className="lg:w-56"
+              >
+                {uploadingCsv ? 'Uploading...' : 'Upload Stock CSV'}
+              </Button>
+            </div>
+            {selectedCsvFile && (
+              <p className="text-sm text-gray-600">
+                Selected file: <span className="font-medium text-gray-900">{selectedCsvFile.name}</span>
+              </p>
+            )}
+            <p className="text-sm text-gray-600">
+              Uploads a BizBox CSV and updates Warehouse stock from the stock:minimumRequiredLevel:* columns.
+            </p>
+          </div>
+        </Card>
+
         {/* Secondary Actions */}
         <div className="flex justify-end space-x-2">
           <Button
             onClick={() => handlePreviewImport('sales-center')}
-            disabled={loadingImportAll || loadingImportAndFix || loadingImportAllegro || loadingImportSalesCenter || processingImport}
+            disabled={loadingImportAll || loadingImportAndFix || loadingImportAllegro || loadingImportSalesCenter || processingImport || uploadingCsv}
             variant="secondary"
             size="small"
           >

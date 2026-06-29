@@ -8,9 +8,18 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { AxiosRequestConfig } from 'axios';
+import * as FormData from 'form-data';
 import { LoggerService } from '@allegro/shared';
 import { Agent as HttpAgent } from 'http';
 import { Agent as HttpsAgent } from 'https';
+
+interface GatewayMultipartFile {
+  originalname: string;
+  mimetype: string;
+  size: number;
+  buffer: Buffer;
+}
+
 
 @Injectable()
 export class GatewayService implements OnModuleInit {
@@ -985,6 +994,106 @@ export class GatewayService implements OnModuleInit {
       
       throw error;
     }
+  }
+
+
+  async forwardMultipartFile(
+    serviceName: string,
+    path: string,
+    method: string,
+    file: GatewayMultipartFile | undefined,
+    headers?: Record<string, string>,
+  ): Promise<any> {
+    const baseUrl = this.serviceUrls[serviceName];
+    if (!baseUrl) {
+      throw new Error(`Service ${serviceName} not configured`);
+    }
+    if (!file) {
+      throw new Error('No file uploaded');
+    }
+    if (method.toUpperCase() !== 'POST') {
+      throw new Error(`Unsupported multipart method: ${method}`);
+    }
+
+    const url = `${baseUrl}${path}`;
+    const form = new FormData();
+    form.append('file', file.buffer, {
+      filename: file.originalname,
+      contentType: file.mimetype || 'text/csv',
+      knownLength: file.size,
+    });
+
+    const defaultTimeout = (() => {
+      const gatewayTimeout = this.configService.get<string>('GATEWAY_TIMEOUT');
+      const httpTimeout = this.configService.get<string>('HTTP_TIMEOUT');
+      const timeout = gatewayTimeout || httpTimeout;
+      if (!timeout) {
+        throw new Error('GATEWAY_TIMEOUT or HTTP_TIMEOUT must be configured in .env file');
+      }
+      return parseInt(timeout);
+    })();
+    const timeout = Math.max(defaultTimeout, 120000);
+    const isHttps = url.startsWith('https://');
+    const requestId = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const startTime = Date.now();
+
+    const config: AxiosRequestConfig = {
+      headers: {
+        ...headers,
+        ...form.getHeaders(),
+      },
+      timeout,
+      maxRedirects: 0,
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+      validateStatus: (status) => status >= 200 && status < 600,
+      httpAgent: isHttps ? undefined : this.httpAgent,
+      httpsAgent: isHttps ? this.httpsAgent : undefined,
+      metadata: {
+        requestId,
+        serviceName,
+        method,
+        url,
+        path,
+      },
+    } as any;
+
+    this.sharedLogger.info(`[${requestId}] Forwarding multipart file request`, {
+      serviceName,
+      method,
+      url,
+      path,
+      fileName: file.originalname,
+      fileSize: file.size,
+      fileMimeType: file.mimetype,
+      headers: Object.keys(headers || {}),
+      authorizationHeader: headers?.Authorization ? 'present' : 'missing',
+      timeout,
+      timestamp: new Date().toISOString(),
+    });
+
+    const response = await firstValueFrom(this.httpService.post(url, form, config));
+    const duration = Date.now() - startTime;
+
+    this.sharedLogger.info(`[${requestId}] Multipart file request completed`, {
+      serviceName,
+      method,
+      url,
+      path,
+      statusCode: response.status,
+      statusText: response.statusText,
+      duration: `${duration}ms`,
+      responseKeys: response.data && typeof response.data === 'object' ? Object.keys(response.data) : [],
+      timestamp: new Date().toISOString(),
+    });
+
+    if (response.status >= 400) {
+      const error: any = new Error(response.data?.error?.message || response.data?.message || `Multipart request failed with status ${response.status}`);
+      error.response = response;
+      throw error;
+    }
+
+    return response.data;
   }
 
   private throwConfigError(key: string): never {

@@ -123,6 +123,12 @@ api.interceptors.request.use(
       }
     }
     
+
+    if (typeof FormData !== 'undefined' && config.data instanceof FormData && config.headers) {
+      delete config.headers['Content-Type'];
+      delete config.headers['content-type'];
+    }
+
     const token = localStorage.getItem('accessToken');
     if (token) {
       // Validate token format before using it

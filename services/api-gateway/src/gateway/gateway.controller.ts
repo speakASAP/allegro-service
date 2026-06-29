@@ -7,15 +7,29 @@ import {
   Controller,
   All,
   Get,
+  Post,
   Req,
   Res,
   UseGuards,
   UnauthorizedException,
   Logger,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
 import { GatewayService } from './gateway.service';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard, LoggerService } from '@allegro/shared';
 import { Request as ExpressRequest, Response as ExpressResponse } from 'express';
+
+interface GatewayUploadedFile {
+  fieldname: string;
+  originalname: string;
+  encoding: string;
+  mimetype: string;
+  size: number;
+  buffer: Buffer;
+}
+
 
 @Controller('api')
 export class GatewayController {
@@ -102,6 +116,22 @@ export class GatewayController {
   async allegroRoute(@Req() req: ExpressRequest, @Res() res: ExpressResponse) {
     const path = req.url.replace('/api/allegro', '');
     return this.routeRequest('allegro', `/allegro${path}`, req, res);
+  }
+
+
+  /**
+   * Route BizBox stock CSV uploads (requires auth)
+   */
+  @Post('import/csv')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  async importCsvUpload(
+    @Req() req: ExpressRequest,
+    @Res() res: ExpressResponse,
+    @UploadedFile() file: GatewayUploadedFile | undefined,
+  ) {
+    const path = req.url.replace('/api/import', '');
+    return this.routeMultipartFileRequest('import', `/import${path}`, req, res, file);
   }
 
   /**
@@ -227,6 +257,84 @@ export class GatewayController {
       requestPath: req.path,
       timestamp: new Date().toISOString(),
     });
+  }
+
+
+  /**
+   * Helper to route multipart file upload requests
+   */
+  private async routeMultipartFileRequest(
+    serviceName: string,
+    path: string,
+    req: ExpressRequest,
+    res: ExpressResponse,
+    file: GatewayUploadedFile | undefined,
+  ) {
+    const method = req.method;
+    const requestId = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const startTime = Date.now();
+    const timestamp = new Date().toISOString();
+
+    this.sharedLogger.info(`[${timestamp}] [TIMING] GatewayController.routeMultipartFileRequest START`, {
+      requestId,
+      serviceName,
+      method,
+      path,
+      originalUrl: req.originalUrl,
+      hasAuth: !!req.headers.authorization,
+      hasFile: !!file,
+      fileName: file?.originalname,
+      fileSize: file?.size,
+      contentType: req.headers['content-type'],
+    });
+
+    try {
+      const response = await this.gatewayService.forwardMultipartFile(
+        serviceName,
+        path,
+        method,
+        file,
+        this.getHeaders(req),
+      );
+
+      const duration = Date.now() - startTime;
+      this.sharedLogger.info(`[${requestId}] Multipart request completed successfully`, {
+        serviceName,
+        method,
+        path,
+        statusCode: 200,
+        duration: `${duration}ms`,
+      });
+
+      res.status(200).json(response);
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      const errorStatus = error.response?.status || error.status;
+      const errorData = error.response?.data;
+
+      this.sharedLogger.error(`[${requestId}] Multipart request failed`, {
+        serviceName,
+        method,
+        path,
+        originalUrl: req.originalUrl,
+        duration: `${duration}ms`,
+        errorType: error.constructor?.name,
+        errorMessage: error.message,
+        errorCode: error.code,
+        errorStatus,
+        errorData,
+      });
+      this.logger.error(`[${requestId}] ${method} ${req.originalUrl} failed: ${error.message}`);
+
+      const statusCode = errorStatus || 500;
+      res.status(statusCode).json({
+        success: false,
+        error: {
+          code: errorData?.error?.code || errorData?.code || 'GATEWAY_MULTIPART_ERROR',
+          message: errorData?.error?.message || errorData?.message || error.message || 'Multipart upload failed',
+        },
+      });
+    }
   }
 
   /**
