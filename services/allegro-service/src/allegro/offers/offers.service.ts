@@ -32,6 +32,42 @@ export class OffersService {
   private readonly encryptionKey: string;
   private readonly encryptionAlgorithm = 'aes-256-cbc';
 
+  private extractOrderStats(rawData: any): { orderCount: number; orderedQuantity: number; lastOrderAt?: string | null } | null {
+    const stats = rawData?.orderStats || rawData?.orderOfferHarvest?.orderStats || rawData?.orderEvidence?.orderStats;
+    if (!stats || typeof stats !== 'object') {
+      return null;
+    }
+
+    return {
+      orderCount: Number(stats.orderCount || 0),
+      orderedQuantity: Number(stats.orderedQuantity || stats.quantity || 0),
+      lastOrderAt: typeof stats.lastOrderAt === 'string' ? stats.lastOrderAt : null,
+    };
+  }
+
+  private buildRecoveryMetadata(offer: any): any {
+    const orderStats = this.extractOrderStats(offer.rawData);
+    const isOrderHistory = offer.syncSource === 'ORDER_HISTORY';
+    const hasImages = Array.isArray(offer.images) && offer.images.length > 0;
+    const hasDescription = Boolean(offer.description && String(offer.description).trim());
+    const hasParameters = Array.isArray(offer.rawData?.parameters) && offer.rawData.parameters.length > 0;
+    const missingFields = [
+      !hasDescription ? 'description' : null,
+      !hasImages ? 'images' : null,
+      !hasParameters ? 'parameters' : null,
+    ].filter(Boolean);
+
+    return {
+      ...offer,
+      orderStats,
+      recoveryStatus: isOrderHistory && offer.syncStatus === 'PARTIAL' ? 'PARTIAL' : 'FULL',
+      missingFields,
+      recoveryNote: isOrderHistory && missingFields.length > 0
+        ? '[MISSING: Allegro API returned 404 for old offer]'
+        : null,
+    };
+  }
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly logger: LoggerService,
@@ -99,6 +135,38 @@ export class OffersService {
     if (query.accountId) {
       where.accountId = query.accountId;
     }
+    if (query.source) {
+      where.syncSource = query.source;
+    }
+
+    const select = {
+      id: true,
+      allegroOfferId: true,
+      title: true,
+      description: true,
+      categoryId: true,
+      price: true,
+      currency: true,
+      stockQuantity: true,
+      status: true,
+      publicationStatus: true,
+      lastSyncedAt: true,
+      syncSource: true,
+      syncStatus: true,
+      validationStatus: true,
+      lastValidatedAt: true,
+      createdAt: true,
+      updatedAt: true,
+      images: true,
+      rawData: true,
+      accountId: true,
+      account: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    } as const;
 
     console.log(`[${timestamp}] [TIMING] OffersService.getOffers START`, {
       filters: {
@@ -106,66 +174,42 @@ export class OffersService {
         categoryId: query.categoryId,
         search: query.search,
         accountId: query.accountId,
+        source: query.source,
+        sort: query.sort,
       },
       pagination: { page, limit, skip },
     });
 
     // Optimized: Load offers without relations first (fast), relations can be loaded on-demand
     const dbQueryStartTime = Date.now();
-    const [items, total] = await Promise.all([
-      this.prisma.allegroOffer.findMany({
+    let items: any[];
+    let total: number;
+
+    if (query.sort === 'orderCount') {
+      const allItems = await this.prisma.allegroOffer.findMany({
         where,
-        skip,
-        take: limit,
-        select: {
-          id: true,
-          allegroOfferId: true,
-          title: true,
-          // Exclude description for list view (it's TEXT and can be very large)
-          // description: true,
-          categoryId: true,
-          price: true,
-          currency: true,
-          stockQuantity: true,
-          status: true,
-          publicationStatus: true,
-          lastSyncedAt: true,
-          syncSource: true,
-          validationStatus: true,
-          // Exclude validationErrors for list view (it's JSON and can be large)
-          // validationErrors: true,
-          lastValidatedAt: true,
-          createdAt: true,
-          updatedAt: true,
-          // Multi-account support
-          accountId: true,
-          account: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          // Relations removed for faster list loading - can be loaded on-demand when viewing details
-          // product: {
-          //   select: {
-          //     id: true,
-          //     code: true,
-          //     name: true,
-          //   },
-          // },
-          // allegroProduct: {
-          //   select: {
-          //     id: true,
-          //     allegroProductId: true,
-          //     name: true,
-          //     brand: true,
-          //   },
-          // },
-        },
+        select,
         orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.allegroOffer.count({ where }),
-    ]);
+      });
+      const sortedItems = allItems
+        .map((offer) => this.buildRecoveryMetadata(offer))
+        .sort((a, b) => (b.orderStats?.orderCount || 0) - (a.orderStats?.orderCount || 0));
+      total = sortedItems.length;
+      items = sortedItems.slice(skip, skip + limit);
+    } else {
+      const [pagedItems, count] = await Promise.all([
+        this.prisma.allegroOffer.findMany({
+          where,
+          skip,
+          take: limit,
+          select,
+          orderBy: { createdAt: 'desc' },
+        }),
+        this.prisma.allegroOffer.count({ where }),
+      ]);
+      total = count;
+      items = pagedItems.map((offer) => this.buildRecoveryMetadata(offer));
+    }
     const dbQueryDuration = Date.now() - dbQueryStartTime;
     const totalDuration = Date.now() - startTime;
 

@@ -131,6 +131,14 @@ interface Offer {
   syncSource?: string;
   syncStatus?: string;
   syncError?: string;
+  recoveryStatus?: 'FULL' | 'PARTIAL';
+  recoveryNote?: string | null;
+  missingFields?: string[];
+  orderStats?: {
+    orderCount?: number;
+    orderedQuantity?: number;
+    lastOrderAt?: string | null;
+  } | null;
   validationStatus?: 'READY' | 'WARNINGS' | 'ERRORS';
   validationErrors?: Array<{ type: string; message: string; severity: 'error' | 'warning' }>;
   lastValidatedAt?: string;
@@ -218,7 +226,7 @@ const OffersPage: React.FC = () => {
 
   
   // Load saved filters from localStorage
-  const loadSavedFilters = (): { statusFilter: string; searchQuery: string; categoryFilter: string; page: number } => {
+  const loadSavedFilters = (): { statusFilter: string; searchQuery: string; categoryFilter: string; sourceFilter: string; sortBy: string; page: number } => {
     try {
       const saved = localStorage.getItem('allegro-offers-filters');
       if (saved) {
@@ -227,16 +235,18 @@ const OffersPage: React.FC = () => {
     } catch (error) {
       console.error('Failed to load saved filters', error);
     }
-    return { statusFilter: '', searchQuery: '', categoryFilter: '', page: 1 };
+    return { statusFilter: '', searchQuery: '', categoryFilter: '', sourceFilter: '', sortBy: '', page: 1 };
   };
 
   // Save filters to localStorage
-  const saveFilters = (statusFilter: string, searchQuery: string, categoryFilter: string, page: number) => {
+  const saveFilters = (statusFilter: string, searchQuery: string, categoryFilter: string, sourceFilter: string, sortBy: string, page: number) => {
     try {
       localStorage.setItem('allegro-offers-filters', JSON.stringify({
         statusFilter,
         searchQuery,
         categoryFilter,
+        sourceFilter,
+        sortBy,
         page,
       }));
     } catch (error) {
@@ -249,6 +259,8 @@ const OffersPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>(savedFilters.statusFilter);
   const [searchQuery, setSearchQuery] = useState<string>(savedFilters.searchQuery);
   const [categoryFilter, setCategoryFilter] = useState<string>(savedFilters.categoryFilter);
+  const [sourceFilter, setSourceFilter] = useState<string>(savedFilters.sourceFilter || '');
+  const [sortBy, setSortBy] = useState<string>(savedFilters.sortBy || '');
   
   // Pagination
   const [page, setPage] = useState<number>(savedFilters.page);
@@ -274,6 +286,12 @@ const OffersPage: React.FC = () => {
       }
       if (searchQuery && searchQuery.trim()) {
         params.search = searchQuery.trim();
+      }
+      if (sourceFilter && sourceFilter.trim()) {
+        params.source = sourceFilter;
+      }
+      if (sortBy && sortBy.trim()) {
+        params.sort = sortBy;
       }
       // ⚠️ CRITICAL: If this timeout triggers, check logs - this is a code issue, not a timing issue!
       // We have max 30 items, Docker network is fast. Don't increase timeout - fix the hanging code!
@@ -305,7 +323,7 @@ const OffersPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [limit, page, statusFilter, categoryFilter, searchQuery]);
+  }, [limit, page, statusFilter, categoryFilter, searchQuery, sourceFilter, sortBy]);
 
   // Load offers when filters or page change
   useEffect(() => {
@@ -314,8 +332,14 @@ const OffersPage: React.FC = () => {
 
   // Save filters to localStorage whenever they change
   useEffect(() => {
-    saveFilters(statusFilter, searchQuery, categoryFilter, page);
-  }, [statusFilter, searchQuery, categoryFilter, page]);
+    saveFilters(statusFilter, searchQuery, categoryFilter, sourceFilter, sortBy, page);
+  }, [statusFilter, searchQuery, categoryFilter, sourceFilter, sortBy, page]);
+
+  const getRecoveryStatus = (offer: Offer): 'FULL' | 'PARTIAL' => {
+    return offer.recoveryStatus || (offer.syncSource === 'ORDER_HISTORY' && offer.syncStatus === 'PARTIAL' ? 'PARTIAL' : 'FULL');
+  };
+
+  const isPartialRecovery = (offer: Offer): boolean => getRecoveryStatus(offer) === 'PARTIAL';
 
   const handleViewDetails = async (offer: Offer) => {
     // Use existing offer data immediately (fast response) - like Publish All does
@@ -687,6 +711,10 @@ const OffersPage: React.FC = () => {
       default:
         return 'text-gray-600 bg-gray-100';
     }
+  };
+
+  const getRecoveryStatusColor = (status: 'FULL' | 'PARTIAL') => {
+    return status === 'PARTIAL' ? 'text-amber-700 bg-amber-100' : 'text-blue-700 bg-blue-100';
   };
 
   const renderImages = (images: ImageArray | undefined) => {
@@ -1286,7 +1314,7 @@ const OffersPage: React.FC = () => {
 
       {/* Filters */}
       <Card title="Filters">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Search Title
@@ -1322,6 +1350,7 @@ const OffersPage: React.FC = () => {
               <option value="ACTIVE">Active</option>
               <option value="INACTIVE">Inactive</option>
               <option value="ENDED">Ended</option>
+              <option value="ORDER_HISTORY_ONLY">Order history only</option>
             </select>
           </div>
           <div>
@@ -1338,8 +1367,47 @@ const OffersPage: React.FC = () => {
               }}
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Source
+            </label>
+            <select
+              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              value={sourceFilter}
+              onChange={(e) => {
+                setSourceFilter(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">All Sources</option>
+              <option value="ORDER_HISTORY">Recovered from orders</option>
+              <option value="ALLEGRO_API">Allegro API</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Sort
+            </label>
+            <select
+              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              value={sortBy}
+              onChange={(e) => {
+                setSortBy(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">Newest first</option>
+              <option value="orderCount">Order count</option>
+            </select>
+          </div>
         </div>
       </Card>
+
+      {sourceFilter === 'ORDER_HISTORY' && (
+        <div className="p-4 bg-amber-50 border border-amber-200 text-amber-900 rounded text-sm">
+          Recovered order-history records are product evidence only. PARTIAL rows are missing unavailable Allegro fields because the old offer API returned 404; buyer data is not stored here.
+        </div>
+      )}
 
       {error && (
         <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded whitespace-pre-line">
@@ -1362,6 +1430,8 @@ const OffersPage: React.FC = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Recovery</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Orders</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Publication</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Validation</th>
@@ -1371,10 +1441,16 @@ const OffersPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {offers.map((offer) => (
+                  {offers.map((offer) => {
+                    const recoveryStatus = getRecoveryStatus(offer);
+                    const missingFields = offer.missingFields || [];
+                    return (
                     <tr key={offer.id}>
                       <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate" title={offer.title}>
-                        {offer.title}
+                        <div className="font-medium truncate">{offer.title}</div>
+                        {offer.syncSource === 'ORDER_HISTORY' && (
+                          <div className="text-xs text-gray-500 mt-1">Offer {offer.allegroOfferId}</div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {offer.account?.name || <span className="text-gray-400">-</span>}
@@ -1389,6 +1465,24 @@ const OffersPage: React.FC = () => {
                         <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(offer.status)}`}>
                           {offer.status}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getRecoveryStatusColor(recoveryStatus)}`}>
+                          {recoveryStatus}
+                        </span>
+                        {missingFields.length > 0 && (
+                          <div className="text-xs text-amber-700 mt-1">Missing: {missingFields.join(', ')}</div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {offer.orderStats ? (
+                          <div>
+                            <div>{offer.orderStats.orderCount || 0} orders</div>
+                            <div className="text-xs text-gray-500">Qty {offer.orderStats.orderedQuantity || 0}</div>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {offer.publicationStatus && (
@@ -1432,7 +1526,7 @@ const OffersPage: React.FC = () => {
                         </Button>
                       </td>
                     </tr>
-                  ))}
+                  );})}
                 </tbody>
               </table>
             </div>
@@ -1524,7 +1618,8 @@ const OffersPage: React.FC = () => {
                   variant="secondary"
                   size="small"
                   onClick={handleSyncFromAllegro}
-                  disabled={syncingFromAllegro || saving}
+                  disabled={syncingFromAllegro || saving || isPartialRecovery(selectedOffer)}
+                  title={isPartialRecovery(selectedOffer) ? 'Partial order-history records cannot be synced from Allegro because the old offer now returns 404.' : undefined}
                 >
                   {syncingFromAllegro ? 'Syncing from Allegro...' : 'Sync from Allegro'}
                 </Button>
@@ -1532,7 +1627,8 @@ const OffersPage: React.FC = () => {
                   variant="secondary"
                   size="small"
                   onClick={handleSyncToAllegro}
-                  disabled={syncingToAllegro || saving}
+                  disabled={syncingToAllegro || saving || isPartialRecovery(selectedOffer)}
+                  title={isPartialRecovery(selectedOffer) ? 'Partial order-history records need manual enrichment before creating or updating an Allegro offer.' : undefined}
                 >
                   {syncingToAllegro ? 'Syncing to Allegro...' : 'Sync to Allegro'}
                 </Button>
@@ -1666,6 +1762,11 @@ const OffersPage: React.FC = () => {
             {/* Core Fields */}
             <div>
               <h3 className="font-semibold mb-2">Core Information</h3>
+              {isPartialRecovery(selectedOffer) && (
+                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded text-sm">
+                  PARTIAL recovery: {selectedOffer.recoveryNote || '[MISSING: Allegro API returned 404 for old offer]'}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <div className="text-sm text-gray-600">Allegro Offer ID</div>
@@ -1796,6 +1897,23 @@ const OffersPage: React.FC = () => {
                     {selectedOffer.syncStatus === 'ERROR' && selectedOffer.syncError && (
                       <div className="mt-1 text-xs text-red-600">{selectedOffer.syncError}</div>
                     )}
+                  </div>
+                )}
+                {selectedOffer.orderStats && (
+                  <div>
+                    <div className="text-sm text-gray-600">Order Evidence</div>
+                    <div className="font-medium">
+                      {selectedOffer.orderStats.orderCount || 0} orders / {selectedOffer.orderStats.orderedQuantity || 0} units
+                    </div>
+                    {selectedOffer.orderStats.lastOrderAt && (
+                      <div className="text-xs text-gray-500">Last order {new Date(selectedOffer.orderStats.lastOrderAt).toLocaleString()}</div>
+                    )}
+                  </div>
+                )}
+                {selectedOffer.missingFields && selectedOffer.missingFields.length > 0 && (
+                  <div>
+                    <div className="text-sm text-gray-600">Missing Fields</div>
+                    <div className="font-medium text-amber-700">{selectedOffer.missingFields.join(', ')}</div>
                   </div>
                 )}
             {selectedOffer.allegroProduct && (

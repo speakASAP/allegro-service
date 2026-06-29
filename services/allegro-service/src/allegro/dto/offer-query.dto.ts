@@ -31,5 +31,13 @@ export class OfferQueryDto {
   @IsOptional()
   @IsString()
   accountId?: string;
+
+  @IsOptional()
+  @IsString()
+  source?: string;
+
+  @IsOptional()
+  @IsString()
+  sort?: string;
 }
 
