@@ -9,7 +9,8 @@
     "start:dev": "ts-node src/main.ts",
     "start:watch": "ts-node-dev --respawn src/main.ts",
     "import:allegro-offers:catalog": "node dist/scripts/import-allegro-offers-to-catalog.js",
-    "import:order-offers:catalog": "node dist/scripts/import-order-offer-products.js"
+    "import:order-offers:catalog": "node dist/scripts/import-order-offer-products.js",
+    "audit:current-stock-source": "node dist/scripts/audit-current-stock-source.js"
   },
   "dependencies": {
     "@allegro/shared": "file:../../shared",
