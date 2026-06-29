@@ -11,6 +11,7 @@ import { LoggerService } from '../logger/logger.service';
 export class CatalogClientService {
   private readonly baseUrl: string;
   private readonly timeout: number;
+  private readonly serviceName = process.env.CATALOG_CALLER_SERVICE_NAME || 'allegro-service';
 
   constructor(
     private readonly httpService: HttpService,
@@ -21,6 +22,24 @@ export class CatalogClientService {
     // Local services on same Docker network should respond quickly (typically <100ms)
     // 5 seconds is enough to handle temporary slowdowns but fail fast if service is down
     this.timeout = parseInt(process.env.CATALOG_SERVICE_TIMEOUT || process.env.HTTP_TIMEOUT || '5000');
+  }
+
+  private requestOptions(extra: Record<string, any> = {}): Record<string, any> {
+    const internalToken = process.env.CATALOG_INTERNAL_SERVICE_TOKEN || process.env.INTERNAL_SERVICE_TOKEN;
+    const headers: Record<string, any> = {
+      ...(extra.headers || {}),
+    };
+
+    if (internalToken) {
+      headers['x-internal-service-token'] = internalToken;
+      headers['x-service-name'] = this.serviceName;
+    }
+
+    return {
+      timeout: this.timeout,
+      ...extra,
+      headers,
+    };
   }
 
   /**
@@ -44,9 +63,7 @@ export class CatalogClientService {
   async getProductById(productId: string): Promise<any> {
     try {
       const response = await firstValueFrom(
-        this.httpService.get(`${this.baseUrl}/api/products/${productId}`, {
-          timeout: this.timeout,
-        })
+        this.httpService.get(`${this.baseUrl}/api/products/${productId}`, this.requestOptions())
       );
       return response.data.data;
     } catch (error: any) {
@@ -72,9 +89,7 @@ export class CatalogClientService {
   async getProductBySku(sku: string): Promise<any> {
     try {
       const response = await firstValueFrom(
-        this.httpService.get(`${this.baseUrl}/api/products/sku/${sku}`, {
-          timeout: this.timeout,
-        })
+        this.httpService.get(`${this.baseUrl}/api/products/sku/${sku}`, this.requestOptions())
       );
       if (!response.data.success || !response.data.data) {
         return null;
@@ -115,9 +130,7 @@ export class CatalogClientService {
       if (query.limit) params.append('limit', String(query.limit));
 
       const response = await firstValueFrom(
-        this.httpService.get(`${this.baseUrl}/api/products?${params.toString()}`, {
-          timeout: this.timeout,
-        })
+        this.httpService.get(`${this.baseUrl}/api/products?${params.toString()}`, this.requestOptions())
       );
       return {
         items: response.data.data || [],
@@ -151,9 +164,7 @@ export class CatalogClientService {
   async createProduct(productData: any): Promise<any> {
     try {
       const response = await firstValueFrom(
-        this.httpService.post(`${this.baseUrl}/api/products`, productData, {
-          timeout: this.timeout,
-        })
+        this.httpService.post(`${this.baseUrl}/api/products`, productData, this.requestOptions())
       );
       return response.data.data;
     } catch (error: any) {
@@ -179,9 +190,7 @@ export class CatalogClientService {
   async updateProduct(productId: string, productData: any): Promise<any> {
     try {
       const response = await firstValueFrom(
-        this.httpService.put(`${this.baseUrl}/api/products/${productId}`, productData, {
-          timeout: this.timeout,
-        })
+        this.httpService.put(`${this.baseUrl}/api/products/${productId}`, productData, this.requestOptions())
       );
       return response.data.data;
     } catch (error: any) {
@@ -207,9 +216,7 @@ export class CatalogClientService {
   async getProductPricing(productId: string): Promise<any> {
     try {
       const response = await firstValueFrom(
-        this.httpService.get(`${this.baseUrl}/api/pricing/product/${productId}/current`, {
-          timeout: this.timeout,
-        })
+        this.httpService.get(`${this.baseUrl}/api/pricing/product/${productId}/current`, this.requestOptions())
       );
       return response.data.data;
     } catch (error: any) {
@@ -228,9 +235,7 @@ export class CatalogClientService {
   async getProductMedia(productId: string): Promise<any[]> {
     try {
       const response = await firstValueFrom(
-        this.httpService.get(`${this.baseUrl}/api/media/product/${productId}`, {
-          timeout: this.timeout,
-        })
+        this.httpService.get(`${this.baseUrl}/api/media/product/${productId}`, this.requestOptions())
       );
       return response.data.data || [];
     } catch (error: any) {
@@ -242,5 +247,71 @@ export class CatalogClientService {
       return [];
     }
   }
-}
 
+  async createProductMedia(mediaData: any): Promise<any> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.baseUrl}/api/media`, mediaData, this.requestOptions())
+      );
+      return response.data.data;
+    } catch (error: any) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (this.isServiceUnavailableError(error)) {
+        this.logger.error(`Catalog service unavailable when creating media: ${errorMessage}`, error instanceof Error ? error.stack : undefined, 'CatalogClient');
+        throw new HttpException(`Catalog service is unavailable: ${errorMessage}`, HttpStatus.SERVICE_UNAVAILABLE);
+      }
+      this.logger.warn(`Failed to create catalog media: ${error.response?.data?.message || errorMessage}`, 'CatalogClient');
+      throw new HttpException(`Failed to create catalog media: ${error.response?.data?.message || errorMessage}`, HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  async upsertProductPricing(pricingData: any): Promise<any> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.baseUrl}/api/pricing`, pricingData, this.requestOptions())
+      );
+      return response.data.data;
+    } catch (error: any) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (this.isServiceUnavailableError(error)) {
+        this.logger.error(`Catalog service unavailable when upserting pricing: ${errorMessage}`, error instanceof Error ? error.stack : undefined, 'CatalogClient');
+        throw new HttpException(`Catalog service is unavailable: ${errorMessage}`, HttpStatus.SERVICE_UNAVAILABLE);
+      }
+      this.logger.warn(`Failed to upsert catalog pricing: ${error.response?.data?.message || errorMessage}`, 'CatalogClient');
+      throw new HttpException(`Failed to upsert catalog pricing: ${error.response?.data?.message || errorMessage}`, HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  async getProductMarketplaceFields(productId: string, marketplace: string): Promise<any | null> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(`${this.baseUrl}/api/products/${productId}/marketplace-fields/${marketplace}`, this.requestOptions())
+      );
+      return response.data.data || response.data;
+    } catch (error: any) {
+      if (this.isServiceUnavailableError(error)) {
+        this.logger.error(`Catalog service unavailable when getting ${marketplace} fields for product ${productId}`, error instanceof Error ? error.stack : undefined, 'CatalogClient');
+        return null;
+      }
+      this.logger.warn(`Marketplace fields not found for product ${productId}/${marketplace}: ${error.message}`, 'CatalogClient');
+      return null;
+    }
+  }
+
+  async updateProductMarketplaceFields(productId: string, marketplace: string, fieldsData: any): Promise<any> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.put(`${this.baseUrl}/api/products/${productId}/marketplace-fields/${marketplace}`, fieldsData, this.requestOptions())
+      );
+      return response.data.data;
+    } catch (error: any) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (this.isServiceUnavailableError(error)) {
+        this.logger.error(`Catalog service unavailable when updating ${marketplace} fields for product ${productId}: ${errorMessage}`, error instanceof Error ? error.stack : undefined, 'CatalogClient');
+        throw new HttpException(`Catalog service is unavailable: ${errorMessage}`, HttpStatus.SERVICE_UNAVAILABLE);
+      }
+      this.logger.warn(`Failed to update ${marketplace} fields for product ${productId}: ${error.response?.data?.message || errorMessage}`, 'CatalogClient');
+      throw new HttpException(`Failed to update marketplace fields: ${error.response?.data?.message || errorMessage}`, HttpStatus.BAD_REQUEST);
+    }
+  }
+}

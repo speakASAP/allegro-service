@@ -115,6 +115,13 @@ export class CatalogSellActionService {
     const accountChoices = await this.listAccountChoices(requestedByUserId);
     const accountIds = accountChoices.map((account) => account.id).filter(Boolean);
     const prismaAny = this.prisma as any;
+    const catalogProduct = await this.loadCatalogProduct(catalogProductId).catch((error) => {
+      this.logger.warn('Failed to load catalog product while reading Allegro sell-action status', {
+        catalogProductId,
+        error: error.message,
+      });
+      return null;
+    });
     const draft = await prismaAny.allegroOffer.findFirst({
       where: {
         catalogProductId,
@@ -136,6 +143,8 @@ export class CatalogSellActionService {
       draft: this.toDraftSummary(draft),
       attempt: attempt || null,
       accountChoices,
+      categoryChoice: this.buildCategoryChoice({ catalogProductId } as any, draft, catalogProduct),
+      catalogProduct: this.toCatalogSummary(catalogProduct),
       listingUrl: this.toListingUrl(draft),
       canEditDraft: Boolean(draft && !['ACTIVE'].includes(String(draft.publicationStatus || '').toUpperCase())),
       canConfirmPublish: Boolean(attempt && attempt.status === 'PREPARED'),
@@ -176,13 +185,62 @@ export class CatalogSellActionService {
 
   private async loadCatalogProduct(catalogProductId: string): Promise<any> {
     try {
-      return await this.catalogClient.getProductById(catalogProductId);
+      const catalogProduct = await this.catalogClient.getProductById(catalogProductId);
+      return await this.enrichCatalogProductForAllegro(catalogProduct);
     } catch (error: any) {
       throw new HttpException(
         `Failed to load catalog product ${catalogProductId}: ${error.message}`,
         error.status || error.response?.status || HttpStatus.BAD_GATEWAY,
       );
     }
+  }
+
+  private async enrichCatalogProductForAllegro(catalogProduct: any): Promise<any> {
+    let marketplaceFields: any = null;
+    let currentPricing: any = null;
+
+    try {
+      marketplaceFields = await this.catalogClient.getProductMarketplaceFields(catalogProduct.id, 'allegro');
+    } catch (error: any) {
+      this.logger.warn('Failed to load Allegro marketplace fields for catalog sell-action', {
+        catalogProductId: catalogProduct.id,
+        error: error.message,
+      });
+    }
+
+    try {
+      currentPricing = await this.catalogClient.getProductPricing(catalogProduct.id);
+    } catch (error: any) {
+      this.logger.warn('Failed to load Catalog pricing for catalog sell-action', {
+        catalogProductId: catalogProduct.id,
+        error: error.message,
+      });
+    }
+
+    const profile = marketplaceFields?.profile || null;
+    const overrides = profile?.overrides || {};
+    const overridePrice = overrides.price !== undefined && overrides.price !== null ? Number(overrides.price) : null;
+    const priceAmount = Number.isFinite(overridePrice) && overridePrice > 0
+      ? overridePrice
+      : this.toNonNegativeNumber(currentPricing?.salePrice, currentPricing?.basePrice, catalogProduct?.price?.gross, catalogProduct?.price);
+    const overrideQuantity = overrides.quantity !== undefined && overrides.quantity !== null ? Number(overrides.quantity) : undefined;
+
+    return {
+      ...catalogProduct,
+      allegroCategoryId: overrides.categoryId || catalogProduct?.allegroCategoryId || null,
+      price: priceAmount > 0 ? {
+        gross: priceAmount,
+        currency: String(overrides.currency || currentPricing?.currency || catalogProduct?.currency || 'CZK').toUpperCase(),
+      } : catalogProduct?.price,
+      currency: String(overrides.currency || currentPricing?.currency || catalogProduct?.currency || 'CZK').toUpperCase(),
+      quantity: Number.isFinite(overrideQuantity) ? overrideQuantity : catalogProduct?.quantity,
+      stockQuantity: Number.isFinite(overrideQuantity) ? overrideQuantity : catalogProduct?.stockQuantity,
+      images: Array.isArray(overrides.images) && overrides.images.length > 0 ? overrides.images : catalogProduct?.images,
+      marketplaceProfiles: {
+        ...(catalogProduct?.marketplaceProfiles || {}),
+        allegro: profile,
+      },
+    };
   }
 
   private async listAccountChoices(requestedByUserId: string): Promise<any[]> {
@@ -255,12 +313,13 @@ export class CatalogSellActionService {
     requestedByUserId: string,
   ): Record<string, unknown> {
     const images = this.extractImageUrls(catalogProduct);
+    const allegroOverrides = catalogProduct?.marketplaceProfiles?.allegro?.overrides || {};
     const title = dto.title || catalogProduct?.title || catalogProduct?.name || `Catalog product ${dto.catalogProductId}`;
     const description = dto.description || catalogProduct?.description || catalogProduct?.shortDescription || null;
-    const categoryId = dto.categoryId || catalogProduct?.allegroCategoryId || catalogProduct?.categoryId || 'UNASSIGNED';
-    const quantity = this.toNonNegativeNumber(dto.quantity, catalogProduct?.stockQuantity, catalogProduct?.quantity, catalogProduct?.stock, 0);
-    const price = this.toNonNegativeNumber(dto.price, catalogProduct?.price?.gross, catalogProduct?.price, catalogProduct?.salePrice, 0);
-    const currency = catalogProduct?.price?.currency || catalogProduct?.currency || 'PLN';
+    const categoryId = dto.categoryId || allegroOverrides.categoryId || catalogProduct?.allegroCategoryId || catalogProduct?.categoryId || 'UNASSIGNED';
+    const quantity = this.toNonNegativeNumber(dto.quantity, allegroOverrides.quantity, catalogProduct?.stockQuantity, catalogProduct?.quantity, catalogProduct?.stock, 0);
+    const price = this.toNonNegativeNumber(dto.price, allegroOverrides.price, catalogProduct?.price?.gross, catalogProduct?.price, catalogProduct?.salePrice, 0);
+    const currency = allegroOverrides.currency || catalogProduct?.price?.currency || catalogProduct?.currency || 'PLN';
 
     return {
       title,
@@ -298,6 +357,7 @@ export class CatalogSellActionService {
 
   private extractImageUrls(catalogProduct: any): string[] {
     const candidates = [
+      ...(Array.isArray(catalogProduct?.marketplaceProfiles?.allegro?.overrides?.images) ? catalogProduct.marketplaceProfiles.allegro.overrides.images : []),
       ...(Array.isArray(catalogProduct?.images) ? catalogProduct.images : []),
       ...(Array.isArray(catalogProduct?.media) ? catalogProduct.media : []),
     ];
@@ -324,14 +384,17 @@ export class CatalogSellActionService {
   }
 
   private buildCategoryChoice(dto: PrepareCatalogSellActionDto, draft: any, catalogProduct: any): any {
-    const selectedCategoryId = dto.categoryId || draft?.categoryId || catalogProduct?.allegroCategoryId || catalogProduct?.categoryId || null;
+    const profileCategoryId = catalogProduct?.marketplaceProfiles?.allegro?.overrides?.categoryId;
+    const selectedCategoryId = dto.categoryId || draft?.categoryId || profileCategoryId || catalogProduct?.allegroCategoryId || catalogProduct?.categoryId || null;
     return {
       selectedCategoryId,
       source: dto.categoryId
         ? 'request'
         : draft?.categoryId && draft.categoryId != 'UNASSIGNED'
           ? 'existing-draft'
-          : catalogProduct?.allegroCategoryId || catalogProduct?.categoryId
+          : profileCategoryId
+            ? 'catalog-allegro-marketplace-profile'
+            : catalogProduct?.allegroCategoryId || catalogProduct?.categoryId
             ? 'catalog'
             : '[MISSING: catalog category mapping contract]',
     };

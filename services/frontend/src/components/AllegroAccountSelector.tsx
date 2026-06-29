@@ -19,7 +19,7 @@ interface AllegroAccount {
 }
 
 interface AllegroAccountSelectorProps {
-  onAccountChange?: (accountId: string | null) => void;
+  onAccountChange?: (accountId: string | null, activeAccountAuthorized: boolean) => void;
 }
 
 export const AllegroAccountSelector: React.FC<AllegroAccountSelectorProps> = ({ onAccountChange }) => {
@@ -54,7 +54,7 @@ export const AllegroAccountSelector: React.FC<AllegroAccountSelectorProps> = ({ 
         setActiveAccountId(activeId);
         
         if (onAccountChange) {
-          onAccountChange(activeId);
+          onAccountChange(activeId, Boolean(activeAccount?.oauthStatus?.authorized));
         }
       } else {
         console.warn('[AllegroAccountSelector] Response success is false:', response.data);
@@ -104,7 +104,8 @@ export const AllegroAccountSelector: React.FC<AllegroAccountSelectorProps> = ({ 
       await loadAccounts();
       
       if (onAccountChange) {
-        onAccountChange(accountId === '' ? null : accountId);
+        const selectedAccount = accountId === '' ? null : accounts.find(acc => acc.id === accountId);
+        onAccountChange(accountId === '' ? null : accountId, Boolean(selectedAccount?.oauthStatus?.authorized));
       }
     } catch (err) {
       if (err instanceof AxiosError) {
@@ -121,7 +122,7 @@ export const AllegroAccountSelector: React.FC<AllegroAccountSelectorProps> = ({ 
   if (loading && accounts.length === 0) {
     return (
       <div className="text-sm text-gray-600">
-        Loading accounts...
+        Načítám účet...
       </div>
     );
   }
@@ -131,7 +132,7 @@ export const AllegroAccountSelector: React.FC<AllegroAccountSelectorProps> = ({ 
   return (
     <div className="flex items-center space-x-2">
       <label htmlFor="account-selector" className="text-sm font-medium text-gray-700">
-        Allegro Account:
+        Můj účet:
       </label>
       <div className="flex flex-col">
         <select
@@ -140,11 +141,11 @@ export const AllegroAccountSelector: React.FC<AllegroAccountSelectorProps> = ({ 
           onChange={(e) => handleAccountChange(e.target.value)}
           className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         >
-          <option value="">-- No Active Account --</option>
+          <option value="">-- Bez aktivního účtu --</option>
           {accounts.map((account) => (
             <option key={account.id} value={account.id}>
               {account.name}
-              {account.oauthStatus?.authorized ? ' ✓' : ' (Not Authorized)'}
+              {account.oauthStatus?.authorized ? ' ✓ Přihlášeno' : ' (Přihlásit)'}
             </option>
           ))}
         </select>
@@ -156,7 +157,7 @@ export const AllegroAccountSelector: React.FC<AllegroAccountSelectorProps> = ({ 
       </div>
       {activeAccount && (
         <span className="text-xs text-gray-500">
-          {activeAccount.oauthStatus?.authorized ? '✓ Authorized' : '⚠ Not Authorized'}
+          {activeAccount.oauthStatus?.authorized ? '✓ Přihlášeno' : 'Přihlásit'}
         </span>
       )}
     </div>

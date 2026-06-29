@@ -51,6 +51,11 @@ spec:
                 secretKeyRef:
                   name: allegro-service-secret
                   key: JWT_TOKEN
+            - name: CATALOG_INTERNAL_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: allegro-service-secret
+                  key: CATALOG_INTERNAL_SERVICE_TOKEN
           startupProbe:
             httpGet:
               path: /health

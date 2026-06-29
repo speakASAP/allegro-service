@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-06-24T16:48:34Z",
+  "created_at": "2026-06-29T08:40:48Z",
   "execution_plans": {
-    "execution_plan_count": 8,
+    "execution_plan_count": 9,
     "execution_plan_files": [
       "21_execution_plans/EP-TASK-001-apply-ips-baseline.md",
       "21_execution_plans/EP-TASK-002-design-governed-publish-lifecycle.md",
@@ -10,13 +10,16 @@
       "21_execution_plans/EP-TASK-005-define-ai-offer-optimization-contract.md",
       "21_execution_plans/EP-TASK-006-plan-stock-order-profit-loop.md",
       "21_execution_plans/EP-TASK-007-plan-growth-analytics-and-demand-loops.md",
-      "21_execution_plans/EP-TASK-008-plan-operations-trust-and-scale.md"
+      "21_execution_plans/EP-TASK-008-plan-operations-trust-and-scale.md",
+      "21_execution_plans/EP-TASK-009-public-client-landing-dashboard.md"
     ],
-    "missing_validation_plan": []
+    "missing_validation_plan": [
+      "21_execution_plans/EP-TASK-009-public-client-landing-dashboard.md"
+    ]
   },
   "gate": "pre_coding",
   "missing_immutable_files": [],
-  "next_step": "start_controlled_coding",
+  "next_step": "fix_pre_coding_gate_findings",
   "project_invariants": {
     "path": "17_governance/PROJECT_INVARIANTS.md",
     "status": "pass"
@@ -41,10 +44,10 @@
     ],
     "status": "pass"
   },
-  "status": "pass",
+  "status": "fail",
   "tasks": {
     "missing_upstream_traceability": [],
-    "task_count": 8,
+    "task_count": 9,
     "task_files": [
       "11_tasks/TASK-001-apply-ips-baseline.md",
       "11_tasks/TASK-002-design-governed-publish-lifecycle.md",
@@ -53,7 +56,8 @@
       "11_tasks/TASK-005-define-ai-offer-optimization-contract.md",
       "11_tasks/TASK-006-plan-stock-order-profit-loop.md",
       "11_tasks/TASK-007-plan-growth-analytics-and-demand-loops.md",
-      "11_tasks/TASK-008-plan-operations-trust-and-scale.md"
+      "11_tasks/TASK-008-plan-operations-trust-and-scale.md",
+      "11_tasks/TASK-009-public-client-landing-dashboard.md"
     ]
   }
 }

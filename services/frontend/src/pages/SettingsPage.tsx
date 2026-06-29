@@ -3,6 +3,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import api, { oauthApi, allegroAccountApi } from '../services/api';
 import { Button } from '../components/Button';
@@ -73,6 +74,32 @@ const AllegroCredentialsHelp: React.FC = () => (
     <p className="mt-2 text-xs text-blue-800">
       Account Name is only a label in this dashboard; use a shop or seller name you will recognize.
     </p>
+  </div>
+);
+
+const AllegroOAuthFlowHelp: React.FC = () => (
+  <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+    <p className="font-medium">Where to click for Allegro OAuth</p>
+    <ol className="mt-2 list-decimal space-y-2 pl-5">
+      <li>
+        In the needed Allegro account card below, click <span className="font-medium">Authorize OAuth</span>. If you see{' '}
+        <span className="font-medium">Authorized</span> and <span className="font-medium">Revoke OAuth</span>, the account is already authorized.
+      </li>
+      <li>
+        The button calls{' '}
+        <code className="break-all rounded bg-white/70 px-1 py-0.5 text-xs">
+          {'/api/allegro/oauth/authorize?accountId=<account id>'}
+        </code>{' '}
+        with your signed-in session, then opens Allegro login/consent. Do not paste this raw API URL into the browser; use the button.
+      </li>
+      <li>
+        After Allegro returns here and the badge says <span className="font-medium">Authorized</span>, select the account in the header and open{' '}
+        <Link to="/dashboard/products" className="font-medium underline">
+          Catalog products
+        </Link>{' '}
+        to click <span className="font-medium">Prepare draft</span> and then <span className="font-medium">Confirm publish</span>.
+      </li>
+    </ol>
   </div>
 );
 
@@ -423,6 +450,7 @@ const SettingsPage: React.FC = () => {
 
   // Page renders immediately, no blocking loading screen
   // Loading state is used for showing loading indicators in the UI, not blocking render
+  const hasPublishReadyAccount = accounts.some(account => account.isActive && account.oauthStatus?.authorized);
 
   return (
     <div className="space-y-6">
@@ -444,6 +472,7 @@ const SettingsPage: React.FC = () => {
       {/* Allegro Accounts */}
       <Card title="Allegro Accounts">
         <div className="space-y-4">
+          {settings && !hasPublishReadyAccount && <AllegroOAuthFlowHelp />}
           {accounts.length > 0 ? (
             <div className="space-y-4">
               {accounts.map((account) => (

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import {
   catalogProductsApi,
@@ -8,6 +9,13 @@ import {
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
+
+type ProductImage = string | { url?: string; src?: string; path?: string };
+
+interface ProductRawData {
+  images?: ProductImage[];
+  media?: ProductImage[];
+}
 
 interface CatalogProduct {
   id: string;
@@ -19,6 +27,13 @@ interface CatalogProduct {
   ean?: string | null;
   publicationStatus?: string | null;
   parameters?: unknown[];
+  images?: ProductImage[];
+  media?: ProductImage[];
+  rawData?: ProductRawData | null;
+  allegroProduct?: {
+    publicationStatus?: string | null;
+    rawData?: ProductRawData | null;
+  } | null;
   createdAt?: string | null;
   updatedAt?: string | null;
   catalogProduct?: {
@@ -37,8 +52,8 @@ interface CatalogProduct {
     quantity?: number;
     stock?: number;
     stockQuantity?: number;
-    images?: Array<string | { url?: string; src?: string }>;
-    media?: Array<string | { url?: string; src?: string }>;
+    images?: ProductImage[];
+    media?: ProductImage[];
   } | null;
 }
 
@@ -149,6 +164,92 @@ const productDescription = (product: CatalogProduct | null) => (
   || ''
 );
 
+const imageUrl = (image: ProductImage | undefined) => {
+  if (!image) return '';
+  return typeof image === 'string' ? image : image.url || image.src || image.path || '';
+};
+
+const productImageUrl = (product: CatalogProduct | null) => {
+  const imageGroups = [
+    product?.images,
+    product?.media,
+    product?.catalogProduct?.images,
+    product?.catalogProduct?.media,
+    product?.rawData?.images,
+    product?.rawData?.media,
+    product?.allegroProduct?.rawData?.images,
+    product?.allegroProduct?.rawData?.media,
+  ];
+
+  for (const images of imageGroups) {
+    const url = images?.map(imageUrl).find(Boolean);
+    if (url) return url;
+  }
+
+  return '';
+};
+
+const soldStatusValues = new Set(['SOLD', 'PAID', 'SENT', 'DELIVERED', 'FULFILLED', 'COMPLETED']);
+
+const isSoldOnAllegro = (product: CatalogProduct, status?: CatalogSellStatus | null) => {
+  const statusValues = [
+    product.publicationStatus,
+    product.allegroProduct?.publicationStatus,
+    status?.status,
+    status?.draft?.publicationStatus,
+    status?.attempt?.status,
+  ]
+    .filter(Boolean)
+    .map((value) => String(value).toUpperCase());
+
+  return statusValues.some((value) => soldStatusValues.has(value) || value.includes('SOLD'));
+};
+
+interface ProductTileProps {
+  product: CatalogProduct;
+  active: boolean;
+  onSelect: (product: CatalogProduct) => void;
+}
+
+const ProductTile: React.FC<ProductTileProps> = ({ product, active, onSelect }) => {
+  const photoUrl = productImageUrl(product);
+  const title = productTitle(product) || 'Untitled product';
+
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={() => onSelect(product)}
+      className={`aspect-square rounded-md border bg-white p-2 text-left shadow-sm transition hover:border-blue-300 hover:shadow focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+        active ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-200'
+      }`}
+    >
+      <div className="h-[72%] overflow-hidden rounded bg-gray-100">
+        {photoUrl ? (
+          <img
+            src={photoUrl}
+            alt={title}
+            className="h-full w-full object-cover"
+            onError={(event) => {
+              (event.currentTarget as HTMLImageElement).style.display = 'none';
+            }}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-gray-100 text-xs font-semibold text-gray-400">
+            Allegro
+          </div>
+        )}
+      </div>
+      <p
+        className="mt-2 text-xs font-medium leading-tight text-gray-900"
+        style={{ display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden' }}
+      >
+        {title}
+      </p>
+    </button>
+  );
+};
+
 const formatDate = (value?: string | null) => value ? new Date(value).toLocaleString() : '-';
 
 const buildInitialForm = (product: CatalogProduct | null, status?: CatalogSellStatus | null): DraftForm => {
@@ -191,6 +292,14 @@ const ProductsPage: React.FC = () => {
   const hasPreparedDraft = Boolean(selectedStatus?.draft?.id);
   const canEditDraft = Boolean(selectedStatus?.canEditDraft && hasPreparedDraft && !sellActionUnavailable);
   const canConfirmPublish = Boolean(selectedStatus?.canConfirmPublish && !sellActionUnavailable);
+  const soldProducts = useMemo(
+    () => products.filter((product) => isSoldOnAllegro(product, statusByProduct[product.id])),
+    [products, statusByProduct],
+  );
+  const publishableProducts = useMemo(
+    () => products.filter((product) => !isSoldOnAllegro(product, statusByProduct[product.id])),
+    [products, statusByProduct],
+  );
 
   const loadStatus = useCallback(async (catalogProductId: string) => {
     try {
@@ -345,10 +454,10 @@ const ProductsPage: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm font-medium uppercase tracking-wide text-blue-700">Catalog publishing</p>
-          <h2 className="text-2xl font-semibold text-gray-900">Sell catalog products on Allegro</h2>
+          <p className="text-sm font-medium uppercase tracking-wide text-blue-700">Allegro.alfares catalog</p>
+          <h2 className="text-2xl font-semibold text-gray-900">Products to publish on Allegro</h2>
           <p className="mt-1 max-w-3xl text-sm text-gray-600">
-            Select a Catalog product, prepare a local Allegro draft, review editable fields, then confirm explicitly. No autonomous publish happens from this screen.
+            Select a product card, prepare a local Allegro draft, review editable fields, then confirm explicitly. No autonomous publish happens from this screen.
           </p>
         </div>
         <Button variant="secondary" onClick={() => loadProducts(pagination.page)} disabled={loading}>
@@ -358,12 +467,29 @@ const ProductsPage: React.FC = () => {
 
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
         <p className="font-semibold">OAuth account readiness is required before publish confirmation.</p>
-        <ol className="mt-2 list-decimal space-y-1 pl-5">
-          <li>Open Settings & OAuth and complete Allegro authorization for the seller account.</li>
-          <li>Select the authorized account in the dashboard header.</li>
-          <li>Select a product, prepare its local inactive draft, review policy blockers, then confirm publish explicitly.</li>
+        <ol className="mt-2 list-decimal space-y-2 pl-5">
+          <li>
+            Open{' '}
+            <Link to="/dashboard/settings" className="font-medium underline">
+              Settings & OAuth
+            </Link>{' '}
+            (<code className="break-all rounded bg-white/70 px-1 py-0.5 text-xs">/dashboard/settings</code>) and click{' '}
+            <span className="font-medium">Authorize OAuth</span> on the seller account card. If the card shows{' '}
+            <span className="font-medium">Authorized</span> and <span className="font-medium">Revoke OAuth</span>, authorization is already complete.
+          </li>
+          <li>Select the same authorized account in the <span className="font-medium">Můj účet</span> dropdown in the dashboard header.</li>
+          <li>
+            On this page, select a product, click <span className="font-medium">Prepare draft</span>, review or save fields, then click{' '}
+            <span className="font-medium">Confirm publish</span>.
+          </li>
         </ol>
-        <p className="mt-2 text-xs">If authorization cannot start because client credentials are absent or expired, an operator can update the OAuth keys in Kubernetes Vault and retry the authorization flow.</p>
+        <p className="mt-2 text-xs">
+          The app starts OAuth through{' '}
+          <code className="break-all rounded bg-white/70 px-1 py-0.5 text-xs">
+            {'/api/allegro/oauth/authorize?accountId=<account id>'}
+          </code>{' '}
+          and redirects you to Allegro automatically. A pasted raw API URL is not the manual login link.
+        </p>
       </div>
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
@@ -385,62 +511,52 @@ const ProductsPage: React.FC = () => {
             </Button>
           </div>
 
-          <div className="mt-2 overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Catalog product</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Brand / EAN</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Draft status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 bg-white">
-                {products.map((product) => {
-                  const status = statusByProduct[product.id];
-                  const statusError = statusErrors[product.id];
-                  const active = selectedProduct?.id === product.id;
-                  return (
-                    <tr
+          <div className="mt-5 space-y-6">
+            <section>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-700">Products that can be published on Allegro</h3>
+                <span className="text-xs text-gray-500">{publishableProducts.length} products</span>
+              </div>
+              {publishableProducts.length > 0 ? (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                  {publishableProducts.map((product) => (
+                    <ProductTile
                       key={product.id}
-                      role="button"
-                      tabIndex={0}
-                      aria-selected={active}
-                      onClick={() => selectProduct(product)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          void selectProduct(product);
-                        }
-                      }}
-                      className={`${active ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : 'hover:bg-gray-50'} cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                    >
-                      <td className="px-4 py-3 text-sm">
-                        <div className="font-medium text-gray-900">{productTitle(product)}</div>
-                        <div className="text-xs text-gray-500">{productSku(product)}</div>
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        <div>{product.brand || product.catalogProduct?.brand || '-'}</div>
-                        <div className="text-xs text-gray-500">{product.ean || product.catalogProduct?.ean || '-'}</div>
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {statusError ? (
-                          <span className="text-red-600">Unavailable</span>
-                        ) : (
-                          status?.status || status?.draft?.publicationStatus || 'Not prepared'
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-                {products.length === 0 && (
-                  <tr>
-                    <td className="px-4 py-8 text-center text-sm text-gray-500" colSpan={3}>
-                      {loading ? 'Loading catalog products...' : 'No catalog products found'}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                      product={product}
+                      active={selectedProduct?.id === product.id}
+                      onSelect={(nextProduct) => { void selectProduct(nextProduct); }}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-md border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
+                  {loading ? 'Loading catalog products...' : 'No products ready for publishing'}
+                </div>
+              )}
+            </section>
+
+            <section className="border-t border-gray-200 pt-5">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-700">Products sold on Allegro</h3>
+                <span className="text-xs text-gray-500">{soldProducts.length} products</span>
+              </div>
+              {soldProducts.length > 0 ? (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                  {soldProducts.map((product) => (
+                    <ProductTile
+                      key={product.id}
+                      product={product}
+                      active={selectedProduct?.id === product.id}
+                      onSelect={(nextProduct) => { void selectProduct(nextProduct); }}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-md border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
+                  No sold Allegro products found
+                </div>
+              )}
+            </section>
           </div>
 
           <div className="mt-4 flex items-center justify-between text-sm text-gray-600">

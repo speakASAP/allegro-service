@@ -63,7 +63,6 @@ Classification: synthetic. Use synthetic product names and UI examples only. Do 
 
 ## Files to Inspect
 
-- `/home/ssf/Documents/Github/bazos-service/services/aukro-service/src/ui/ui.assets.ts`
 - `/home/ssf/Documents/Github/bazos-service/implementation-goals/GOAL-06-landing-admin-client-ui.md`
 - `/home/ssf/Documents/Github/bazos-service/implementation-goals/GOAL-08-hosted-auth-ui.md`
 - `/home/ssf/Documents/Github/bazos-service/implementation-goals/GOAL-12-client-catalog-publishing-flow.md`

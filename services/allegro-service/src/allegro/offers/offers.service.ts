@@ -1819,6 +1819,13 @@ export class OffersService {
             }
             
             const offerData = this.sanitizeOfferDataForPrisma(this.extractOfferData(fullOfferData));
+            catalogProductId = await this.syncCatalogFromImportedOffer(
+              fullOfferData,
+              offerData,
+              allegroProductId,
+              catalogProductId,
+              '[importApprovedOffers]',
+            );
             
             // Sync stock to warehouse-microservice if catalog product exists and stock is available
             if (catalogProductId && offerData.stockQuantity > 0) {
@@ -2270,6 +2277,13 @@ export class OffersService {
             }
             
             const offerData = this.sanitizeOfferDataForPrisma(this.extractOfferData(fullOfferData));
+            catalogProductId = await this.syncCatalogFromImportedOffer(
+              fullOfferData,
+              offerData,
+              allegroProductId,
+              catalogProductId,
+              '[importAllOffers]',
+            );
             
             // Sync stock to warehouse-microservice if catalog product exists and stock is available
             if (catalogProductId && offerData.stockQuantity > 0) {
@@ -3170,6 +3184,301 @@ export class OffersService {
   private sanitizeOfferDataForPrisma(data: any): any {
     const { publicUrl, ...rest } = data || {};
     return rest;
+  }
+
+  private async syncCatalogFromImportedOffer(
+    allegroOffer: any,
+    offerData: any,
+    allegroProductId: string | null,
+    existingCatalogProductId: string | null,
+    logContext: string,
+  ): Promise<string | null> {
+    const allegroOfferId = String(offerData?.allegroOfferId || allegroOffer?.id || '').trim();
+    if (!allegroOfferId) {
+      return existingCatalogProductId;
+    }
+
+    try {
+      const allegroProduct = allegroProductId
+        ? await (this.prisma as any).allegroProduct.findUnique({ where: { id: allegroProductId } })
+        : null;
+      const productDetails = this.extractCatalogProductDetails(allegroOffer, offerData, allegroProduct);
+      const sku = `ALLEGRO-OFFER-${allegroOfferId}`;
+      const existing = await this.findCatalogProductForImportedOffer(sku, existingCatalogProductId);
+      const productPayload = {
+        sku,
+        title: productDetails.title,
+        description: productDetails.description || undefined,
+        brand: productDetails.brand || undefined,
+        manufacturer: productDetails.manufacturer || undefined,
+        ean: productDetails.ean || undefined,
+        isActive: productDetails.isActive,
+        lifecycle: productDetails.isActive ? 'active' : 'archived',
+        tags: ['source:allegro', `allegro-offer:${allegroOfferId}`],
+      };
+
+      const catalogProduct = existing
+        ? await this.catalogClient.updateProduct(existing.id, productPayload)
+        : await this.catalogClient.createProduct(productPayload);
+
+      await this.syncCatalogMediaFromImportedOffer(catalogProduct.id, productDetails.images, sku, logContext);
+      await this.syncCatalogPricingFromImportedOffer(catalogProduct.id, productDetails.price, productDetails.currency, sku, logContext);
+      await this.syncCatalogMarketplaceProfileFromImportedOffer(
+        catalogProduct.id,
+        productDetails,
+        allegroOffer,
+        offerData,
+        allegroProduct,
+        sku,
+        logContext,
+      );
+
+      this.logger.log(`${logContext} Synced imported Allegro offer to Catalog`, {
+        catalogProductId: catalogProduct.id,
+        sku,
+        allegroOfferId,
+        categoryId: productDetails.categoryId,
+        price: productDetails.price,
+        currency: productDetails.currency,
+        quantity: productDetails.quantity,
+        imagesCount: productDetails.images.length,
+      });
+
+      return catalogProduct.id;
+    } catch (error: any) {
+      this.logger.warn(`${logContext} Failed to sync imported offer to Catalog`, {
+        allegroOfferId,
+        existingCatalogProductId,
+        error: error?.response?.data?.message || error?.message || String(error),
+      });
+      return existingCatalogProductId;
+    }
+  }
+
+  private async findCatalogProductForImportedOffer(sku: string, existingCatalogProductId?: string | null): Promise<any | null> {
+    const bySku = await this.catalogClient.getProductBySku(sku);
+    if (bySku) {
+      return bySku;
+    }
+
+    if (!existingCatalogProductId) {
+      return null;
+    }
+
+    try {
+      return await this.catalogClient.getProductById(existingCatalogProductId);
+    } catch {
+      return null;
+    }
+  }
+
+  private extractCatalogProductDetails(allegroOffer: any, offerData: any, allegroProduct: any): any {
+    const productSet = Array.isArray(allegroOffer?.productSet) ? allegroOffer.productSet[0] : null;
+    const product = productSet?.product || {};
+    const parameters = [
+      ...(Array.isArray(allegroOffer?.parameters) ? allegroOffer.parameters : []),
+      ...(Array.isArray(product?.parameters) ? product.parameters : []),
+      ...(Array.isArray(allegroProduct?.parameters) ? allegroProduct.parameters : []),
+    ];
+    const categoryId = String(offerData?.categoryId || allegroOffer?.category?.id || '').trim();
+    const price = this.toPositiveNumber(offerData?.price, allegroOffer?.sellingMode?.price?.amount);
+    const currency = String(offerData?.currency || allegroOffer?.sellingMode?.price?.currency || this.getDefaultCurrency()).toUpperCase();
+    const quantity = this.toNonNegativeNumber(offerData?.stockQuantity, offerData?.quantity, allegroOffer?.stock?.available);
+    const status = String(offerData?.publicationStatus || offerData?.status || allegroOffer?.publication?.status || '').toUpperCase();
+
+    return {
+      title: String(offerData?.title || allegroOffer?.name || product?.name || 'Product'),
+      description: offerData?.description || null,
+      brand: allegroProduct?.brand || this.findAllegroParameterValue(parameters, ['248811'], ['Značka', 'Brand']) || product?.brand || null,
+      manufacturer: allegroProduct?.manufacturerCode || this.findAllegroParameterValue(parameters, ['224017'], ['Kód výrobce', 'Manufacturer code']) || product?.manufacturerCode || null,
+      ean: allegroProduct?.ean || this.findAllegroParameterValue(parameters, ['225693'], ['EAN (GTIN)', 'EAN', 'GTIN']) || product?.ean || null,
+      categoryId,
+      price,
+      currency,
+      quantity,
+      images: this.extractImages(allegroOffer).filter((url: any) => typeof url === 'string' && url.trim()).slice(0, 16),
+      parameters,
+      isActive: status !== 'ENDED',
+    };
+  }
+
+  private findAllegroParameterValue(parameters: any[], ids: string[], names: string[]): string | null {
+    const normalizedNames = names.map((name) => name.toLowerCase());
+    const parameter = parameters.find((param) => {
+      const id = String(param?.id || param?.parameterId || '').toLowerCase();
+      const name = String(param?.name || '').toLowerCase();
+      return ids.includes(id) || normalizedNames.includes(name);
+    });
+
+    if (!parameter) {
+      return null;
+    }
+
+    const values = Array.isArray(parameter.values) ? parameter.values : [];
+    const first = values[0] ?? parameter.value ?? null;
+    if (typeof first === 'string') {
+      return first.trim() || null;
+    }
+    if (first && typeof first.name === 'string') {
+      return first.name.trim() || null;
+    }
+    return null;
+  }
+
+  private toPositiveNumber(...values: any[]): number | null {
+    for (const value of values) {
+      const numeric = Number(value);
+      if (Number.isFinite(numeric) && numeric > 0) {
+        return numeric;
+      }
+    }
+    return null;
+  }
+
+  private toNonNegativeNumber(...values: any[]): number {
+    for (const value of values) {
+      const numeric = Number(value);
+      if (Number.isFinite(numeric) && numeric >= 0) {
+        return numeric;
+      }
+    }
+    return 0;
+  }
+
+  private async syncCatalogMediaFromImportedOffer(
+    catalogProductId: string,
+    imageUrls: string[],
+    sku: string,
+    logContext: string,
+  ): Promise<void> {
+    if (!imageUrls.length) {
+      return;
+    }
+
+    try {
+      const existing = await this.catalogClient.getProductMedia(catalogProductId);
+      const existingUrls = new Set(existing.map((item: any) => item.url).filter(Boolean));
+      for (const [index, url] of imageUrls.entries()) {
+        if (existingUrls.has(url)) {
+          continue;
+        }
+        await this.catalogClient.createProductMedia({
+          productId: catalogProductId,
+          type: 'image',
+          url,
+          thumbnailUrl: null,
+          altText: 'Allegro product image',
+          title: 'Allegro image',
+          position: index,
+          isPrimary: index === 0 && !existing.some((item: any) => item.isPrimary),
+          metadata: { source: 'allegro', sku },
+        });
+        existingUrls.add(url);
+      }
+    } catch (error: any) {
+      this.logger.warn(`${logContext} Failed to sync Catalog media for imported offer`, {
+        catalogProductId,
+        sku,
+        error: error?.response?.data?.message || error?.message || String(error),
+      });
+    }
+  }
+
+  private async syncCatalogPricingFromImportedOffer(
+    catalogProductId: string,
+    price: number | null,
+    currency: string,
+    sku: string,
+    logContext: string,
+  ): Promise<void> {
+    if (!price) {
+      return;
+    }
+
+    try {
+      const current = await this.catalogClient.getProductPricing(catalogProductId);
+      const currentAmount = current?.basePrice != null ? Number(current.basePrice) : null;
+      const currentCurrency = current?.currency ? String(current.currency).toUpperCase() : null;
+      if (current?.isActive && currentAmount === price && currentCurrency === currency) {
+        return;
+      }
+
+      await this.catalogClient.upsertProductPricing({
+        productId: catalogProductId,
+        basePrice: price,
+        currency,
+        priceType: 'regular',
+        isActive: true,
+        validFrom: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      this.logger.warn(`${logContext} Failed to sync Catalog pricing for imported offer`, {
+        catalogProductId,
+        sku,
+        price,
+        currency,
+        error: error?.response?.data?.message || error?.message || String(error),
+      });
+    }
+  }
+
+  private async syncCatalogMarketplaceProfileFromImportedOffer(
+    catalogProductId: string,
+    productDetails: any,
+    allegroOffer: any,
+    offerData: any,
+    allegroProduct: any,
+    sku: string,
+    logContext: string,
+  ): Promise<void> {
+    try {
+      await this.catalogClient.updateProductMarketplaceFields(catalogProductId, 'allegro', {
+        canonical: {
+          title: productDetails.title,
+          description: productDetails.description,
+          brand: productDetails.brand,
+          manufacturer: productDetails.manufacturer,
+          ean: productDetails.ean,
+        },
+        overrides: {
+          categoryId: productDetails.categoryId,
+          parameters: productDetails.parameters,
+          price: productDetails.price,
+          currency: productDetails.currency,
+          quantity: productDetails.quantity,
+          images: productDetails.images,
+          sellingMode: allegroOffer?.sellingMode || null,
+          delivery: offerData?.deliveryOptions || allegroOffer?.delivery || null,
+          payments: offerData?.paymentOptions || allegroOffer?.payments || null,
+          location: allegroOffer?.location || null,
+          responsibleProducer: Array.isArray(allegroOffer?.productSet) ? allegroOffer.productSet[0]?.responsibleProducer || null : null,
+          publication: allegroOffer?.publication || { status: offerData?.publicationStatus || offerData?.status || null },
+          afterSalesServices: allegroOffer?.afterSalesServices || null,
+          taxSettings: allegroOffer?.taxSettings || null,
+        },
+        externalRefs: {
+          allegroProductId: allegroProduct?.allegroProductId || allegroOffer?.productSet?.[0]?.product?.id || null,
+          allegroOfferIds: [offerData?.allegroOfferId].filter(Boolean),
+          listingIds: [offerData?.allegroListingId].filter(Boolean),
+          categoryIds: [productDetails.categoryId].filter(Boolean),
+          sku,
+        },
+        sourceData: {
+          importedAt: new Date().toISOString(),
+          source: 'allegro-api',
+          offer: offerData,
+          productSet: allegroOffer?.productSet || null,
+          rawData: allegroOffer,
+        },
+        status: 'imported',
+      });
+    } catch (error: any) {
+      this.logger.warn(`${logContext} Failed to sync Allegro marketplace profile for imported offer`, {
+        catalogProductId,
+        sku,
+        error: error?.response?.data?.message || error?.message || String(error),
+      });
+    }
   }
 
   /**
@@ -6377,4 +6686,3 @@ export class OffersService {
   }
 
 }
-

@@ -39,7 +39,7 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<Navigate to="settings" replace />} />
+            <Route index element={<Navigate to="products" replace />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="import" element={<ImportJobsPage />} />
             <Route path="offers" element={<OffersPage />} />

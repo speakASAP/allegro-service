@@ -76,7 +76,6 @@ Publish-like actions remain idempotent through the existing governed lifecycle. 
 
 ## Required Context
 
-- `bazos-service` UI reference: `/home/ssf/Documents/Github/bazos-service/services/aukro-service/src/ui/ui.assets.ts`
 - `bazos-service` docs: `implementation-goals/GOAL-06-landing-admin-client-ui.md`, `GOAL-08-hosted-auth-ui.md`, `GOAL-12-client-catalog-publishing-flow.md`
 - Allegro frontend: `services/frontend/src`
 - Allegro sell-action backend: `services/allegro-service/src/allegro/catalog-sell-action`

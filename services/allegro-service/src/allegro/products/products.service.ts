@@ -39,6 +39,71 @@ export class ProductsService {
     this.logger.setContext('ProductsService');
   }
 
+  private async enrichCatalogProductForAllegro(catalogProduct: any): Promise<any> {
+    let marketplaceProfile: any = null;
+    let currentPricing: any = null;
+
+    try {
+      marketplaceProfile = await this.catalogClient.getProductMarketplaceFields(catalogProduct.id, 'allegro');
+    } catch (error: any) {
+      this.logger.warn(`Failed to load Allegro marketplace profile for catalog product ${catalogProduct.id}: ${error.message}`);
+    }
+
+    try {
+      currentPricing = await this.catalogClient.getProductPricing(catalogProduct.id);
+    } catch (error: any) {
+      this.logger.warn(`Failed to load current Catalog pricing for product ${catalogProduct.id}: ${error.message}`);
+    }
+
+    const profile = marketplaceProfile?.profile || null;
+    const overrides = profile?.overrides || {};
+    const media = Array.isArray(catalogProduct.media) ? catalogProduct.media : [];
+    const mediaImages = media.map((item: any) => item?.url || item?.src || null).filter(Boolean);
+    const overrideImages = Array.isArray(overrides.images) ? overrides.images.filter(Boolean) : [];
+    const activePrice = currentPricing || this.pickCurrentPrice(catalogProduct.pricing);
+    const overridePrice = overrides.price !== undefined && overrides.price !== null ? Number(overrides.price) : null;
+    const priceAmount = Number.isFinite(overridePrice) && overridePrice > 0 ? overridePrice : this.priceAmount(activePrice);
+    const currency = String(overrides.currency || activePrice?.currency || catalogProduct.currency || 'CZK').toUpperCase();
+    const quantity = overrides.quantity !== undefined && overrides.quantity !== null ? Number(overrides.quantity) : undefined;
+
+    return {
+      ...catalogProduct,
+      allegroCategoryId: overrides.categoryId || catalogProduct.allegroCategoryId || null,
+      price: priceAmount ? { gross: priceAmount, currency } : catalogProduct.price,
+      currency,
+      stockQuantity: Number.isFinite(quantity) ? quantity : catalogProduct.stockQuantity,
+      quantity: Number.isFinite(quantity) ? quantity : catalogProduct.quantity,
+      images: overrideImages.length > 0 ? overrideImages : mediaImages,
+      marketplaceProfiles: {
+        ...(catalogProduct.marketplaceProfiles || {}),
+        allegro: profile,
+      },
+    };
+  }
+
+  private pickCurrentPrice(pricingRows: any[] | undefined): any | null {
+    if (!Array.isArray(pricingRows) || pricingRows.length === 0) {
+      return null;
+    }
+    const now = Date.now();
+    return pricingRows
+      .filter((row) => row?.isActive !== false)
+      .filter((row) => {
+        const validFrom = row.validFrom ? new Date(row.validFrom).getTime() : 0;
+        const validTo = row.validTo ? new Date(row.validTo).getTime() : Number.MAX_SAFE_INTEGER;
+        return validFrom <= now && validTo >= now;
+      })
+      .sort((left, right) => new Date(right.updatedAt || right.createdAt || 0).getTime() - new Date(left.updatedAt || left.createdAt || 0).getTime())[0] || null;
+  }
+
+  private priceAmount(price: any): number | null {
+    if (!price) {
+      return null;
+    }
+    const amount = Number(price.salePrice ?? price.basePrice ?? price.gross ?? price.amount);
+    return Number.isFinite(amount) && amount > 0 ? amount : null;
+  }
+
   private extractSummaryFromRaw(
     rawData: any,
     payload: ProductPayload = {},
@@ -140,13 +205,14 @@ export class ProductsService {
       const enrichedItems = await Promise.all(
         catalogResult.items.map(async (catalogProduct: any) => {
           try {
+            const enrichedCatalogProduct = await this.enrichCatalogProductForAllegro(catalogProduct);
             // Try to find AllegroProduct by EAN or SKU
             const prisma = this.prisma as any;
             const allegroProduct = await prisma.allegroProduct.findFirst({
               where: {
                 OR: [
-                  catalogProduct.ean ? { ean: catalogProduct.ean } : undefined,
-                  { allegroProductId: catalogProduct.sku },
+                  enrichedCatalogProduct.ean ? { ean: enrichedCatalogProduct.ean } : undefined,
+                  { allegroProductId: enrichedCatalogProduct.sku },
                 ].filter(Boolean),
               },
               include: {
@@ -170,15 +236,15 @@ export class ProductsService {
             return {
               id: catalogProduct.id,
               // Use allegroProductId from AllegroProduct if available, otherwise use SKU
-              allegroProductId: allegroProduct?.allegroProductId || catalogProduct.sku || catalogProduct.id,
+              allegroProductId: allegroProduct?.allegroProductId || enrichedCatalogProduct.sku || catalogProduct.id,
               // Map catalog title to name
-              name: catalogProduct.title || null,
+              name: enrichedCatalogProduct.title || null,
               // Brand from catalog
-              brand: catalogProduct.brand || null,
+              brand: enrichedCatalogProduct.brand || null,
               // Manufacturer code from catalog (catalog uses 'manufacturer' field)
-              manufacturerCode: catalogProduct.manufacturer || allegroProduct?.manufacturerCode || null,
+              manufacturerCode: enrichedCatalogProduct.manufacturer || allegroProduct?.manufacturerCode || null,
               // EAN from catalog or AllegroProduct
-              ean: catalogProduct.ean || allegroProduct?.ean || null,
+              ean: enrichedCatalogProduct.ean || allegroProduct?.ean || null,
               // Publication status from AllegroProduct
               publicationStatus: allegroProduct?.publicationStatus || null,
               // AI co-created flag
@@ -188,12 +254,12 @@ export class ProductsService {
               // Parameters
               parameters: allegroProduct?.parameters || [],
               // Timestamps
-              createdAt: catalogProduct.createdAt || null,
-              updatedAt: catalogProduct.updatedAt || allegroProduct?.updatedAt || null,
+              createdAt: enrichedCatalogProduct.createdAt || null,
+              updatedAt: enrichedCatalogProduct.updatedAt || allegroProduct?.updatedAt || null,
               // Keep raw data if requested
               rawData: includeRaw && allegroProduct ? allegroProduct.rawData : undefined,
               // Keep full catalog product data for reference
-              catalogProduct: catalogProduct,
+              catalogProduct: enrichedCatalogProduct,
               // Keep full allegro product data for reference
               allegroProduct: allegroProduct ? {
                 id: allegroProduct.id,
@@ -221,7 +287,7 @@ export class ProductsService {
               parameters: [],
               createdAt: catalogProduct.createdAt || null,
               updatedAt: catalogProduct.updatedAt || null,
-              catalogProduct: catalogProduct,
+              catalogProduct: await this.enrichCatalogProductForAllegro(catalogProduct),
               allegroProduct: null,
             };
           }
@@ -272,13 +338,14 @@ export class ProductsService {
         throw new HttpException('Product not found', HttpStatus.NOT_FOUND);
       }
 
+      const enrichedCatalogProduct = await this.enrichCatalogProductForAllegro(catalogProduct);
       // Enrich with AllegroProduct data (Allegro-specific raw data)
       const prisma = this.prisma as any;
       const allegroProduct = await prisma.allegroProduct.findFirst({
         where: {
           OR: [
-            catalogProduct.ean ? { ean: catalogProduct.ean } : undefined,
-            { allegroProductId: catalogProduct.sku },
+            enrichedCatalogProduct.ean ? { ean: enrichedCatalogProduct.ean } : undefined,
+            { allegroProductId: enrichedCatalogProduct.sku },
           ].filter(Boolean),
         },
         include: { parameters: true },
@@ -300,15 +367,15 @@ export class ProductsService {
       return {
         id: catalogProduct.id,
         // Use allegroProductId from AllegroProduct if available, otherwise use SKU
-        allegroProductId: allegroProduct?.allegroProductId || catalogProduct.sku || catalogProduct.id,
+        allegroProductId: allegroProduct?.allegroProductId || enrichedCatalogProduct.sku || catalogProduct.id,
         // Map catalog title to name
-        name: catalogProduct.title || null,
+        name: enrichedCatalogProduct.title || null,
         // Brand from catalog
-        brand: catalogProduct.brand || null,
+        brand: enrichedCatalogProduct.brand || null,
         // Manufacturer code from catalog (catalog uses 'manufacturer' field)
-        manufacturerCode: catalogProduct.manufacturer || allegroProduct?.manufacturerCode || null,
+        manufacturerCode: enrichedCatalogProduct.manufacturer || allegroProduct?.manufacturerCode || null,
         // EAN from catalog or AllegroProduct
-        ean: catalogProduct.ean || allegroProduct?.ean || null,
+        ean: enrichedCatalogProduct.ean || allegroProduct?.ean || null,
         // Publication status from AllegroProduct
         publicationStatus: allegroProduct?.publicationStatus || null,
         // AI co-created flag
@@ -318,12 +385,12 @@ export class ProductsService {
         // Parameters
         parameters: allegroProduct?.parameters || [],
         // Timestamps
-        createdAt: catalogProduct.createdAt || null,
-        updatedAt: catalogProduct.updatedAt || allegroProduct?.updatedAt || null,
+        createdAt: enrichedCatalogProduct.createdAt || null,
+        updatedAt: enrichedCatalogProduct.updatedAt || allegroProduct?.updatedAt || null,
         // Keep raw data
         rawData: allegroProduct?.rawData || null,
         // Keep full catalog product data for reference
-        catalogProduct: catalogProduct,
+        catalogProduct: enrichedCatalogProduct,
         // Keep full allegro product data for reference
         allegroProduct: allegroProduct ? {
           id: allegroProduct.id,
@@ -863,4 +930,3 @@ export class ProductsService {
     });
   }
 }
-
