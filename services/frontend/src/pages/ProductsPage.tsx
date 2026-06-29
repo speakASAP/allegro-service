@@ -392,7 +392,6 @@ const ProductsPage: React.FC = () => {
                   <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Catalog product</th>
                   <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Brand / EAN</th>
                   <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Draft status</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Next action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white">
@@ -430,16 +429,12 @@ const ProductsPage: React.FC = () => {
                           status?.status || status?.draft?.publicationStatus || 'Not prepared'
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm">
-                        <div>{statusError || status?.nextAction || 'prepare_draft'}</div>
-                        {active && <div className="mt-1 text-xs font-semibold text-blue-700">Selected</div>}
-                      </td>
                     </tr>
                   );
                 })}
                 {products.length === 0 && (
                   <tr>
-                    <td className="px-4 py-8 text-center text-sm text-gray-500" colSpan={4}>
+                    <td className="px-4 py-8 text-center text-sm text-gray-500" colSpan={3}>
                       {loading ? 'Loading catalog products...' : 'No catalog products found'}
                     </td>
                   </tr>
