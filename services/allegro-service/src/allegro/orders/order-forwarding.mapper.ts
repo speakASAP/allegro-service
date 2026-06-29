@@ -41,6 +41,20 @@ export interface OrderForwardingBuildResult {
   lineOfferIds: string[];
 }
 
+function parseMoney(value: any, fallback = 0): number {
+  const amount = typeof value === "object" && value !== null ? value.amount : value;
+  const parsed = parseFloat(String(amount ?? fallback));
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function getOrderTotal(allegroOrder: any): { amount: number; currency: string } {
+  const total = allegroOrder?.totalPrice || allegroOrder?.summary?.totalToPay || {};
+  return {
+    amount: parseMoney(total),
+    currency: total.currency || "PLN",
+  };
+}
+
 export function getAllegroLineOfferIds(lineItems: any[] = []): string[] {
   return Array.from(new Set(
     lineItems
@@ -87,7 +101,7 @@ export function buildOrderForwardingPayload(
     }
 
     const quantity = item?.quantity || 1;
-    const unitPrice = parseFloat(item?.price?.amount || "0");
+    const unitPrice = parseMoney(item?.price);
 
     items.push({
       productId: offer.catalogProductId,
@@ -112,6 +126,7 @@ export function buildOrderForwardingPayload(
   const firstMappedOffer = lineItems
     .map((item: any) => offersByAllegroOfferId.get(String(item?.offer?.id || "").trim()))
     .find((offer: AllegroForwardingOffer | undefined) => !!offer);
+  const orderTotal = getOrderTotal(allegroOrder);
 
   return {
     orderData: {
@@ -123,13 +138,13 @@ export function buildOrderForwardingPayload(
         login: allegroOrder?.buyer?.login,
       },
       items,
-      subtotal: parseFloat(allegroOrder?.totalPrice?.amount || "0"),
+      subtotal: orderTotal.amount,
       shippingCost: 0,
       taxAmount: 0,
-      total: parseFloat(allegroOrder?.totalPrice?.amount || "0"),
-      currency: allegroOrder?.totalPrice?.currency || "PLN",
-      paymentStatus: allegroOrder?.payment?.status,
-      orderedAt: new Date(allegroOrder?.createdAt || Date.now()),
+      total: orderTotal.amount,
+      currency: orderTotal.currency,
+      paymentStatus: allegroOrder?.payment?.status || (allegroOrder?.payment?.finishedAt ? "PAID" : undefined),
+      orderedAt: new Date(allegroOrder?.createdAt || lineItems[0]?.boughtAt || Date.now()),
     },
     blockedReasons: [],
     missingOfferIds: [],

@@ -115,6 +115,7 @@ model AllegroOffer {
   // Relations
   // NOTE: catalogProductId references catalog-microservice product ID (no foreign key constraint)
   orders          AllegroOrder[]
+  orderLineItems  AllegroOrderLineItem[]
   syncJobs        SyncJob[]
   publishAttempts AllegroPublishAttempt[]
 
@@ -183,7 +184,7 @@ model AllegroPublishAttempt {
 model AllegroOrder {
   id              String  @id @default(uuid()) @db.Uuid
   allegroOrderId  String  @unique @db.VarChar(100) // Allegro's order ID
-  allegroOfferId  String  @db.Uuid
+  allegroOfferId  String? @db.Uuid
   catalogProductId String? @db.Uuid // Product ID from catalog-microservice (no FK constraint)
 
   // Order details
@@ -196,6 +197,7 @@ model AllegroOrder {
   price      Decimal @db.Decimal(10, 2)
   totalPrice Decimal @db.Decimal(10, 2)
   currency   String  @default("PLN") @db.VarChar(10)
+  lineItemsCount Int  @default(0)
 
   // Status
   status            String  @db.VarChar(50) // NEW, PAID, SENT, DELIVERED, CANCELLED
@@ -211,13 +213,20 @@ model AllegroOrder {
   paymentMethod String?   @db.VarChar(100)
   paidAt        DateTime? @db.Timestamp(6)
 
+  // Checkout form metadata
+  marketplaceId   String? @db.VarChar(100)
+  revision        String? @db.VarChar(100)
+  invoiceRequired Boolean @default(false)
+  rawData         Json?
+
   // Timestamps
   orderDate DateTime @db.Timestamp(6)
   createdAt DateTime @default(now()) @db.Timestamp(6)
   updatedAt DateTime @updatedAt @db.Timestamp(6)
 
   // Relations
-  offer   AllegroOffer @relation(fields: [allegroOfferId], references: [id])
+  offer     AllegroOffer? @relation(fields: [allegroOfferId], references: [id], onDelete: SetNull)
+  lineItems AllegroOrderLineItem[]
   // NOTE: catalogProductId references catalog-microservice product ID (no foreign key constraint)
 
   @@index([allegroOrderId])
@@ -225,7 +234,45 @@ model AllegroOrder {
   @@index([catalogProductId])
   @@index([status])
   @@index([orderDate])
+  @@index([marketplaceId])
   @@map("allegro_orders")
+}
+
+model AllegroOrderLineItem {
+  id                     String   @id @default(uuid()) @db.Uuid
+  orderId                String   @db.Uuid
+  allegroLineItemId      String   @db.VarChar(150)
+  allegroOfferExternalId String?  @db.VarChar(100)
+  allegroOfferId         String?  @db.Uuid
+  catalogProductId       String?  @db.Uuid // Product ID from catalog-microservice (no FK constraint)
+
+  title         String  @db.VarChar(500)
+  quantity      Int     @default(1)
+  price         Decimal @db.Decimal(10, 2)
+  originalPrice Decimal? @db.Decimal(10, 2)
+  totalPrice    Decimal @db.Decimal(10, 2)
+  currency      String  @default("PLN") @db.VarChar(10)
+
+  tax                        Json?
+  discounts                  Json?
+  vouchers                   Json?
+  selectedAdditionalServices Json?
+  rawData                    Json?
+  boughtAt                   DateTime? @db.Timestamp(6)
+
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @db.Timestamp(6)
+
+  order AllegroOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  offer AllegroOffer? @relation(fields: [allegroOfferId], references: [id], onDelete: SetNull)
+
+  @@unique([orderId, allegroLineItemId])
+  @@index([allegroLineItemId])
+  @@index([allegroOfferExternalId])
+  @@index([allegroOfferId])
+  @@index([catalogProductId])
+  @@index([boughtAt])
+  @@map("allegro_order_line_items")
 }
 
 // Sync job tracking

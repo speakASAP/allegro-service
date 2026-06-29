@@ -984,7 +984,7 @@ export class AllegroApiService {
    */
   async getOrders(params?: any) {
     const queryString = new URLSearchParams(params).toString();
-    const endpoint = `/order/orders${queryString ? `?${queryString}` : ''}`;
+    const endpoint = `/order/checkout-forms${queryString ? `?${queryString}` : ''}`;
     return this.request('GET', endpoint);
   }
 
@@ -992,7 +992,7 @@ export class AllegroApiService {
    * Get order by ID
    */
   async getOrder(orderId: string) {
-    return this.request('GET', `/order/orders/${orderId}`);
+    return this.request('GET', `/order/checkout-forms/${orderId}`);
   }
 
   /**
@@ -1055,7 +1055,7 @@ export class AllegroApiService {
    * Get order events (for event polling)
    * Note: Allegro may not have a dedicated /order/events endpoint
    * This method attempts to fetch order events, or returns empty if not available
-   * @param after - Event ID to start after (optional)
+   * @param after - Event ID to start from (optional)
    * @param limit - Maximum number of events to return (default: 100)
    */
   async getOrderEvents(after?: string, limit: number = 100) {
@@ -1063,7 +1063,7 @@ export class AllegroApiService {
     try {
       const params: any = { limit };
       if (after) {
-        params.after = after;
+        params.from = after;
       }
       const queryString = new URLSearchParams(params).toString();
       return this.request('GET', `/order/events?${queryString}`);
@@ -1169,4 +1169,3 @@ export class AllegroApiService {
     throw new Error(`Missing required environment variable: ${key}. Please set it in your .env file.`);
   }
 }
-

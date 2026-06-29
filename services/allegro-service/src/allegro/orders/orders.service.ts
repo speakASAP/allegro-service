@@ -8,6 +8,61 @@ import { PrismaService, LoggerService, OrderClientService } from '@allegro/share
 import { AllegroApiService } from '../allegro-api.service';
 import { AllegroForwardingOffer, buildOrderForwardingPayload, getAllegroLineOfferIds } from './order-forwarding.mapper';
 
+function parseMoney(value: any, fallback = 0): number {
+  const amount = typeof value === 'object' && value !== null ? value.amount : value;
+  const parsed = Number.parseFloat(String(amount ?? fallback));
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function parseDate(value: any): Date | null {
+  if (!value) {
+    return null;
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getOrderTotal(order: any): { amount: number; currency: string } {
+  const total = order?.totalPrice || order?.summary?.totalToPay || {};
+  return {
+    amount: parseMoney(total),
+    currency: total.currency || 'PLN',
+  };
+}
+
+function getPaymentStatus(order: any): string | null {
+  if (order?.payment?.status) {
+    return order.payment.status;
+  }
+  return order?.payment?.finishedAt ? 'PAID' : null;
+}
+
+function buildLineItemPayload(lineItem: any, offer: AllegroForwardingOffer | undefined, index: number) {
+  const quantity = Number(lineItem?.quantity || 1);
+  const price = parseMoney(lineItem?.price);
+  const originalPrice = lineItem?.originalPrice ? parseMoney(lineItem.originalPrice) : null;
+  const currency = lineItem?.price?.currency || lineItem?.originalPrice?.currency || 'PLN';
+
+  return {
+    allegroLineItemId: String(lineItem?.id || `${index}:${lineItem?.offer?.id || 'unknown'}:${lineItem?.boughtAt || ''}`),
+    allegroOfferExternalId: lineItem?.offer?.id ? String(lineItem.offer.id) : null,
+    allegroOfferId: offer?.id || null,
+    catalogProductId: offer?.catalogProductId || null,
+    title: String(lineItem?.offer?.name || offer?.title || 'Product').slice(0, 500),
+    quantity,
+    price,
+    originalPrice,
+    totalPrice: price * quantity,
+    currency,
+    tax: lineItem?.tax || null,
+    discounts: lineItem?.discounts || null,
+    vouchers: lineItem?.vouchers || null,
+    selectedAdditionalServices: lineItem?.selectedAdditionalServices || null,
+    rawData: lineItem || null,
+    boughtAt: parseDate(lineItem?.boughtAt),
+  };
+}
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -64,6 +119,9 @@ export class OrdersService {
           status: true,
           paymentStatus: true,
           fulfillmentStatus: true,
+          deliveryMethod: true,
+          marketplaceId: true,
+          lineItemsCount: true,
           orderDate: true,
           createdAt: true,
           updatedAt: true,
@@ -116,6 +174,9 @@ export class OrdersService {
       where: { id },
       include: {
         offer: true,
+        lineItems: {
+          orderBy: { createdAt: 'asc' },
+        },
       },
     });
 
@@ -144,10 +205,11 @@ export class OrdersService {
           offset,
         });
 
-        const orders = response.orders || [];
+        const orders = response.checkoutForms || response.orders || [];
         
         for (const allegroOrder of orders) {
           try {
+            const lineItems = allegroOrder.lineItems || [];
             const lineOfferIds = getAllegroLineOfferIds(allegroOrder.lineItems || []);
             const offers: AllegroForwardingOffer[] = lineOfferIds.length > 0
               ? await this.prisma.allegroOffer.findMany({
@@ -166,45 +228,79 @@ export class OrdersService {
             );
             const primaryOfferId = lineOfferIds[0] || '';
             const offer = primaryOfferId ? offersByAllegroOfferId.get(primaryOfferId) : null;
-
-            if (!offer) {
-              this.logger.warn('Skipping Allegro order sync because first line item offer is not mapped', {
-                allegroOrderId: allegroOrder.id,
-                lineOfferIds,
-              });
-              continue;
-            }
+            const firstLine = lineItems[0] || {};
+            const firstLinePrice = firstLine.price || {};
+            const orderTotal = getOrderTotal(allegroOrder);
+            const paymentStatus = getPaymentStatus(allegroOrder);
+            const orderDate = parseDate(allegroOrder.createdAt || firstLine.boughtAt || allegroOrder.updatedAt) || new Date();
 
             const savedOrder = await this.prisma.allegroOrder.upsert({
               where: { allegroOrderId: allegroOrder.id },
               update: {
-                quantity: allegroOrder.lineItems?.[0]?.quantity || 1,
-                price: parseFloat(allegroOrder.lineItems?.[0]?.price?.amount || '0'),
-                totalPrice: parseFloat(allegroOrder.totalPrice?.amount || '0'),
-                currency: allegroOrder.totalPrice?.currency || this.configService.get<string>('PRICE_CURRENCY_TARGET') || 'PLN',
+                allegroOfferId: offer?.id || null,
+                catalogProductId: offer?.catalogProductId || null,
+                quantity: lineItems.reduce((sum: number, item: any) => sum + Number(item?.quantity || 0), 0) || 1,
+                price: parseMoney(firstLinePrice),
+                totalPrice: orderTotal.amount,
+                currency: orderTotal.currency || firstLinePrice.currency || this.configService.get<string>('PRICE_CURRENCY_TARGET') || 'PLN',
+                lineItemsCount: lineItems.length,
                 status: allegroOrder.status || 'NEW',
-                paymentStatus: allegroOrder.payment?.status,
+                paymentStatus,
                 fulfillmentStatus: allegroOrder.fulfillment?.status,
+                buyerId: allegroOrder.buyer?.id,
                 buyerEmail: allegroOrder.buyer?.email,
                 buyerLogin: allegroOrder.buyer?.login,
+                deliveryMethod: allegroOrder.delivery?.method?.name,
+                deliveryAddress: allegroOrder.delivery?.address || null,
+                paymentMethod: allegroOrder.payment?.provider || allegroOrder.payment?.type,
+                paidAt: parseDate(allegroOrder.payment?.finishedAt),
+                marketplaceId: allegroOrder.marketplace?.id,
+                revision: allegroOrder.revision,
+                invoiceRequired: Boolean(allegroOrder.invoice?.required),
+                rawData: allegroOrder,
                 updatedAt: new Date(),
               },
               create: {
                 allegroOrderId: allegroOrder.id,
-                allegroOfferId: offer.id,
-                catalogProductId: offer.catalogProductId || null,
-                quantity: allegroOrder.lineItems?.[0]?.quantity || 1,
-                price: parseFloat(allegroOrder.lineItems?.[0]?.price?.amount || '0'),
-                totalPrice: parseFloat(allegroOrder.totalPrice?.amount || '0'),
-                currency: allegroOrder.totalPrice?.currency || this.configService.get<string>('PRICE_CURRENCY_TARGET') || 'PLN',
+                allegroOfferId: offer?.id || null,
+                catalogProductId: offer?.catalogProductId || null,
+                quantity: lineItems.reduce((sum: number, item: any) => sum + Number(item?.quantity || 0), 0) || 1,
+                price: parseMoney(firstLinePrice),
+                totalPrice: orderTotal.amount,
+                currency: orderTotal.currency || firstLinePrice.currency || this.configService.get<string>('PRICE_CURRENCY_TARGET') || 'PLN',
+                lineItemsCount: lineItems.length,
                 status: allegroOrder.status || 'NEW',
-                paymentStatus: allegroOrder.payment?.status,
+                paymentStatus,
                 fulfillmentStatus: allegroOrder.fulfillment?.status,
+                buyerId: allegroOrder.buyer?.id,
                 buyerEmail: allegroOrder.buyer?.email,
                 buyerLogin: allegroOrder.buyer?.login,
-                orderDate: new Date(allegroOrder.createdAt || Date.now()),
+                deliveryMethod: allegroOrder.delivery?.method?.name,
+                deliveryAddress: allegroOrder.delivery?.address || null,
+                paymentMethod: allegroOrder.payment?.provider || allegroOrder.payment?.type,
+                paidAt: parseDate(allegroOrder.payment?.finishedAt),
+                marketplaceId: allegroOrder.marketplace?.id,
+                revision: allegroOrder.revision,
+                invoiceRequired: Boolean(allegroOrder.invoice?.required),
+                rawData: allegroOrder,
+                orderDate,
               },
             });
+
+            await this.prisma.allegroOrderLineItem.deleteMany({
+              where: { orderId: savedOrder.id },
+            });
+            if (lineItems.length > 0) {
+              await this.prisma.allegroOrderLineItem.createMany({
+                data: lineItems.map((lineItem: any, index: number) => {
+                  const lineOfferId = String(lineItem?.offer?.id || '').trim();
+                  return {
+                    orderId: savedOrder.id,
+                    ...buildLineItemPayload(lineItem, lineOfferId ? offersByAllegroOfferId.get(lineOfferId) : undefined, index),
+                  };
+                }),
+              });
+            }
 
             // Forward order to orders-microservice only when every line has its own catalog product mapping.
             if (savedOrder) {

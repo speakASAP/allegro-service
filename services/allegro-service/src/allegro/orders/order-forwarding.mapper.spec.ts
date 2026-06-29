@@ -17,12 +17,14 @@ function syntheticOrder(lineItems: any[]) {
       login: "synthetic-buyer",
     },
     lineItems,
-    totalPrice: {
-      amount: "42.00",
-      currency: "PLN",
+    summary: {
+      totalToPay: {
+        amount: "42.00",
+        currency: "PLN",
+      },
     },
     payment: {
-      status: "PAID",
+      finishedAt: "2026-06-26T10:01:00Z",
     },
   };
 }
@@ -44,6 +46,8 @@ async function testMultiLineOrderUsesEachLineOfferCatalogProductId() {
   assert.equal(result.orderData?.items[0].productId, "11111111-1111-1111-1111-111111111111");
   assert.equal(result.orderData?.items[1].productId, "22222222-2222-2222-2222-222222222222");
   assert.equal(result.orderData?.items[1].totalPrice, 32);
+  assert.equal(result.orderData?.total, 42);
+  assert.equal(result.orderData?.paymentStatus, "PAID");
 }
 
 async function testMissingLineOfferMappingBlocksForwarding() {

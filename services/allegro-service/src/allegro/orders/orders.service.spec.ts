@@ -31,6 +31,16 @@ function createServiceFixture(orders: any[], offers: OfferFixture[]) {
         return { id: 'local-' + args.where.allegroOrderId };
       },
     },
+    allegroOrderLineItem: {
+      deleteMany: async (args: any) => {
+        captured.lineItemDeleteMany = args;
+        return { count: 0 };
+      },
+      createMany: async (args: any) => {
+        captured.lineItemCreateMany = args;
+        return { count: args.data.length };
+      },
+    },
   };
 
   const logger = {
@@ -40,7 +50,7 @@ function createServiceFixture(orders: any[], offers: OfferFixture[]) {
   };
 
   const allegroApi = {
-    getOrders: async () => ({ orders }),
+    getOrders: async () => ({ checkoutForms: orders }),
   };
 
   const configService = {
@@ -69,10 +79,17 @@ function buildAllegroOrder(lineItems: any[]) {
   return {
     id: 'allegro-order-1',
     lineItems,
-    totalPrice: { amount: '25.00', currency: 'PLN' },
+    summary: { totalToPay: { amount: '25.00', currency: 'PLN' } },
     status: 'READY_FOR_PROCESSING',
-    payment: { status: 'PAID' },
+    payment: { finishedAt: '2026-06-26T10:01:00.000Z', provider: 'ONLINE' },
     fulfillment: { status: 'NEW' },
+    delivery: {
+      method: { name: 'Allegro Automaty Paczkowe One' },
+      address: { city: 'Synthetic' },
+    },
+    invoice: { required: false },
+    marketplace: { id: 'allegro-cz' },
+    revision: '1',
     buyer: { email: 'buyer@example.invalid', login: 'buyer-login' },
     createdAt: '2026-06-26T10:00:00.000Z',
   };
@@ -93,6 +110,12 @@ async function testMultiLineOrderForwardsEachLineCatalogProductId() {
   assert.equal(result.totalSynced, 1);
   assert.deepEqual(fixture.captured.offerFindMany.where.allegroOfferId.in.sort(), ['offer-1', 'offer-2']);
   assert.equal(fixture.captured.orderUpsert.create.catalogProductId, 'catalog-a');
+  assert.equal(fixture.captured.orderUpsert.create.lineItemsCount, 2);
+  assert.equal(fixture.captured.orderUpsert.create.marketplaceId, 'allegro-cz');
+  assert.equal(fixture.captured.orderUpsert.create.paymentStatus, 'PAID');
+  assert.equal(fixture.captured.lineItemCreateMany.data.length, 2);
+  assert.equal(fixture.captured.lineItemCreateMany.data[0].allegroOfferExternalId, 'offer-1');
+  assert.equal(fixture.captured.lineItemCreateMany.data[1].catalogProductId, 'catalog-b');
   assert.equal(fixture.orderClientCalls.length, 1);
   assert.equal(fixture.orderClientCalls[0].externalOrderId, 'allegro-order-1');
   assert.equal(fixture.orderClientCalls[0].channel, 'allegro');
@@ -108,7 +131,7 @@ async function testMultiLineOrderForwardsEachLineCatalogProductId() {
   assert.equal(fixture.warnings.length, 0);
 }
 
-async function testMissingPrimaryOfferSkipsLocalSyncAndCentralForward() {
+async function testMissingPrimaryOfferStillPersistsCheckoutFormButSkipsCentralForward() {
   const order = buildAllegroOrder([
     { offer: { id: 'offer-missing', name: 'Missing first line' }, quantity: 1, price: { amount: '10.00' } },
     { offer: { id: 'offer-2', name: 'Mapped second line' }, quantity: 1, price: { amount: '15.00' } },
@@ -119,12 +142,16 @@ async function testMissingPrimaryOfferSkipsLocalSyncAndCentralForward() {
 
   const result = await fixture.service.syncOrdersFromAllegro();
 
-  assert.equal(result.totalSynced, 0);
-  assert.equal(fixture.captured.orderUpsert, undefined);
+  assert.equal(result.totalSynced, 1);
+  assert.equal(fixture.captured.orderUpsert.create.allegroOfferId, null);
+  assert.equal(fixture.captured.orderUpsert.create.catalogProductId, null);
+  assert.equal(fixture.captured.lineItemCreateMany.data.length, 2);
+  assert.equal(fixture.captured.lineItemCreateMany.data[0].allegroOfferId, null);
+  assert.equal(fixture.captured.lineItemCreateMany.data[1].allegroOfferId, 'db-offer-2');
   assert.equal(fixture.orderClientCalls.length, 0);
   assert.equal(fixture.warnings.length, 1);
-  assert.equal(fixture.warnings[0][0], 'Skipping Allegro order sync because first line item offer is not mapped');
-  assert.deepEqual(fixture.warnings[0][1].lineOfferIds, ['offer-missing', 'offer-2']);
+  assert.equal(fixture.warnings[0][0], 'Skipped forwarding Allegro order to orders-microservice because catalog mapping is incomplete');
+  assert.deepEqual(fixture.warnings[0][1].missingOfferIds, ['offer-missing']);
 }
 
 async function testMissingCatalogProductSkipsMalformedCentralForward() {
@@ -147,7 +174,7 @@ async function testMissingCatalogProductSkipsMalformedCentralForward() {
 
 export async function runOrdersServiceSpec(): Promise<void> {
   await testMultiLineOrderForwardsEachLineCatalogProductId();
-  await testMissingPrimaryOfferSkipsLocalSyncAndCentralForward();
+  await testMissingPrimaryOfferStillPersistsCheckoutFormButSkipsCentralForward();
   await testMissingCatalogProductSkipsMalformedCentralForward();
 }
 
