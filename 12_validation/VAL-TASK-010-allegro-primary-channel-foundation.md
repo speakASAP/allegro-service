@@ -462,3 +462,11 @@ Date: 2026-06-29
 - Migration status: PASS on 2026-06-30. `/app/shared/node_modules/.bin/prisma migrate deploy --schema=/tmp/prisma/schema.prisma` ran inside the deployed `allegro-service` pod using runtime DB env, reported 10 migrations, and `migrate status` reported database schema up to date.
 - Live table verification: PASS on 2026-06-30. Deployed Prisma client query `allegroQuantityCommandAttempt.count()` returned 0, confirming the table exists before live quantity commands.
 - Live route verification: PASS on 2026-06-30. `https://allegro.alfares.cz/api/health` returned HTTP 200, `https://allegro.alfares.cz/` returned HTTP 200, and unauthenticated guarded routes for quantity commands and operations quantity-command attempts returned HTTP 401 `No token provided`.
+
+## 2026-06-30 Authenticated Quantity Command Smoke Addendum
+
+- Live image verification: PASS. Remote `main` is `268e845`, and Kubernetes deployments `allegro-service`, `allegro-api-gateway`, `allegro-settings`, `allegro-imports`, and `allegro-frontend` all run image tag `268e845` with ready/updated/available replicas at 1.
+- Public route smoke: PASS. `https://allegro.alfares.cz/api/health` returned HTTP 200, `https://allegro.alfares.cz/` returned HTTP 200, and unauthenticated quantity-command routes returned HTTP 401.
+- Authenticated quantity-command smoke: PASS. A short-lived runtime JWT was generated inside the deployed pod for the owner of an existing active offer. `POST /api/allegro/quantity-commands/prepare` returned HTTP 200 and status `PREPARED`; `POST /api/allegro/quantity-commands/:attemptId/confirm` returned HTTP 200 and status `QUEUED`.
+- Mutation boundary: PASS. The smoke used target quantity equal to the current local quantity, did not call `execute`, did not call `confirm-and-execute`, did not call `poll`, did not create an Allegro command id, and did not perform a real Allegro quantity change. Preview tokens and JWT material were not printed or stored in validation artifacts.
+- Remaining blocker: `[MISSING: recurring stock orchestration policy for automatic Allegro quantity commands]`. Live quantity command execution remains owner-approved and business-need gated.

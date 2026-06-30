@@ -4,15 +4,17 @@
   "stage": "production",
   "health": "ok",
   "cycle": 7,
-  "last_cycle_at": "2026-06-30T07:00:00Z",
+  "last_cycle_at": "2026-06-30T08:35:00Z",
   "tasks_active": 1,
   "tasks_failed_last_cycle": 0,
   "open_task_ids": [
     "TASK-010"
   ],
-  "last_milestone": "task010-quantity-command-governance-migrated-deployed",
-  "next_focus": "TASK-010 preview-token governed import approvals and governed Allegro quantity-command write-back are migrated, deployed, and live-verified. Next: authenticated UX/API smoke for prepare/confirm without executing a real quantity change, then owner-approved live command only when needed.",
-  "blockers": [],
+  "last_milestone": "task010-authenticated-quantity-prepare-confirm-smoke-complete",
+  "next_focus": "TASK-010 authenticated quantity-command prepare/confirm smoke completed without execute and without real Allegro quantity change. Next: owner-approved live quantity command only when business-needed; recurring stock orchestration policy remains [MISSING: recurring stock orchestration policy for automatic Allegro quantity commands].",
+  "blockers": [
+    "[MISSING: recurring stock orchestration policy for automatic Allegro quantity commands]"
+  ],
   "budget_units_used": 0,
   "metrics": {
     "custom": {

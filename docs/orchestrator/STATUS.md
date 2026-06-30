@@ -1,6 +1,6 @@
 # Allegro Service Orchestrator Status
 
-Updated: 2026-06-29
+Updated: 2026-06-30
 
 ## 2026-06-29 - TASK-STOCK-004 Allegro Complete Physical Stock Source Recheck
 
@@ -20,8 +20,8 @@ Boundary: read-only Allegro/API probes and audit script deployment only; no Ware
 - W2 sync/projection migration is applied live and deployed.
 - Owner-approved one-time current-stock Warehouse apply completed on 2026-06-29.
 - P1 order sync now defaults to local projection only; central forwarding is exact-confirmation gated.
-- Durable central order forwarding attempt/status storage is migrated and deployed; final handoff must verify pushed `main` and live Kubernetes image tags agree.
-- Preview-token governed import approvals and governed Allegro quantity-command write-back are migrated and deployed; guarded unauthenticated routes return HTTP 401 and the quantity-command attempt table is empty before live commands. Final handoff must verify the exact live image tag against pushed `main`.
+- Durable central order forwarding attempt/status storage is migrated and deployed; pushed `main` and live Kubernetes image tags agree on `268e845`.
+- Preview-token governed import approvals and governed Allegro quantity-command write-back are migrated, deployed, live-image verified on tag `268e845`, and authenticated-smoke verified. The smoke ran `prepare` then `confirm` with target quantity equal to current quantity, reached `QUEUED`, did not call `execute`, did not create a command id, and did not change Allegro quantity.
 - P2 script import paths now separate dry-run, local projection, and Catalog apply confirmations.
 - P7 operations read API and the dashboard Operations route are implemented.
 
@@ -53,6 +53,7 @@ The operations raw-payload endpoint returns metadata only and does not select ra
 ## Blockers
 
 - `orders.create.v1` duplicate/equality behavior confirmed from orders-microservice source and verification scripts: exact replay returns existing order without duplicate side effects; mismatched same-key replay returns HTTP 409.
-- `[MISSING: preview-token governed service/controller import approval routes]`
-- `[MISSING: governed recurring stock sync and Allegro quantity command write-back]`
+- Preview-token governed service/controller import approval routes are implemented and live guarded.
+- Governed Allegro quantity command prepare/confirm/execute/poll routes are implemented, migrated, deployed, and smoke-verified without execute.
+- `[MISSING: recurring stock orchestration policy for automatic Allegro quantity commands]`
 - TASK-009 IPS audit/pre-coding debt repaired and validated on 2026-06-29; strict audit, pre-coding, and TASK-009 readiness gates passed.
