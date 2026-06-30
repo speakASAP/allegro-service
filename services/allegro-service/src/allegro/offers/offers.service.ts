@@ -1732,7 +1732,7 @@ export class OffersService {
       this.logger.log('[importApprovedOffers] OAuth token retrieved successfully', {
         userId,
         tokenLength: oauthToken?.length || 0,
-        tokenFirstChars: oauthToken?.substring(0, 20) || 'N/A',
+        hasToken: !!oauthToken,
       });
     } catch (error: any) {
       this.logger.error('[importApprovedOffers] Failed to get OAuth token', {
@@ -2470,7 +2470,7 @@ export class OffersService {
       this.logger.log('[importApprovedOffersFromSalesCenter] OAuth token retrieved successfully', {
         userId,
         tokenLength: oauthToken?.length || 0,
-        tokenFirstChars: oauthToken?.substring(0, 20) || 'N/A',
+        hasToken: !!oauthToken,
       });
     } catch (error: any) {
       this.logger.error('[importApprovedOffersFromSalesCenter] Failed to get OAuth token', {
@@ -2957,7 +2957,7 @@ export class OffersService {
         userId,
         accountId,
         tokenLength: token?.length || 0,
-        tokenFirstChars: token?.substring(0, 20) || 'N/A',
+        hasToken: !!token,
         dbQueryDuration: `${dbQueryDuration}ms`,
         totalDuration: `${totalDuration}ms`,
         timestamp: new Date().toISOString(),
@@ -4642,9 +4642,6 @@ export class OffersService {
         tokenDurationSeconds: Math.round(tokenDuration / 1000),
         tokenLength: oauthToken?.length || 0,
         hasToken: !!oauthToken,
-        tokenPreview: oauthToken ? `${oauthToken.substring(0, 20)}...${oauthToken.substring(oauthToken.length - 10)}` : 'null',
-        tokenFirstChars: oauthToken ? oauthToken.substring(0, 30) : 'null',
-        tokenLastChars: oauthToken ? oauthToken.substring(oauthToken.length - 20) : 'null',
         timestamp: new Date().toISOString(),
         step: '1/5',
         status: 'SUCCESS',
