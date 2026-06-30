@@ -82,8 +82,8 @@ const AllegroOAuthFlowHelp: React.FC = () => (
     <p className="font-medium">Where to click for Allegro OAuth</p>
     <ol className="mt-2 list-decimal space-y-2 pl-5">
       <li>
-        In the needed Allegro account card below, click <span className="font-medium">Authorize OAuth</span>. If you see{' '}
-        <span className="font-medium">Authorized</span> and <span className="font-medium">Revoke OAuth</span>, the account is already authorized.
+        In the needed Allegro account card below, click <span className="font-medium">Authorize OAuth</span> or{' '}
+        <span className="font-medium">Re-authorize OAuth</span>. Use re-authorization when the badge says Authorized but live Allegro imports still fail.
       </li>
       <li>
         The button calls{' '}
@@ -576,6 +576,13 @@ const SettingsPage: React.FC = () => {
                     <div className="flex items-center space-x-2">
                       {account.oauthStatus?.authorized ? (
                         <>
+                          <Button
+                            size="small"
+                            onClick={() => handleAuthorizeOAuth(account.id)}
+                            disabled={oauthLoadingAccountId === account.id || !account.clientId}
+                          >
+                            {oauthLoadingAccountId === account.id ? 'Starting...' : 'Re-authorize OAuth'}
+                          </Button>
                           <Button
                             variant="danger"
                             size="small"
