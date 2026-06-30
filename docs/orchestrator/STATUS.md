@@ -21,7 +21,7 @@ Boundary: read-only Allegro/API probes and audit script deployment only; no Ware
 - Owner-approved one-time current-stock Warehouse apply completed on 2026-06-29.
 - P1 order sync now defaults to local projection only; central forwarding is exact-confirmation gated.
 - Durable central order forwarding attempt/status storage is migrated and deployed; final handoff must verify pushed `main` and live Kubernetes image tags agree.
-- Preview-token governed import approvals and governed Allegro quantity-command write-back are migrated and deployed on image tag `ef0c610`; guarded unauthenticated routes return HTTP 401 and the quantity-command attempt table is empty before live commands.
+- Preview-token governed import approvals and governed Allegro quantity-command write-back are migrated and deployed; guarded unauthenticated routes return HTTP 401 and the quantity-command attempt table is empty before live commands. Final handoff must verify the exact live image tag against pushed `main`.
 - P2 script import paths now separate dry-run, local projection, and Catalog apply confirmations.
 - P7 operations read API and the dashboard Operations route are implemented.
 

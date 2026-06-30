@@ -4,14 +4,14 @@
   "stage": "production",
   "health": "ok",
   "cycle": 7,
-  "last_cycle_at": "2026-06-30T06:58:00Z",
+  "last_cycle_at": "2026-06-30T07:00:00Z",
   "tasks_active": 1,
   "tasks_failed_last_cycle": 0,
   "open_task_ids": [
     "TASK-010"
   ],
   "last_milestone": "task010-quantity-command-governance-migrated-deployed",
-  "next_focus": "TASK-010 preview-token governed import approvals and governed Allegro quantity-command write-back are migrated, deployed, and live-verified on image tag ef0c610. Next: authenticated UX/API smoke for prepare/confirm without executing a real quantity change, then owner-approved live command only when needed.",
+  "next_focus": "TASK-010 preview-token governed import approvals and governed Allegro quantity-command write-back are migrated, deployed, and live-verified. Next: authenticated UX/API smoke for prepare/confirm without executing a real quantity change, then owner-approved live command only when needed.",
   "blockers": [],
   "budget_units_used": 0,
   "metrics": {
@@ -32,5 +32,5 @@
     }
   },
   "project_status": "active",
-  "updated_at": "2026-06-29"
+  "updated_at": "2026-06-30"
 }
