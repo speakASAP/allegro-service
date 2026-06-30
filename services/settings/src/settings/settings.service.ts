@@ -102,6 +102,24 @@ export class SettingsService {
     return decrypted;
   }
 
+  private buildSellerIdentity(account: any): any {
+    return {
+      expectedLogin: account.expectedSellerLogin || undefined,
+      expectedId: account.expectedSellerId || undefined,
+      login: account.verifiedSellerLogin || undefined,
+      id: account.verifiedSellerId || undefined,
+      email: account.verifiedSellerEmail || undefined,
+      companyName: account.verifiedCompanyName || undefined,
+      marketplace: account.verifiedMarketplace || undefined,
+      verifiedAt: account.sellerVerifiedAt ? (account.sellerVerifiedAt instanceof Date ? account.sellerVerifiedAt.toISOString() : account.sellerVerifiedAt) : undefined,
+      error: account.sellerIdentityError || undefined,
+      mismatch: Boolean(
+        (account.expectedSellerLogin && account.verifiedSellerLogin && account.expectedSellerLogin.toLowerCase() !== account.verifiedSellerLogin.toLowerCase()) ||
+        (account.expectedSellerId && account.verifiedSellerId && account.expectedSellerId !== account.verifiedSellerId),
+      ),
+    };
+  }
+
   /**
    * Get user settings
    */
@@ -214,6 +232,7 @@ export class SettingsService {
           authorized: true,
           expiresAt: account.tokenExpiresAt ? (account.tokenExpiresAt instanceof Date ? account.tokenExpiresAt.toISOString() : account.tokenExpiresAt) : undefined,
           scopes: account.tokenScopes || undefined,
+          sellerIdentity: this.buildSellerIdentity(account),
         };
       } else {
         accountData.oauthStatus = {

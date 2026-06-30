@@ -18,6 +18,14 @@ interface TokenResponse {
   scope?: string;
 }
 
+export interface AllegroSellerIdentity {
+  id: string | null;
+  login: string | null;
+  email: string | null;
+  companyName: string | null;
+  baseMarketplace: string | null;
+}
+
 @Injectable()
 export class AllegroOAuthService {
   private readonly authorizeUrl: string;
@@ -154,33 +162,24 @@ export class AllegroOAuthService {
       code_verifier: codeVerifier.trim(),
     });
 
-    // Log request details (without sensitive data)
-    const requestBody = params.toString();
     this.logger.debug('Exchanging authorization code for token', {
       redirectUri: normalizedRedirectUri,
       codeLength: code?.length,
       codeVerifierLength: codeVerifier?.length,
       clientId: clientId.substring(0, 8) + '...',
       tokenUrl: this.tokenUrl,
-      requestBodyPreview: requestBody.substring(0, 100) + '...',
     });
 
-    // Log full request details for debugging
-    const requestLog = {
+    this.logger.log('Exchanging authorization code for token', {
       tokenUrl: this.tokenUrl,
-      grant_type: 'authorization_code',
+      grantType: 'authorization_code',
       codeLength: code?.length,
-      codeFirstChars: code?.substring(0, 20) + '...',
       redirectUri: normalizedRedirectUri,
       codeVerifierLength: codeVerifier?.length,
-      codeVerifierFirstChars: codeVerifier?.substring(0, 20) + '...',
       clientId: clientId.substring(0, 8) + '...',
       clientSecretLength: clientSecret?.length,
-      requestBody: params.toString().substring(0, 200) + '...',
       timestamp: new Date().toISOString(),
-    };
-    console.log('[AllegroOAuthService] exchangeCodeForToken - Full request details', JSON.stringify(requestLog, null, 2));
-    this.logger.log('Exchanging authorization code for token - Full details', requestLog);
+    });
 
     try {
       const response = await firstValueFrom(
@@ -228,9 +227,7 @@ export class AllegroOAuthService {
         hasCodeVerifier: !!codeVerifier,
         codeVerifierLength: codeVerifier?.length,
         codeLength: code?.length,
-        codeFirstChars: code?.substring(0, 20) + '...',
         tokenUrl: this.tokenUrl,
-        requestBody: params.toString().substring(0, 200) + '...',
         timestamp: new Date().toISOString(),
       };
       
@@ -242,6 +239,28 @@ export class AllegroOAuthService {
         `Failed to exchange authorization code: ${errorDescription} (${errorCode})`,
       );
     }
+  }
+
+  async getSellerIdentity(accessToken: string): Promise<AllegroSellerIdentity> {
+    const apiUrl = this.configService.get<string>('ALLEGRO_API_URL') || 'https://api.allegro.pl';
+    const response = await firstValueFrom(
+      this.httpService.get(`${apiUrl.replace(/\/+$/, '')}/me`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.allegro.public.v1+json',
+        },
+        timeout: 15000,
+      }),
+    );
+
+    const data = response.data || {};
+    return {
+      id: data.id || null,
+      login: data.login || null,
+      email: data.email || null,
+      companyName: data.company?.name || null,
+      baseMarketplace: data.baseMarketplace?.id || null,
+    };
   }
 
   /**

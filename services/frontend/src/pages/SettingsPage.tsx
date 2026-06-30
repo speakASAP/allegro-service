@@ -28,6 +28,18 @@ interface AllegroAccount {
     authorized: boolean;
     expiresAt?: string;
     scopes?: string;
+    sellerIdentity?: {
+      expectedLogin?: string;
+      expectedId?: string;
+      login?: string;
+      id?: string;
+      email?: string;
+      companyName?: string;
+      marketplace?: string;
+      verifiedAt?: string;
+      error?: string;
+      mismatch?: boolean;
+    };
   };
   createdAt: string;
   updatedAt: string;
@@ -495,10 +507,28 @@ const SettingsPage: React.FC = () => {
                             ⚠ Not Authorized
                           </span>
                         )}
+                        {account.oauthStatus?.sellerIdentity?.login && (
+                          <span className={`px-2 py-1 text-xs rounded ${account.oauthStatus.sellerIdentity.mismatch ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                            as {account.oauthStatus.sellerIdentity.login}
+                          </span>
+                        )}
                       </div>
                       {account.oauthStatus?.authorized && account.oauthStatus.expiresAt && (
                         <div className="text-sm text-gray-600 mb-2">
                           <strong>Expires:</strong> {new Date(account.oauthStatus.expiresAt).toLocaleString()}
+                        </div>
+                      )}
+                      {account.oauthStatus?.sellerIdentity && (
+                        <div className="text-sm text-gray-600 mb-2">
+                          {account.oauthStatus.sellerIdentity.login ? (
+                            <>
+                              <strong>Allegro seller:</strong> {account.oauthStatus.sellerIdentity.login}
+                              {account.oauthStatus.sellerIdentity.companyName && <span> · {account.oauthStatus.sellerIdentity.companyName}</span>}
+                              {account.oauthStatus.sellerIdentity.marketplace && <span> · {account.oauthStatus.sellerIdentity.marketplace}</span>}
+                            </>
+                          ) : account.oauthStatus.sellerIdentity.error ? (
+                            <span className="text-red-700">Seller identity check failed: {account.oauthStatus.sellerIdentity.error}</span>
+                          ) : null}
                         </div>
                       )}
                       {editingAccountId === account.id ? (

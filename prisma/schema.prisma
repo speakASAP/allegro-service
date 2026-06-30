@@ -713,6 +713,17 @@ model AllegroAccount {
   oAuthState        String?   @db.VarChar(255) // For OAuth state verification
   oAuthCodeVerifier String?   @db.VarChar(500) // Encrypted, for PKCE
 
+  // Allegro seller identity verified with /me after OAuth
+  expectedSellerLogin  String?   @db.VarChar(255)
+  expectedSellerId     String?   @db.VarChar(255)
+  verifiedSellerLogin  String?   @db.VarChar(255)
+  verifiedSellerId     String?   @db.VarChar(255)
+  verifiedSellerEmail  String?   @db.VarChar(255)
+  verifiedCompanyName  String?   @db.VarChar(255)
+  verifiedMarketplace  String?   @db.VarChar(64)
+  sellerVerifiedAt     DateTime? @db.Timestamp(6)
+  sellerIdentityError  String?   @db.VarChar(1000)
+
   // Active account flag (only one active per user)
   isActive Boolean @default(false)
 

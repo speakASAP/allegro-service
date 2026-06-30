@@ -223,13 +223,11 @@ export class OAuthController {
     const callbackReceivedLog = {
       hasCode: !!code,
       codeLength: code?.length,
-      codeFirstChars: code?.substring(0, 20) + '...',
       hasState: !!state,
       stateLength: state?.length,
-      stateFirstChars: state?.substring(0, 20) + '...',
       timestamp: new Date().toISOString(),
     };
-    console.log('[OAuth Callback] Received callback', JSON.stringify(callbackReceivedLog, null, 2));
+    this.logger.log('OAuth callback received', callbackReceivedLog);
     
     if (!code || !state) {
       const errorLog = { 
@@ -260,14 +258,11 @@ export class OAuthController {
     }
 
     const processingLog = { 
-      state: trimmedState.substring(0, 20) + '...',
       stateLength: trimmedState.length,
-      code: trimmedCode.substring(0, 20) + '...',
       codeLength: trimmedCode.length,
       timestamp: new Date().toISOString(),
     };
     this.logger.log('Processing OAuth callback', processingLog);
-    console.log('[OAuth Callback] Processing callback', JSON.stringify(processingLog, null, 2));
 
     try {
       // Find account by OAuth state (use trimmed state)
@@ -283,7 +278,6 @@ export class OAuthController {
         });
         
         this.logger.error('OAuth state not found', { 
-          state: trimmedState,
           stateLength: trimmedState.length,
           accountsWithState: accountsWithState.map(acc => ({
             id: acc.id,
@@ -299,26 +293,26 @@ export class OAuthController {
       this.logger.log('Found OAuth state for account', { 
         userId: account.userId,
         accountId: account.id,
-        state: trimmedState,
+        stateLength: trimmedState.length,
         hasCodeVerifier: !!account.oAuthCodeVerifier,
       });
       console.log('[OAuth Callback] Found OAuth state for account', { 
         userId: account.userId,
         accountId: account.id,
-        state: trimmedState, 
+        stateLength: trimmedState.length,
         hasCodeVerifier: !!account.oAuthCodeVerifier 
       });
 
       // Validate state
       if (!this.oauthService.validateState(trimmedState, account.oAuthState || '')) {
         this.logger.error('OAuth state validation failed', { 
-          receivedState: trimmedState, 
-          storedState: account.oAuthState,
+          receivedStateLength: trimmedState.length,
+          storedStateLength: account.oAuthState?.length,
           statesMatch: trimmedState === account.oAuthState,
         });
         console.error('[OAuth Callback] State validation failed', { 
-          receivedState: trimmedState, 
-          storedState: account.oAuthState 
+          receivedStateLength: trimmedState.length,
+          storedStateLength: account.oAuthState?.length
         });
         return res.redirect(`${this.getFrontendUrl()}/auth/callback?error=state_mismatch`);
       }
@@ -433,6 +427,29 @@ export class OAuthController {
         clientSecret,
       );
 
+      let sellerIdentity: any = null;
+      let sellerIdentityError: string | null = null;
+      try {
+        sellerIdentity = await this.oauthService.getSellerIdentity(tokenResponse.access_token);
+        this.logger.log('Verified Allegro seller identity after OAuth', {
+          userId: account.userId,
+          accountId: account.id,
+          sellerId: sellerIdentity.id,
+          sellerLogin: sellerIdentity.login,
+          emailPresent: !!sellerIdentity.email,
+          companyName: sellerIdentity.companyName,
+          baseMarketplace: sellerIdentity.baseMarketplace,
+        });
+      } catch (identityError: any) {
+        sellerIdentityError = identityError?.message || 'Failed to verify Allegro seller identity';
+        this.logger.error('Failed to verify Allegro seller identity after OAuth', {
+          userId: account.userId,
+          accountId: account.id,
+          error: sellerIdentityError,
+          status: identityError?.response?.status,
+        });
+      }
+
       // Encrypt tokens and check lengths before saving
       const encryptedAccessToken = this.encrypt(tokenResponse.access_token);
       const encryptedRefreshToken = this.encrypt(tokenResponse.refresh_token || '');
@@ -490,6 +507,13 @@ export class OAuthController {
           tokenScopes: truncatedScopes,
           oAuthState: null,
           oAuthCodeVerifier: null,
+          verifiedSellerLogin: sellerIdentity?.login || null,
+          verifiedSellerId: sellerIdentity?.id || null,
+          verifiedSellerEmail: sellerIdentity?.email || null,
+          verifiedCompanyName: sellerIdentity?.companyName || null,
+          verifiedMarketplace: sellerIdentity?.baseMarketplace || null,
+          sellerVerifiedAt: sellerIdentity ? new Date() : null,
+          sellerIdentityError: sellerIdentityError ? sellerIdentityError.substring(0, 1000) : null,
         },
       });
 
@@ -498,13 +522,16 @@ export class OAuthController {
         accountId: account.id,
         expiresAt,
         scopes: tokenResponse.scope,
+        sellerLogin: sellerIdentity?.login || null,
+        sellerId: sellerIdentity?.id || null,
+        sellerIdentityVerified: !!sellerIdentity,
       });
 
       return res.redirect(`${this.getFrontendUrl()}/auth/callback?success=true`);
     } catch (error: any) {
       this.logger.error('OAuth callback error', {
         error: error.message,
-        state,
+        stateLength: state?.length,
       });
       return res.redirect(
         `${this.getFrontendUrl()}/auth/callback?error=${encodeURIComponent(error.message)}`,
@@ -717,6 +744,13 @@ export class OAuthController {
         tokenScopes: null,
         oAuthState: null,
         oAuthCodeVerifier: null,
+        verifiedSellerLogin: null,
+        verifiedSellerId: null,
+        verifiedSellerEmail: null,
+        verifiedCompanyName: null,
+        verifiedMarketplace: null,
+        sellerVerifiedAt: null,
+        sellerIdentityError: null,
       },
     });
 

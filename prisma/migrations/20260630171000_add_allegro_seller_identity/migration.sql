@@ -1,0 +1,10 @@
+ALTER TABLE "allegro_accounts"
+  ADD COLUMN IF NOT EXISTS "expectedSellerLogin" VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS "expectedSellerId" VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS "verifiedSellerLogin" VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS "verifiedSellerId" VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS "verifiedSellerEmail" VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS "verifiedCompanyName" VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS "verifiedMarketplace" VARCHAR(64),
+  ADD COLUMN IF NOT EXISTS "sellerVerifiedAt" TIMESTAMP(6),
+  ADD COLUMN IF NOT EXISTS "sellerIdentityError" VARCHAR(1000);

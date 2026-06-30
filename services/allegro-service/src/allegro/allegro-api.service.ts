@@ -416,8 +416,8 @@ export class AllegroApiService {
         parametersCount: data.parameters?.length || 0,
         hasDescription: !!data.description,
         descriptionLength: data.description?.length || 0,
+        hasAccessToken: !!accessToken,
         tokenLength: accessToken?.length || 0,
-        tokenPreview: accessToken ? `${accessToken.substring(0, 20)}...${accessToken.substring(accessToken.length - 10)}` : 'null',
         payloadPreview: JSON.stringify(data, null, 2).substring(0, 2000),
         timestamp: new Date().toISOString(),
       });
@@ -542,8 +542,8 @@ export class AllegroApiService {
         imagesCount: data.images?.length || 0,
         hasParameters: !!data.parameters,
         parametersCount: data.parameters?.length || 0,
+        hasAccessToken: !!accessToken,
         tokenLength: accessToken?.length || 0,
-        tokenPreview: accessToken ? `${accessToken.substring(0, 20)}...${accessToken.substring(accessToken.length - 10)}` : 'null',
         payloadPreview: JSON.stringify(data, null, 2).substring(0, 2000),
         timestamp: new Date().toISOString(),
       });
@@ -761,8 +761,8 @@ export class AllegroApiService {
         firstOfferIds: offerIds.slice(0, 10),
         payloadSize: `${payloadSize} bytes`,
         payloadKeys: Object.keys(body),
+        hasAccessToken: !!accessToken,
         tokenLength: accessToken?.length || 0,
-        tokenPreview: accessToken ? `${accessToken.substring(0, 20)}...${accessToken.substring(accessToken.length - 10)}` : 'null',
         payloadPreview: JSON.stringify(body, null, 2).substring(0, 2000),
         timestamp: new Date().toISOString(),
       });

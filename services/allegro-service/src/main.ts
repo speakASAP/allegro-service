@@ -13,6 +13,11 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 
+function sanitizeRequestUrl(url?: string): string | undefined {
+  if (!url) return url;
+  return url.replace(/([?&](?:code|state|access_token|refresh_token|id_token)=)[^&]*/gi, '$1[REDACTED]');
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
@@ -23,8 +28,9 @@ async function bootstrap() {
     const connectionTime = Date.now();
     const remoteAddress = req.socket?.remoteAddress || req.ip || 'unknown';
     const remotePort = req.socket?.remotePort || 'unknown';
+    const safeUrl = sanitizeRequestUrl(req.url);
     
-    console.log(`[${timestamp}] [HTTP] Incoming request: ${req.method} ${req.url}`, {
+    console.log(`[${timestamp}] [HTTP] Incoming request: ${req.method} ${safeUrl}`, {
       remoteAddress,
       remotePort,
       headers: {
@@ -45,7 +51,7 @@ async function bootstrap() {
       const socketReadyTime = Date.now();
       console.log(`[${new Date().toISOString()}] [HTTP] Socket connection details`, {
         method: req.method,
-        url: req.url,
+        url: safeUrl,
         socketReadyState: req.socket.readyState,
         socketLocalAddress: req.socket.localAddress,
         socketLocalPort: req.socket.localPort,
@@ -57,7 +63,7 @@ async function bootstrap() {
     
     res.on('finish', () => {
       const duration = Date.now() - startTime;
-      console.log(`[${new Date().toISOString()}] [HTTP] Request completed: ${req.method} ${req.url} - ${res.statusCode} (${duration}ms)`, {
+      console.log(`[${new Date().toISOString()}] [HTTP] Request completed: ${req.method} ${safeUrl} - ${res.statusCode} (${duration}ms)`, {
         remoteAddress,
         remotePort,
         totalTimeSinceConnection: Date.now() - connectionTime,
