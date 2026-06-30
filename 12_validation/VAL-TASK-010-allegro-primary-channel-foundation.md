@@ -372,14 +372,18 @@ Date: 2026-06-29
 - Live table verification: PASS on 2026-06-29.
   `public.allegro_order_forwarding_attempts` exists in the Allegro database;
   row count was 0 before any live central order-forwarding command.
-- `./scripts/deploy.sh`: PARTIAL on 2026-06-29 for image tag `14183a9`.
-  Image build, push, manifest apply, and image set completed, then the script
-  exited 1 after an intermediate `allegro-service` rollout wait timeout while
-  the new pod was still starting.
+- `./scripts/deploy.sh`: PARTIAL on 2026-06-29 for the code-bearing
+  image tag `14183a9`. Image build, push, manifest apply, and image set
+  completed, then the script exited 1 after an intermediate `allegro-service`
+  rollout wait timeout while the new pod was still starting.
 - Follow-up Kubernetes rollout verification: PASS on 2026-06-29.
   `allegro-service`, `allegro-api-gateway`, `allegro-settings`,
-  `allegro-imports`, and `allegro-frontend` all successfully rolled out to
-  image tag `14183a9`.
+  `allegro-imports`, and `allegro-frontend` all successfully rolled out after
+  the intermediate wait timeout.
+- Final evidence redeploy policy: PASS. Documentation-only evidence commits
+  may advance the image tag beyond the code-bearing rollout; the handoff must
+  verify that pushed `main`, Kubernetes image tags, migration status, and live
+  routes agree at completion time.
 - External health after deployment: PASS on 2026-06-29.
   `https://allegro.alfares.cz/api/health` returned API gateway `status=ok`,
   and `https://allegro.alfares.cz/` returned HTTP 200.
@@ -394,9 +398,11 @@ Date: 2026-06-29
 - Live database migration apply completed for
   `20260629210000_add_allegro_order_forwarding_attempts`; the forwarding
   attempts table exists and was empty before any live central forwarding.
-- Kubernetes deployments were rolled to image tag `14183a9`; the deploy script
-  timed out during an intermediate rollout wait, but follow-up rollout status
-  passed for all five Allegro deployments.
+- Kubernetes deployments were rolled after the durable forwarding code and
+  evidence commits. The first code-bearing rollout hit an intermediate wait
+  timeout, but follow-up rollout status passed for all five Allegro deployments;
+  final completion requires the handoff to verify pushed `main` and live image
+  tags agree.
 - No live central order forwarding command was run.
 - No Warehouse, Catalog, BizBox, Allegro write, payment/refund, shipment, label, or fulfillment write-back path was run.
 - `orders.create.v1` duplicate/equality behavior is confirmed by orders-microservice source inspection and verification scripts. No live central forwarding command was run.
@@ -428,3 +434,31 @@ Date: 2026-06-29
 - No live central order forwarding command was run.
 - No orders-microservice code or database state was changed.
 - No Allegro deploy or live migration apply was run during the orders-microservice duplicate/equality verification; the Allegro migration and deployment happened later in the durable forwarding deployment step.
+
+## 2026-06-30 Preview-Token Import Approval and Quantity Command Write-Back Evidence
+
+- `POST /allegro/offers/import/approve` and
+  `POST /allegro/offers/import/sales-center/approve` now require the preview
+  token and previewed offer-id set returned by the matching preview route, in
+  addition to the explicit Catalog apply confirmation.
+- Added governed Allegro quantity command attempts with preview-token-bound
+  prepare/confirm/execute/poll flow under `/allegro/quantity-commands`.
+- Added additive `AllegroQuantityCommandAttempt` schema and SQL migration file
+  for durable idempotency, command id, target quantity, policy snapshot,
+  failure context, and terminal status evidence. The migration was not applied
+  to the live database in this pass.
+- Warehouse remains physical stock owner. The quantity command path mutates
+  Allegro only after preview-token confirmation; local offer quantity is updated
+  only after command polling reports terminal success.
+- Validation run on 2026-06-30:
+  - `git diff --check`: PASS.
+  - `LOGGING_SERVICE_URL=http://127.0.0.1 AUTH_SERVICE_URL=http://127.0.0.1 NOTIFICATION_SERVICE_URL=http://127.0.0.1 JWT_SECRET=test-secret ENCRYPTION_KEY=0123456789abcdef0123456789abcdef npx ts-node services/allegro-service/src/allegro/quantity-commands/quantity-commands.spec.ts`: PASS.
+  - `cd services/allegro-service && LOGGING_SERVICE_URL=http://127.0.0.1 AUTH_SERVICE_URL=http://127.0.0.1 NOTIFICATION_SERVICE_URL=http://127.0.0.1 JWT_SECRET=test-secret ENCRYPTION_KEY=0123456789abcdef0123456789abcdef npm run build`: PASS.
+  - `npm run ips:audit`: PASS.
+  - `npm run ips:pre-coding`: PASS.
+  - `npx prisma validate --schema prisma/schema.prisma`: PASS.
+  - `python3 scripts/deployment_readiness_gate.py --root . --target TASK-010`: PASS.
+- Deployment status: not deployed in this pass.
+- Migration status: not applied in this pass.
+- Git note: `prisma/migrations/*` is ignored by existing `.gitignore`; the new
+  quantity-command migration must be force-added when committing.

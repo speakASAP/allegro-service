@@ -20,7 +20,7 @@ Boundary: read-only Allegro/API probes and audit script deployment only; no Ware
 - W2 sync/projection migration is applied live and deployed.
 - Owner-approved one-time current-stock Warehouse apply completed on 2026-06-29.
 - P1 order sync now defaults to local projection only; central forwarding is exact-confirmation gated.
-- Durable central order forwarding attempt/status storage is migrated and deployed on image tag `14183a9`.
+- Durable central order forwarding attempt/status storage is migrated and deployed; final handoff must verify pushed `main` and live Kubernetes image tags agree.
 - P2 script import paths now separate dry-run, local projection, and Catalog apply confirmations.
 - P7 operations read API and the dashboard Operations route are implemented.
 
