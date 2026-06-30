@@ -172,8 +172,9 @@ plan by turning Allegro import and export mapping into safe implementation lanes
 - ALG-INV-006: Pass. TASK-010 traceability exists across feature, task,
   goal-impact, context, execution plan, prompt, validation, graph, `TASKS.md`,
   and `STATE.json`.
-- ALG-INV-007: Partial. TASK-010 validation evidence is recorded, but full
-  readiness closure remains blocked by pre-existing TASK-009 documentation debt.
+- ALG-INV-007: Pass. TASK-010 validation evidence is recorded, and the
+  TASK-009 IPS documentation debt that previously blocked readiness closure was
+  repaired on 2026-06-29.
 
 ## Sensitive-data scan evidence
 
@@ -244,9 +245,9 @@ This does not yet claim full category coverage or live UI enforcement.
 
 ## Issues found
 
-- Known pre-existing issue: TASK-009 documentation/graph audit debt existed
-  before TASK-010 and remains out of scope because TASK-010 did not edit
-  TASK-009 files.
+- Historical issue resolved: TASK-009 documentation/graph audit debt existed
+  before TASK-010 and blocked earlier gates, then was repaired separately on
+  2026-06-29 before this durable forwarding deployment evidence was recorded.
 - Owner approval for the one-time current-stock Warehouse apply was granted
   and used on 2026-06-29. Recurring automatic stock sync and Allegro
   quantity-command write-back remain separate follow-up work.
@@ -287,7 +288,9 @@ evidence and explicit owner approval for any new live apply path beyond the
 
 TASK-010 is aligned with FEAT-010, GOAL-IMPACT-TASK-010, the Allegro mapping
 document, and the primary-channel implementation plan. It preserves the Intent
-Preservation chain and does not authorize live mutations.
+Preservation chain and does not authorize additional live mutations beyond the
+documented owner-approved stock apply, schema migration, deployment, and
+guarded read checks.
 
 ## P1/P2/P7 Validation Addendum
 
