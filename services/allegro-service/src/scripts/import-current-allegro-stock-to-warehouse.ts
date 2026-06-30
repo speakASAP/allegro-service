@@ -11,6 +11,7 @@ type Args = {
   apply: boolean;
   confirmApply?: string;
   verifyWarehouse: boolean;
+  refreshToken: boolean;
   detailLimit: number;
   listLimit: number;
   publicationStatuses: string[];
@@ -74,13 +75,14 @@ function printHelp(): void {
 
 Usage:
   npm run import:current-stock:warehouse -- --all-accounts --dry-run
-  npm run import:current-stock:warehouse -- --all-accounts --dry-run --verify-warehouse
+  npm run import:current-stock:warehouse -- --all-accounts --dry-run --verify-warehouse --refresh-token
   npm run import:current-stock:warehouse -- --account-name FlipFlop --dry-run
   npm run import:current-stock:warehouse -- --all-accounts --warehouse-id <uuid> --apply --confirm-apply ${APPLY_CONFIRMATION}
 
 This script reads Allegro /sale/offers and /sale/product-offers/{offerId}.
 Only product-offers stock.available is treated as current stock-authoritative.
-Dry-run is the default and does not call Warehouse or mutate local database rows.
+Dry-run is the default and does not call Warehouse, mutate local offer rows, or refresh OAuth tokens.
+Use --refresh-token to update only encrypted OAuth token fields before reading Allegro.
 Use --verify-warehouse to read Warehouse totals and compare them to Allegro stock.available.
 Apply mode calls Warehouse POST /api/stock/set for locally mapped offers. Local AllegroOffer rows remain read-only.
 Apply mode requires both --apply and --confirm-apply ${APPLY_CONFIRMATION}.
@@ -104,6 +106,7 @@ function parseArgs(argv: string[]): Args {
     allAccounts: false,
     apply: false,
     verifyWarehouse: false,
+    refreshToken: false,
     detailLimit: 500,
     listLimit: 100,
     publicationStatuses: [...DEFAULT_PUBLICATION_STATUSES],
@@ -127,6 +130,7 @@ function parseArgs(argv: string[]): Args {
     else if (arg === '--dry-run') args.apply = false;
     else if (arg === '--confirm-apply') args.confirmApply = next();
     else if (arg === '--verify-warehouse') args.verifyWarehouse = true;
+    else if (arg === '--refresh-token') args.refreshToken = true;
     else if (arg === '--detail-limit') args.detailLimit = Math.max(0, Number(next()));
     else if (arg === '--list-limit') args.listLimit = Math.max(1, Math.min(1000, Number(next())));
     else if (arg === '--warehouse-id') args.warehouseId = next();
@@ -153,6 +157,74 @@ function decrypt(value: string): string {
   if (parts.length !== 2) throw new Error('Invalid encrypted token format.');
   const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(key.slice(0, 32), 'utf8'), Buffer.from(parts[0], 'hex'));
   return decipher.update(parts[1], 'hex', 'utf8') + decipher.final('utf8');
+}
+
+
+
+function encrypt(value: string): string {
+  const key = process.env.ENCRYPTION_KEY;
+  if (!key || key.length < 32) throw new Error('ENCRYPTION_KEY must be configured and at least 32 characters.');
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(key.slice(0, 32), 'utf8'), iv);
+  return `${iv.toString('hex')}:${cipher.update(value, 'utf8', 'hex') + cipher.final('hex')}`;
+}
+
+async function refreshAccessToken(account: any): Promise<string> {
+  if (!account.refreshToken) throw new Error(`Account ${account.id} has no refresh token.`);
+  if (!account.clientId || !account.clientSecret) throw new Error(`Account ${account.id} has no Allegro client credentials.`);
+  const tokenUrl = process.env.ALLEGRO_OAUTH_TOKEN_URL || process.env.ALLEGRO_TOKEN_URL;
+  if (!tokenUrl) throw new Error('ALLEGRO_OAUTH_TOKEN_URL must be configured.');
+  const refreshToken = decrypt(account.refreshToken);
+  const clientSecret = decrypt(account.clientSecret);
+  const response = await fetch(tokenUrl, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      authorization: `Basic ${Buffer.from(`${account.clientId}:${clientSecret}`).toString('base64')}`,
+    },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+    }),
+  });
+  const text = await response.text();
+  let data: any = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text.slice(0, 500) }; }
+  if (!response.ok || !data?.access_token) {
+    const message = data?.error_description || data?.error || data?.message || response.statusText;
+    throw Object.assign(new Error(`${response.status} ${message}`), { status: response.status, data });
+  }
+  const expiresAt = new Date(Date.now() + Number(data.expires_in || 0) * 1000);
+  await prisma.allegroAccount.update({
+    where: { id: account.id },
+    data: {
+      accessToken: encrypt(data.access_token),
+      refreshToken: data.refresh_token ? encrypt(data.refresh_token) : account.refreshToken,
+      tokenExpiresAt: expiresAt,
+    },
+  });
+  account.accessToken = '[refreshed]';
+  account.refreshToken = data.refresh_token ? '[refreshed]' : account.refreshToken;
+  account.tokenExpiresAt = expiresAt;
+  return data.access_token;
+}
+
+async function accessTokenForAccount(account: any, refreshTokenBeforeRead: boolean): Promise<{ token: string | null; tokenState: string; refreshed: boolean; error?: string }> {
+  if (refreshTokenBeforeRead) {
+    try {
+      const token = await refreshAccessToken(account);
+      return { token, tokenState: 'refreshed', refreshed: true };
+    } catch (error: any) {
+      return { token: null, tokenState: 'refresh_failed', refreshed: false, error: error?.message || String(error) };
+    }
+  }
+  const state = tokenState(account);
+  if (state !== 'present' && state !== 'present_without_expiry') return { token: null, tokenState: state, refreshed: false };
+  try {
+    return { token: decrypt(account.accessToken), tokenState: state, refreshed: false };
+  } catch (error: any) {
+    return { token: null, tokenState: 'decrypt_failed', refreshed: false, error: error?.message || String(error) };
+  }
 }
 
 function tokenState(account: any): string {
@@ -201,6 +273,9 @@ async function resolveAccounts(args: Args): Promise<any[]> {
     name: true,
     isActive: true,
     accessToken: true,
+    refreshToken: true,
+    clientId: true,
+    clientSecret: true,
     tokenExpiresAt: true,
     updatedAt: true,
   };
@@ -268,16 +343,12 @@ async function listOfferIds(token: string, args: Args): Promise<Map<string, any>
 async function collectCandidates(account: any, args: Args): Promise<{ candidates: ImportCandidate[]; errors: any[] }> {
   const source = accountSource(account);
   const errors: any[] = [];
-  if (source.tokenState !== 'present' && source.tokenState !== 'present_without_expiry') {
-    return { candidates: [], errors: [{ source: 'local-token', accountId: account.id, message: source.tokenState }] };
+  const tokenResult = await accessTokenForAccount(account, args.refreshToken);
+  source.tokenState = tokenResult.tokenState;
+  if (!tokenResult.token) {
+    return { candidates: [], errors: [{ source: 'local-token', accountId: account.id, message: tokenResult.error || tokenResult.tokenState }] };
   }
-
-  let token: string;
-  try {
-    token = decrypt(account.accessToken);
-  } catch (error: any) {
-    return { candidates: [], errors: [{ source: 'local-token', accountId: account.id, message: error?.message || String(error) }] };
-  }
+  const token = tokenResult.token;
 
   let listed: Map<string, any>;
   try {
@@ -510,8 +581,9 @@ async function main(): Promise<void> {
     source: 'allegro-current-stock-warehouse-import.v1',
     mode: args.apply ? 'apply' : 'dry-run',
     mutatesWarehouse: args.apply,
-    mutatesLocalAllegroOffer: false,
+    mutatesLocalAllegroOffer: args.refreshToken,
     verifiesWarehouse: args.verifyWarehouse,
+    refreshesOauthTokens: args.refreshToken,
     apiBaseUrl: ALLEGRO_API_URL,
     warehouseServiceUrl: WAREHOUSE_SERVICE_URL,
     publicationStatuses: args.publicationStatuses,

@@ -1496,6 +1496,7 @@ export class OffersService {
       userId,
       [offerId],
       requestId || 'update-sync-' + offerId + '-' + Date.now(),
+      offer.accountId || undefined,
     );
     const item = Array.isArray(result?.results)
       ? result.results.find((entry: any) => entry.offerId === offerId)
@@ -4518,7 +4519,7 @@ export class OffersService {
    * - If offer doesn't exist: search for product, create if needed, then create offer
    * Returns summary with success/failure results
    */
-  async publishOffersToAllegro(userId: string, offerIds: string[], requestId?: string): Promise<any> {
+  async publishOffersToAllegro(userId: string, offerIds: string[], requestId?: string, targetAccountId?: string): Promise<any> {
     console.log('[publishOffersToAllegro] ========== METHOD CALLED ==========', {
       userId,
       offerIdsCount: offerIds?.length || 0,
@@ -4557,22 +4558,32 @@ export class OffersService {
     let successful = 0;
     let failed = 0;
 
-    // Get active account ID for ownership verification
-    console.log('[publishOffersToAllegro] About to get active account');
-    const activeAccount = await this.prisma.allegroAccount.findFirst({
-      where: {
-        userId,
-        isActive: true,
-      },
-    });
+    // Resolve the target account explicitly when a governed publish attempt selected one.
+    // Falling back to the active account preserves legacy UI behaviour.
+    console.log('[publishOffersToAllegro] About to get target account');
+    const activeAccount = targetAccountId
+      ? await this.prisma.allegroAccount.findFirst({
+          where: {
+            id: targetAccountId,
+            userId,
+          },
+        })
+      : await this.prisma.allegroAccount.findFirst({
+          where: {
+            userId,
+            isActive: true,
+          },
+        });
 
     if (!activeAccount) {
       throw new HttpException(
         {
           success: false,
           error: {
-            code: 'NO_ACTIVE_ACCOUNT',
-            message: 'No active Allegro account found. Please select an active account in Settings.',
+            code: targetAccountId ? 'TARGET_ACCOUNT_NOT_FOUND' : 'NO_ACTIVE_ACCOUNT',
+            message: targetAccountId
+              ? `Allegro account ${targetAccountId} was not found for this user.`
+              : 'No active Allegro account found. Please select an active account in Settings.',
           },
         },
         HttpStatus.BAD_REQUEST,
@@ -4581,7 +4592,7 @@ export class OffersService {
 
     const activeAccountId = activeAccount.id;
     const activeAccountName = activeAccount.name;
-    console.log('[publishOffersToAllegro] Active account found', { activeAccountId, activeAccountName });
+    console.log('[publishOffersToAllegro] Target account found', { activeAccountId, activeAccountName, targetAccountId: targetAccountId || null });
 
     // Sync producers from Allegro API to database before exporting offers
     // This ensures all producers exist in database before we try to export offers
@@ -4621,8 +4632,8 @@ export class OffersService {
       });
 
       console.log('[publishOffersToAllegro] About to call getUserOAuthToken');
-      oauthToken = await this.getUserOAuthToken(userId);
-      console.log('[publishOffersToAllegro] getUserOAuthToken completed', { tokenLength: oauthToken?.length || 0 });
+      oauthToken = await this.getUserOAuthToken(userId, activeAccountId);
+      console.log('[publishOffersToAllegro] getUserOAuthToken completed', { tokenLength: oauthToken?.length || 0, accountId: activeAccountId });
       const tokenDuration = Date.now() - tokenStartTime;
       
       console.log(`[${finalRequestId}] [publishOffersToAllegro] STEP 1 COMPLETE: OAuth token obtained`, {

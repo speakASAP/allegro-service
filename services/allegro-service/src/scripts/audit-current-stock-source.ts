@@ -11,6 +11,7 @@ type Args = {
   accountName?: string;
   allAccounts: boolean;
   recordSyncRun: boolean;
+  refreshToken: boolean;
   confirmSyncRecording?: string;
   detailLimit: number;
   listLimit: number;
@@ -76,14 +77,15 @@ Usage:
   npm run audit:current-stock-source -- --account-id <uuid> --detail-limit 500
   npm run audit:current-stock-source -- --account-name FlipFlop --record-sync-run --confirm-sync-recording ${SYNC_RECORDING_CONFIRMATION}
 
-This script does not import offers, write Warehouse stock, activate accounts, refresh tokens, or mutate local rows.
+This script does not import offers, write Warehouse stock, activate accounts, or mutate Catalog/Warehouse.
+By default it does not refresh tokens; --refresh-token updates only encrypted OAuth token fields before reading Allegro.
 It reads Allegro /sale/offers and /sale/product-offers/{offerId}; only product-offers stock.available is treated as current physical stock evidence.
 With --record-sync-run it writes only local sync-run/raw-payload/audit/stock-snapshot evidence.
 `);
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { allAccounts: false, recordSyncRun: false, detailLimit: 500, listLimit: 100, help: false };
+  const args: Args = { allAccounts: false, recordSyncRun: false, refreshToken: false, detailLimit: 500, listLimit: 100, help: false };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     const next = () => {
@@ -97,6 +99,7 @@ function parseArgs(argv: string[]): Args {
     else if (arg === '--account-name') args.accountName = next();
     else if (arg === '--all-accounts') args.allAccounts = true;
     else if (arg === '--record-sync-run') args.recordSyncRun = true;
+    else if (arg === '--refresh-token') args.refreshToken = true;
     else if (arg === '--confirm-sync-recording') args.confirmSyncRecording = next();
     else if (arg === '--detail-limit') args.detailLimit = Math.max(0, Number(next()));
     else if (arg === '--list-limit') args.listLimit = Math.max(1, Math.min(1000, Number(next())));
@@ -115,6 +118,74 @@ function decrypt(value: string): string {
   if (parts.length !== 2) throw new Error('Invalid encrypted token format.');
   const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(key.slice(0, 32), 'utf8'), Buffer.from(parts[0], 'hex'));
   return decipher.update(parts[1], 'hex', 'utf8') + decipher.final('utf8');
+}
+
+
+
+function encrypt(value: string): string {
+  const key = process.env.ENCRYPTION_KEY;
+  if (!key || key.length < 32) throw new Error('ENCRYPTION_KEY must be configured and at least 32 characters.');
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(key.slice(0, 32), 'utf8'), iv);
+  return `${iv.toString('hex')}:${cipher.update(value, 'utf8', 'hex') + cipher.final('hex')}`;
+}
+
+async function refreshAccessToken(account: any): Promise<string> {
+  if (!account.refreshToken) throw new Error(`Account ${account.id} has no refresh token.`);
+  if (!account.clientId || !account.clientSecret) throw new Error(`Account ${account.id} has no Allegro client credentials.`);
+  const tokenUrl = process.env.ALLEGRO_OAUTH_TOKEN_URL || process.env.ALLEGRO_TOKEN_URL;
+  if (!tokenUrl) throw new Error('ALLEGRO_OAUTH_TOKEN_URL must be configured.');
+  const refreshToken = decrypt(account.refreshToken);
+  const clientSecret = decrypt(account.clientSecret);
+  const response = await fetch(tokenUrl, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      authorization: `Basic ${Buffer.from(`${account.clientId}:${clientSecret}`).toString('base64')}`,
+    },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+    }),
+  });
+  const text = await response.text();
+  let data: any = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text.slice(0, 500) }; }
+  if (!response.ok || !data?.access_token) {
+    const message = data?.error_description || data?.error || data?.message || response.statusText;
+    throw Object.assign(new Error(`${response.status} ${message}`), { status: response.status, data });
+  }
+  const expiresAt = new Date(Date.now() + Number(data.expires_in || 0) * 1000);
+  await prisma.allegroAccount.update({
+    where: { id: account.id },
+    data: {
+      accessToken: encrypt(data.access_token),
+      refreshToken: data.refresh_token ? encrypt(data.refresh_token) : account.refreshToken,
+      tokenExpiresAt: expiresAt,
+    },
+  });
+  account.accessToken = '[refreshed]';
+  account.refreshToken = data.refresh_token ? '[refreshed]' : account.refreshToken;
+  account.tokenExpiresAt = expiresAt;
+  return data.access_token;
+}
+
+async function accessTokenForAccount(account: any, refreshTokenBeforeRead: boolean): Promise<{ token: string | null; tokenState: string; refreshed: boolean; error?: string }> {
+  if (refreshTokenBeforeRead) {
+    try {
+      const token = await refreshAccessToken(account);
+      return { token, tokenState: 'refreshed', refreshed: true };
+    } catch (error: any) {
+      return { token: null, tokenState: 'refresh_failed', refreshed: false, error: error?.message || String(error) };
+    }
+  }
+  const state = tokenState(account);
+  if (state !== 'present' && state !== 'present_without_expiry') return { token: null, tokenState: state, refreshed: false };
+  try {
+    return { token: decrypt(account.accessToken), tokenState: state, refreshed: false };
+  } catch (error: any) {
+    return { token: null, tokenState: 'decrypt_failed', refreshed: false, error: error?.message || String(error) };
+  }
 }
 
 function tokenState(account: any): string {
@@ -150,6 +221,9 @@ async function resolveAccounts(args: Args): Promise<any[]> {
     name: true,
     isActive: true,
     accessToken: true,
+    refreshToken: true,
+    clientId: true,
+    clientSecret: true,
     tokenExpiresAt: true,
     updatedAt: true,
   };
@@ -208,19 +282,13 @@ async function auditAccount(account: any, args: Args): Promise<AccountAuditResul
   report.localMappedOffers = localOffers.length;
   report.localMappedStockTotal = localOffers.reduce((sum: number, offer: any) => sum + Number(offer.stockQuantity || 0), 0);
 
-  if (report.tokenState !== 'present' && report.tokenState !== 'present_without_expiry') {
-    report.errors.push({ source: 'local-token', message: report.tokenState });
+  const tokenResult = await accessTokenForAccount(account, args.refreshToken);
+  report.tokenState = tokenResult.tokenState;
+  if (!tokenResult.token) {
+    report.errors.push({ source: 'local-token', message: tokenResult.error || tokenResult.tokenState });
     return { report, detailPayloads: [] };
   }
-
-  let token: string;
-  try {
-    token = decrypt(account.accessToken);
-  } catch (error: any) {
-    report.tokenState = 'decrypt_failed';
-    report.errors.push({ source: 'local-token', message: error?.message || String(error) });
-    return { report, detailPayloads: [] };
-  }
+  const token = tokenResult.token;
 
   const seen = new Map<string, any>();
   const detailPayloads: any[] = [];
@@ -419,10 +487,10 @@ async function main(): Promise<void> {
     source: 'allegro-current-stock-audit.v1',
     mode: 'audit',
     taskId: 'TASK-010',
-    mutates: syncRecording.enabled,
+    mutates: syncRecording.enabled || args.refreshToken,
     safety: buildScriptSafety({
       mode: 'audit',
-      mutates: syncRecording.enabled,
+      mutates: syncRecording.enabled || args.refreshToken,
       mutatesLocalAllegroProjection: false,
       mutatesLocalSyncEvidence: syncRecording.enabled,
       mutatesCatalog: false,
@@ -432,8 +500,8 @@ async function main(): Promise<void> {
       mutatesBizBox: false,
       forwardsOrders: false,
       writesAllowed: syncRecording.enabled
-        ? ['allegro_sync_runs', 'allegro_sync_cursors', 'allegro_raw_payloads', 'allegro_projection_audit_logs', 'allegro_offer_stock_snapshots']
-        : [],
+        ? ['allegro_sync_runs', 'allegro_sync_cursors', 'allegro_raw_payloads', 'allegro_projection_audit_logs', 'allegro_offer_stock_snapshots', ...(args.refreshToken ? ['allegro_accounts.oauth_tokens'] : [])]
+        : args.refreshToken ? ['allegro_accounts.oauth_tokens'] : [],
       writesForbidden: ['orders-microservice', 'catalog-microservice', 'warehouse-microservice', 'allegro-write-api', 'bizbox-import'],
       confirmation: syncRecording.enabled ? syncRecording.confirmation : undefined,
     }),
@@ -454,7 +522,7 @@ async function main(): Promise<void> {
       stockAuthoritative: 'Only successful /sale/product-offers/{offerId}.stock.available rows are treated as current physical stock evidence.',
       listedStock: '/sale/offers stock is listed for comparison only; final import should use product-offers current stock or owner-approved external stock source.',
       unfilteredListing: 'unfilteredListedOffers reports /sale/offers without publication.status so status filters cannot hide offer-count mismatches.',
-      tokenRefresh: 'This audit does not refresh OAuth tokens or activate accounts.',
+      tokenRefresh: args.refreshToken ? 'OAuth tokens were refreshed before read; no Catalog/Warehouse/Allegro writes were executed.' : 'This audit does not refresh OAuth tokens or activate accounts unless --refresh-token is supplied.',
     },
   }, null, 2));
 }
@@ -467,6 +535,7 @@ function snapshotArgs(args: Args): Record<string, unknown> {
     detailLimit: args.detailLimit,
     listLimit: args.listLimit,
     recordSyncRun: args.recordSyncRun,
+    refreshToken: args.refreshToken,
   };
 }
 

@@ -268,7 +268,7 @@ export class PublishLifecycleService {
       let result: any;
       const executionRequestId = requestId || `publish-attempt-${attempt.id}`;
       if (attempt.action === 'PUBLISH') {
-        result = await this.offersService.publishOffersToAllegro(requestedByUserId, [attempt.offerId], executionRequestId);
+        result = await this.offersService.publishOffersToAllegro(requestedByUserId, [attempt.offerId], executionRequestId, attempt.accountId || undefined);
         if (result?.failed > 0 || result?.successful === 0) {
           throw new HttpException(
             {
