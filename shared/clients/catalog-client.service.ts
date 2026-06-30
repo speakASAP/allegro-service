@@ -298,6 +298,23 @@ export class CatalogClientService {
     }
   }
 
+  async getProductContentPreview(productId: string, marketplace: string): Promise<any | null> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(`${this.baseUrl}/api/products/${productId}/content-previews/${marketplace}`, this.requestOptions())
+      );
+      return response.data?.data || response.data || null;
+    } catch (error: any) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (this.isServiceUnavailableError(error)) {
+        this.logger.error(`Catalog service unavailable when getting ${marketplace} content preview for product ${productId}: ${errorMessage}`, error instanceof Error ? error.stack : undefined, 'CatalogClient');
+        return null;
+      }
+      this.logger.warn(`Content preview not found for product ${productId}/${marketplace}: ${error.response?.data?.message || errorMessage}`, 'CatalogClient');
+      return null;
+    }
+  }
+
   async updateProductMarketplaceFields(productId: string, marketplace: string, fieldsData: any): Promise<any> {
     try {
       const response = await firstValueFrom(

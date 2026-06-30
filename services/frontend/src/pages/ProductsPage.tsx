@@ -100,14 +100,36 @@ interface AllegroAccount {
   };
 }
 
+interface CatalogContentPreview {
+  marketplace?: string | null;
+  label?: string | null;
+  format?: string | null;
+  content?: {
+    title?: string | null;
+    plainText?: string | null;
+    html?: string | null;
+    blockCount?: number;
+    sectionCount?: number;
+  } | null;
+  source?: {
+    canonicalDocumentVersion?: string | null;
+    legacyDescriptionFallback?: boolean | null;
+    sourceHash?: string | null;
+    generatedAt?: string | null;
+  } | null;
+  overridesApplied?: boolean;
+  warnings?: string[];
+}
+
 interface CatalogSellStatus {
   status?: string | null;
   nextAction?: string | null;
   draft?: DraftSummary | null;
-  attempt?: { id?: string; status?: string; blockedReasons?: string[] } | null;
+  attempt?: { id?: string; status?: string; blockedReasons?: string[]; previewToken?: string; previewTokenBinding?: Record<string, unknown> } | null;
   accountChoices?: AccountChoice[];
   categoryChoice?: { selectedCategoryId?: string | null; source?: string | null };
   catalogProduct?: { id?: string; sku?: string; title?: string; brand?: string; ean?: string } | null;
+  catalogContentPreview?: CatalogContentPreview | null;
   listingUrl?: string | null;
   canEditDraft?: boolean;
   canConfirmPublish?: boolean;
@@ -175,6 +197,13 @@ const productDescription = (product: CatalogProduct | null) => (
   || product?.catalogProduct?.shortDescription
   || ''
 );
+
+const contentPreviewDescription = (preview?: CatalogContentPreview | null) => {
+  const content = preview?.content;
+  if (typeof content?.plainText === 'string' && content.plainText.trim()) return content.plainText;
+  if (typeof content?.html === 'string' && content.html.trim()) return content.html;
+  return '';
+};
 
 const imageUrl = (image: ProductImage | undefined) => {
   if (!image) return '';
@@ -268,7 +297,7 @@ const buildInitialForm = (product: CatalogProduct | null, status?: CatalogSellSt
   const draft = status?.draft;
   return {
     title: String(draft?.title || productTitle(product)),
-    description: String(draft?.description || productDescription(product)),
+    description: String(draft?.description || contentPreviewDescription(status?.catalogContentPreview) || productDescription(product)),
     categoryId: String(draft?.categoryId || status?.categoryChoice?.selectedCategoryId || productCategory(product)),
     price: draft?.price !== undefined && draft?.price !== null ? String(draft.price) : productPrice(product),
     quantity: draft?.quantity !== undefined && draft?.quantity !== null ? String(draft.quantity) : productQuantity(product),
@@ -283,6 +312,7 @@ const ProductsPage: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [statusByProduct, setStatusByProduct] = useState<Record<string, CatalogSellStatus>>({});
   const [statusErrors, setStatusErrors] = useState<Record<string, string>>({});
+  const [previewTokensByProduct, setPreviewTokensByProduct] = useState<Record<string, string>>({});
   const [draftForm, setDraftForm] = useState<DraftForm>(buildInitialForm(null));
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
@@ -301,6 +331,8 @@ const ProductsPage: React.FC = () => {
   );
   const selectedStatus = selectedProduct ? statusByProduct[selectedProduct.id] : null;
   const selectedStatusError = selectedProduct ? statusErrors[selectedProduct.id] : null;
+  const selectedContentPreview = selectedStatus?.catalogContentPreview || null;
+  const selectedContentPreviewDescription = contentPreviewDescription(selectedContentPreview);
   const accountChoices = selectedStatus?.accountChoices || [];
   const sellActionUnavailable = Boolean(selectedStatusError);
   const hasPreparedDraft = Boolean(selectedStatus?.draft?.id);
@@ -315,11 +347,22 @@ const ProductsPage: React.FC = () => {
     [products, statusByProduct],
   );
 
+  const applyStatus = useCallback((catalogProductId: string, status: CatalogSellStatus) => {
+    setStatusByProduct((prev) => ({
+      ...prev,
+      [catalogProductId]: {
+        ...prev[catalogProductId],
+        ...status,
+        catalogContentPreview: status.catalogContentPreview ?? prev[catalogProductId]?.catalogContentPreview ?? null,
+      },
+    }));
+  }, []);
+
   const loadStatus = useCallback(async (catalogProductId: string) => {
     try {
       const res = await catalogSellActionApi.getProductStatus(catalogProductId);
       const status = unwrapData<CatalogSellStatus>(res.data);
-      setStatusByProduct((prev) => ({ ...prev, [catalogProductId]: status }));
+      applyStatus(catalogProductId, status);
       setStatusErrors((prev) => {
         const next = { ...prev };
         delete next[catalogProductId];
@@ -331,7 +374,7 @@ const ProductsPage: React.FC = () => {
       setStatusErrors((prev) => ({ ...prev, [catalogProductId]: message }));
       return null;
     }
-  }, []);
+  }, [applyStatus]);
 
   const loadAccountReadiness = useCallback(async () => {
     try {
@@ -402,7 +445,9 @@ const ProductsPage: React.FC = () => {
       offerId: selectedStatus?.draft?.id || undefined,
       categoryId: draftForm.categoryId || undefined,
       title: draftForm.title || undefined,
-      description: draftForm.description || undefined,
+      description: draftForm.description && !(selectedContentPreviewDescription && draftForm.description === selectedContentPreviewDescription && !selectedStatus?.draft?.description)
+        ? draftForm.description
+        : undefined,
       price: draftForm.price ? Number(draftForm.price) : undefined,
       quantity: draftForm.quantity ? Number(draftForm.quantity) : undefined,
       forceNewDraft: draftForm.forceNewDraft || undefined,
@@ -418,7 +463,10 @@ const ProductsPage: React.FC = () => {
     try {
       const res = await catalogSellActionApi.prepare(payload);
       const status = unwrapData<CatalogSellStatus>(res.data);
-      setStatusByProduct((prev) => ({ ...prev, [selectedProduct.id]: status }));
+      applyStatus(selectedProduct.id, status);
+      if (status.attempt?.previewToken) {
+        setPreviewTokensByProduct((prev) => ({ ...prev, [selectedProduct.id]: String(status.attempt?.previewToken) }));
+      }
       setStatusErrors((prev) => {
         const next = { ...prev };
         delete next[selectedProduct.id];
@@ -441,7 +489,7 @@ const ProductsPage: React.FC = () => {
     try {
       const res = await catalogSellActionApi.updateProductDraft(selectedProduct.id, payload);
       const status = unwrapData<CatalogSellStatus>(res.data);
-      setStatusByProduct((prev) => ({ ...prev, [selectedProduct.id]: status }));
+      applyStatus(selectedProduct.id, status);
       setSuccess('Draft fields saved locally. This did not publish to Allegro.');
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to update draft fields'));
@@ -454,19 +502,34 @@ const ProductsPage: React.FC = () => {
     if (!selectedProduct || !canConfirmPublish) return;
     const confirmed = window.confirm('Confirm publishing this prepared draft to the guarded Allegro queue? This is the explicit approval step.');
     if (!confirmed) return;
+    const previewToken = previewTokensByProduct[selectedProduct.id] || selectedStatus?.attempt?.previewToken;
+    if (!previewToken) {
+      setError('Prepare the draft again to receive a fresh preview token before confirmation.');
+      return;
+    }
     setConfirming(true);
     setError(null);
     setSuccess(null);
     try {
-      const res = await catalogSellActionApi.confirmProductPublish(selectedProduct.id);
+      const res = await catalogSellActionApi.confirmProductPublish(selectedProduct.id, previewToken);
       const status = unwrapData<CatalogSellStatus>(res.data);
-      setStatusByProduct((prev) => ({ ...prev, [selectedProduct.id]: status }));
+      applyStatus(selectedProduct.id, status);
+      setPreviewTokensByProduct((prev) => {
+        const next = { ...prev };
+        delete next[selectedProduct.id];
+        return next;
+      });
       setSuccess('Publish confirmation accepted. The guarded Allegro queue will process the prepared draft.');
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to confirm Allegro publish'));
     } finally {
       setConfirming(false);
     }
+  };
+
+  const applyCatalogPreviewDescription = () => {
+    if (!selectedContentPreviewDescription) return;
+    setDraftForm((current) => ({ ...current, description: selectedContentPreviewDescription }));
   };
 
   const selectProduct = async (product: CatalogProduct) => {
@@ -660,6 +723,41 @@ const ProductsPage: React.FC = () => {
                 </label>
               )}
 
+              {selectedContentPreview && (
+                <div className="space-y-2 border-y border-gray-200 py-3 text-sm">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="font-semibold text-gray-900">Catalog connector preview</div>
+                      <div className="text-xs text-gray-500">
+                        {(selectedContentPreview.label || 'Allegro')}{selectedContentPreview.format ? ` · ${selectedContentPreview.format}` : ''}{selectedContentPreview.source?.generatedAt ? ` · ${formatDate(selectedContentPreview.source.generatedAt)}` : ''}
+                      </div>
+                    </div>
+                    <Button variant="secondary" size="small" onClick={applyCatalogPreviewDescription} disabled={!selectedContentPreviewDescription || !selectedProduct || sellActionUnavailable}>
+                      Use preview
+                    </Button>
+                  </div>
+                  {selectedContentPreview.content?.title && (
+                    <div className="font-medium text-gray-900">{selectedContentPreview.content.title}</div>
+                  )}
+                  {selectedContentPreviewDescription && (
+                    <div className="max-h-28 overflow-auto whitespace-pre-line rounded bg-gray-50 p-2 text-gray-700">
+                      {selectedContentPreviewDescription}
+                    </div>
+                  )}
+                  <div className="grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
+                    <div><span className="font-medium">Version:</span> {selectedContentPreview.source?.canonicalDocumentVersion || '-'}</div>
+                    <div className="break-all"><span className="font-medium">Source hash:</span> {selectedContentPreview.source?.sourceHash || '-'}</div>
+                    <div><span className="font-medium">Overrides:</span> {selectedContentPreview.overridesApplied ? 'applied' : 'none'}</div>
+                    <div><span className="font-medium">Fallback:</span> {selectedContentPreview.source?.legacyDescriptionFallback ? 'legacy description' : 'canonical content'}</div>
+                  </div>
+                  {selectedContentPreview.warnings && selectedContentPreview.warnings.length > 0 && (
+                    <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                      {selectedContentPreview.warnings.join(', ')}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <label className="block text-sm font-medium text-gray-700">
                 Description
                 <textarea
@@ -718,6 +816,16 @@ const ProductsPage: React.FC = () => {
                 {selectedStatus.attempt?.blockedReasons && selectedStatus.attempt.blockedReasons.length > 0 && (
                   <div className="rounded border border-red-200 bg-red-50 p-2 text-red-700">
                     {selectedStatus.attempt.blockedReasons.join(', ')}
+                  </div>
+                )}
+                {selectedProduct && previewTokensByProduct[selectedProduct.id] && (
+                  <div className="rounded border border-blue-200 bg-blue-50 p-2 text-blue-700">
+                    Preview token ready for this prepared attempt.
+                  </div>
+                )}
+                {selectedStatus.catalogContentPreview?.source?.sourceHash && (
+                  <div className="break-all text-xs text-gray-500">
+                    Catalog preview source: {selectedStatus.catalogContentPreview.source.sourceHash}
                   </div>
                 )}
                 {selectedStatus.listingUrl && (

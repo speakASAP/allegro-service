@@ -505,16 +505,16 @@ export const catalogSellActionApi = {
     return api.put(`/allegro/catalog-sell/products/${catalogProductId}/draft`, payload);
   },
 
-  confirmProductPublish: (catalogProductId: string) => {
-    return api.post(`/allegro/catalog-sell/products/${catalogProductId}/confirm`);
+  confirmProductPublish: (catalogProductId: string, previewToken: string) => {
+    return api.post(`/allegro/catalog-sell/products/${catalogProductId}/confirm`, { previewToken });
   },
 
   getAttemptStatus: (attemptId: string) => {
     return api.get(`/allegro/catalog-sell/${attemptId}/status`);
   },
 
-  confirmAttempt: (attemptId: string) => {
-    return api.post(`/allegro/catalog-sell/${attemptId}/confirm`);
+  confirmAttempt: (attemptId: string, previewToken: string) => {
+    return api.post(`/allegro/catalog-sell/${attemptId}/confirm`, { previewToken });
   },
 };
 

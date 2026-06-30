@@ -23,8 +23,10 @@ Owner created TASK-009 runtime/UI implementation goal on 2026-06-27.
 - 2026-06-27 TASK 009 live validated: Allegro landing, registration/login SPA routes, dashboard/products, API gateway, backend health route, Catalog product selection endpoint wiring, and governed publish-flow backend routes deployed and smoke validated on allegro.alfares.cz.
 
 - 2026-06-30 Task 010 allegro primary channel foundation validated: Warehouse-only recurring stock policy implemented for Allegro stock events; stock.updated/stock.out automatically execute governed Allegro quantity commands at one request per second, with zero quantity setting the Allegro offer quantity to 0.
+- 2026-06-30 TASK-011 catalog canonical content preview connector validated: Catalog content previews feed local Allegro draft descriptions and ProductsPage evidence while publish confirmation remains preview-token-gated. Strict audit, pre-coding gate, targeted spec, backend build, frontend build, and diff check passed without deploy.
 
 ## Project Completion Marker
 
 - 2026-06-21: Project marked completed/frozen after TASK-006 validation.
 - 2026-06-27: TASK-009 live validated and project returned to completed state after deploying the public Allegro landing and registered-client dashboard.
+- 2026-06-30: TASK-011 implemented as a no-deploy connector lane for Catalog canonical content previews in draft preparation.

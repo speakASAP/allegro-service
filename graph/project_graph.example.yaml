@@ -55,6 +55,10 @@ nodes:
     type: feature
     path: 10_features/FEAT-010-allegro-primary-channel-foundation.md
     title: Allegro Primary Channel Foundation
+  - id: FEAT-011
+    type: feature
+    path: 10_features/FEAT-011-catalog-canonical-content-preview-connector.md
+    title: Catalog Canonical Content Preview Connector
   - id: TASK-001
     type: task
     path: 11_tasks/TASK-001-apply-ips-baseline.md
@@ -95,6 +99,10 @@ nodes:
     type: task
     path: 11_tasks/TASK-010-allegro-primary-channel-foundation.md
     title: Allegro Primary Channel Foundation
+  - id: TASK-011
+    type: task
+    path: 11_tasks/TASK-011-catalog-canonical-content-preview-connector.md
+    title: Catalog Canonical Content Preview Connector
   - id: EP-TASK-001
     type: execution_plan
     path: 21_execution_plans/EP-TASK-001-apply-ips-baseline.md
@@ -135,6 +143,10 @@ nodes:
     type: execution_plan
     path: 21_execution_plans/EP-TASK-010-allegro-primary-channel-foundation.md
     title: Allegro Primary Channel Foundation
+  - id: EP-TASK-011
+    type: execution_plan
+    path: 21_execution_plans/EP-TASK-011-catalog-canonical-content-preview-connector.md
+    title: Catalog Canonical Content Preview Connector
   - id: PROMPT-TASK-001-ips-baseline
     type: coding_prompt
     path: 14_prompts/PROMPT-TASK-001-ips-baseline.md
@@ -175,6 +187,10 @@ nodes:
     type: coding_prompt
     path: 14_prompts/PROMPT-TASK-010-allegro-primary-channel-foundation.md
     title: Allegro Primary Channel Foundation Prompt
+  - id: PROMPT-TASK-011-catalog-canonical-content-preview-connector
+    type: coding_prompt
+    path: 14_prompts/PROMPT-TASK-011-catalog-canonical-content-preview-connector.md
+    title: Catalog Canonical Content Preview Connector Prompt
   - id: CP-TASK-001
     type: context_package
     path: 13_context_packages/CP-TASK-001-ips-baseline.md
@@ -215,6 +231,10 @@ nodes:
     type: context_package
     path: 13_context_packages/CP-TASK-010-allegro-primary-channel-foundation.md
     title: Allegro Primary Channel Foundation Context Package
+  - id: CP-TASK-011-catalog-canonical-content-preview-connector
+    type: context_package
+    path: 13_context_packages/CP-TASK-011-catalog-canonical-content-preview-connector.md
+    title: Catalog Canonical Content Preview Connector Context Package
   - id: ADR-001
     type: adr
     path: 07_decisions/ADR-001-preserve-existing-nestjs-prisma-service-boundary.md
@@ -259,6 +279,10 @@ nodes:
     type: validation_report
     path: 12_validation/VAL-TASK-010-allegro-primary-channel-foundation.md
     title: Allegro Primary Channel Foundation Validation
+  - id: VAL-TASK-011-catalog-canonical-content-preview-connector
+    type: validation_report
+    path: 12_validation/VAL-TASK-011-catalog-canonical-content-preview-connector.md
+    title: Catalog Canonical Content Preview Connector Validation
 edges:
   - from: VISION-ALLEGRO-SERVICE
     type: defines
@@ -299,6 +323,9 @@ edges:
   - from: SYS-001
     type: enables
     to: FEAT-010
+  - from: SYS-001
+    type: enables
+    to: FEAT-011
   - from: TASK-001
     type: impacts_goal
     to: VG-004
@@ -537,5 +564,30 @@ edges:
     type: validates
     to: TASK-010
   - from: EP-TASK-010
+    type: constrained_by
+    to: ADR-001
+
+  - from: TASK-011
+    type: impacts_goal
+    to: VG-REVENUE
+  - from: TASK-011
+    type: implements
+    to: FEAT-011
+  - from: EP-TASK-011
+    type: derives_from
+    to: TASK-011
+  - from: EP-TASK-011
+    type: generates
+    to: PROMPT-TASK-011-catalog-canonical-content-preview-connector
+  - from: PROMPT-TASK-011-catalog-canonical-content-preview-connector
+    type: derives_from
+    to: EP-TASK-011
+  - from: PROMPT-TASK-011-catalog-canonical-content-preview-connector
+    type: included_in_context
+    to: CP-TASK-011-catalog-canonical-content-preview-connector
+  - from: VAL-TASK-011-catalog-canonical-content-preview-connector
+    type: validates
+    to: TASK-011
+  - from: EP-TASK-011
     type: constrained_by
     to: ADR-001

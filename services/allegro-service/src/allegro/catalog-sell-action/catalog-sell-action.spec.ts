@@ -42,10 +42,15 @@ import { strict as assert } from 'assert';
               brand: 'Synthetic brand',
               ean: '1234567890123',
               categoryId: overrides.catalogCategoryId || 'cat-123',
+              description: overrides.catalogDescription,
+              shortDescription: overrides.catalogShortDescription,
               price: { gross: 109, currency: 'PLN' },
               quantity: 5,
               images: ['https://example.invalid/product.jpg'],
             }),
+            getProductMarketplaceFields: async () => overrides.marketplaceFields || null,
+            getProductPricing: async () => overrides.currentPricing || null,
+            getProductContentPreview: async () => overrides.contentPreview || null,
           };
 
           const offersService = {
@@ -126,6 +131,51 @@ import { strict as assert } from 'assert';
           assert.equal(result.draftCreated, true);
           assert.equal(result.nextAction, 'confirm_publish');
           assert.equal(result.draft.accountId, '22222222-2222-2222-2222-222222222222');
+        }
+
+        async function testPrepareUsesCatalogContentPreviewDescriptionWhenMissing() {
+          const contentPreview = {
+            marketplace: 'allegro',
+            label: 'Allegro generated content',
+            format: 'plain-text',
+            content: { title: 'Generated title', plainText: 'Generated Allegro description' },
+            source: {
+              canonicalDocumentVersion: 'doc-v1',
+              legacyDescriptionFallback: false,
+              sourceHash: 'sha256:synthetic',
+              generatedAt: '2026-06-30T00:00:00.000Z',
+            },
+            overridesApplied: true,
+            warnings: ['Synthetic warning'],
+          };
+          const { service, createdOffers } = createHarness({ contentPreview });
+          const result = await service.prepare(
+            { catalogProductId: '33333333-3333-3333-3333-333333333333' },
+            'user-1',
+          );
+
+          assert.equal(createdOffers[0].description, 'Generated Allegro description');
+          assert.equal(createdOffers[0].rawData.catalogSnapshot.descriptionSource, 'catalog-content-preview');
+          assert.equal(createdOffers[0].rawData.catalogSnapshot.contentPreview.descriptionApplied, true);
+          assert.equal(result.catalogContentPreview.source.sourceHash, 'sha256:synthetic');
+          assert.equal(result.catalogContentPreview.warnings[0], 'Synthetic warning');
+        }
+
+        async function testPrepareKeepsExplicitDescriptionOverCatalogContentPreview() {
+          const contentPreview = {
+            marketplace: 'allegro',
+            content: { plainText: 'Generated Allegro description' },
+            source: { sourceHash: 'sha256:synthetic' },
+          };
+          const { service, createdOffers } = createHarness({ contentPreview });
+          await service.prepare(
+            { catalogProductId: '33333333-3333-3333-3333-333333333333', description: 'Operator provided description' },
+            'user-1',
+          );
+
+          assert.equal(createdOffers[0].description, 'Operator provided description');
+          assert.equal(createdOffers[0].rawData.catalogSnapshot.descriptionSource, 'request');
+          assert.equal(createdOffers[0].rawData.catalogSnapshot.contentPreview.descriptionApplied, false);
         }
 
         async function testPrepareCapsRequestedQuantityToWarehouseAvailability() {
@@ -309,6 +359,8 @@ import { strict as assert } from 'assert';
 
         export async function runCatalogSellActionSpec(): Promise<void> {
           await testPrepareCreatesNewDraftAndReturnsConfirmAction();
+          await testPrepareUsesCatalogContentPreviewDescriptionWhenMissing();
+          await testPrepareKeepsExplicitDescriptionOverCatalogContentPreview();
           await testPrepareCapsRequestedQuantityToWarehouseAvailability();
           await testPrepareCapsReusableDraftToWarehouseAvailability();
           await testPrepareReusesExistingDraft();

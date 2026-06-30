@@ -4,6 +4,28 @@ import { OffersService } from '../offers/offers.service';
 import { PublishLifecycleService } from '../publish-lifecycle/publish-lifecycle.service';
 import { BulkPrepareCatalogSellActionDto, PrepareCatalogSellActionDto } from './catalog-sell-action.dto';
 
+interface CatalogContentPreview {
+  marketplace?: string;
+  label?: string;
+  format?: string;
+  product?: Record<string, unknown>;
+  content?: {
+    title?: string | null;
+    plainText?: string | null;
+    html?: string | null;
+    blocks?: unknown[];
+    sections?: unknown[];
+  };
+  source?: {
+    canonicalDocumentVersion?: string | null;
+    legacyDescriptionFallback?: boolean | null;
+    sourceHash?: string | null;
+    generatedAt?: string | null;
+  };
+  overridesApplied?: boolean;
+  warnings?: string[];
+}
+
 @Injectable()
 export class CatalogSellActionService {
   constructor(
@@ -31,7 +53,14 @@ export class CatalogSellActionService {
       draft = await this.createDraftFromCatalog(dto, catalogProduct, selectedAccountId, requestedByUserId);
     } else {
       draft = await this.enforceDraftWarehouseQuantity(draft, catalogProduct);
+      draft = await this.enforceDraftCanonicalContent(draft, catalogProduct, dto);
     }
+
+    const contentPreviewEvidence = this.toCatalogContentPreviewEvidence(
+      this.getAllegroContentPreview(catalogProduct),
+      draft?.rawData?.catalogContentPreview?.descriptionApplied === true
+        || draft?.rawData?.catalogSnapshot?.contentPreview?.descriptionApplied === true,
+    );
 
     const attempt = await this.publishLifecycleService.prepare(
       {
@@ -44,6 +73,7 @@ export class CatalogSellActionService {
           source: 'catalog-sell-action',
           catalogProductId: dto.catalogProductId,
           localDraftOfferId: draft.id,
+          catalogContentPreview: contentPreviewEvidence,
         },
       },
       requestedByUserId,
@@ -58,6 +88,7 @@ export class CatalogSellActionService {
       accountChoices,
       categoryChoice: this.buildCategoryChoice(dto, draft, catalogProduct),
       catalogProduct: this.toCatalogSummary(catalogProduct),
+      catalogContentPreview: this.toCatalogContentPreview(this.getAllegroContentPreview(catalogProduct)),
     };
   }
 
@@ -148,6 +179,7 @@ export class CatalogSellActionService {
       accountChoices,
       categoryChoice: this.buildCategoryChoice({ catalogProductId } as any, draft, catalogProduct),
       catalogProduct: this.toCatalogSummary(catalogProduct),
+      catalogContentPreview: this.toCatalogContentPreview(this.getAllegroContentPreview(catalogProduct)),
       listingUrl: this.toListingUrl(draft),
       canEditDraft: Boolean(draft && !['ACTIVE'].includes(String(draft.publicationStatus || '').toUpperCase())),
       canConfirmPublish: Boolean(attempt && attempt.status === 'PREPARED'),
@@ -179,6 +211,10 @@ export class CatalogSellActionService {
       nextAction: current.attempt ? this.deriveNextAction(current.attempt) : 'confirm_publish',
       draft: this.toDraftSummary(draft),
       attempt: current.attempt || null,
+      accountChoices: current.accountChoices || [],
+      categoryChoice: current.categoryChoice || null,
+      catalogProduct: current.catalogProduct || null,
+      catalogContentPreview: current.catalogContentPreview || null,
       listingUrl: this.toListingUrl(draft),
       canEditDraft: Boolean(draft && !['ACTIVE'].includes(String(draft.publicationStatus || '').toUpperCase())),
       canConfirmPublish: Boolean(current.attempt && current.attempt.status === 'PREPARED'),
@@ -190,7 +226,17 @@ export class CatalogSellActionService {
     if (!current.attempt?.id) {
       throw new HttpException('Prepare an Allegro publish attempt before confirmation', HttpStatus.CONFLICT);
     }
-    return this.confirm(current.attempt.id, requestedByUserId, previewToken);
+    const confirmed = await this.confirm(current.attempt.id, requestedByUserId, previewToken);
+    return {
+      ...confirmed,
+      accountChoices: current.accountChoices || [],
+      categoryChoice: current.categoryChoice || null,
+      catalogProduct: current.catalogProduct || null,
+      catalogContentPreview: current.catalogContentPreview || null,
+      listingUrl: this.toListingUrl(confirmed.draft),
+      canEditDraft: Boolean(confirmed.draft && !['ACTIVE'].includes(String(confirmed.draft.publicationStatus || '').toUpperCase())),
+      canConfirmPublish: false,
+    };
   }
 
   private async loadCatalogProduct(catalogProductId: string): Promise<any> {
@@ -208,6 +254,7 @@ export class CatalogSellActionService {
   private async enrichCatalogProductForAllegro(catalogProduct: any): Promise<any> {
     let marketplaceFields: any = null;
     let currentPricing: any = null;
+    let contentPreview: CatalogContentPreview | null = null;
 
     try {
       marketplaceFields = await this.catalogClient.getProductMarketplaceFields(catalogProduct.id, 'allegro');
@@ -222,6 +269,18 @@ export class CatalogSellActionService {
       currentPricing = await this.catalogClient.getProductPricing(catalogProduct.id);
     } catch (error: any) {
       this.logger.warn('Failed to load Catalog pricing for catalog sell-action', {
+        catalogProductId: catalogProduct.id,
+        error: error.message,
+      });
+    }
+
+    try {
+      const getContentPreview = (this.catalogClient as any).getProductContentPreview;
+      if (typeof getContentPreview === 'function') {
+        contentPreview = await getContentPreview.call(this.catalogClient, catalogProduct.id, 'allegro');
+      }
+    } catch (error: any) {
+      this.logger.warn('Failed to load Allegro canonical content preview for catalog sell-action', {
         catalogProductId: catalogProduct.id,
         error: error.message,
       });
@@ -262,6 +321,11 @@ export class CatalogSellActionService {
         ...(catalogProduct?.marketplaceProfiles || {}),
         allegro: profile,
       },
+      contentPreviews: {
+        ...(catalogProduct?.contentPreviews || {}),
+        allegro: contentPreview,
+      },
+      allegroContentPreview: contentPreview,
     };
   }
 
@@ -353,6 +417,38 @@ export class CatalogSellActionService {
     });
   }
 
+  private async enforceDraftCanonicalContent(draft: any, catalogProduct: any, dto: PrepareCatalogSellActionDto): Promise<any> {
+    if (!draft) return draft;
+    const contentPreview = this.getAllegroContentPreview(catalogProduct);
+    const generatedDescription = this.getGeneratedDescription(contentPreview);
+    const shouldApplyDescription = dto.description === undefined
+      && Boolean(generatedDescription)
+      && !String(draft.description || '').trim();
+    const previewEvidence = this.toCatalogContentPreviewEvidence(contentPreview, shouldApplyDescription);
+
+    if (!previewEvidence && !shouldApplyDescription) {
+      return draft;
+    }
+
+    const rawData = {
+      ...(draft.rawData || {}),
+      catalogContentPreview: previewEvidence,
+      catalogSnapshot: {
+        ...(draft.rawData?.catalogSnapshot || {}),
+        contentPreview: previewEvidence,
+      },
+    };
+    const data: Record<string, unknown> = { rawData };
+    if (shouldApplyDescription) {
+      data.description = generatedDescription;
+    }
+
+    return (this.prisma as any).allegroOffer.update({
+      where: { id: draft.id },
+      data,
+    });
+  }
+
   private mapCatalogProductToLocalDraft(
     dto: PrepareCatalogSellActionDto,
     catalogProduct: any,
@@ -361,8 +457,21 @@ export class CatalogSellActionService {
   ): Record<string, unknown> {
     const images = this.extractImageUrls(catalogProduct);
     const allegroOverrides = catalogProduct?.marketplaceProfiles?.allegro?.overrides || {};
+    const contentPreview = this.getAllegroContentPreview(catalogProduct);
+    const generatedDescription = this.getGeneratedDescription(contentPreview);
     const title = dto.title || catalogProduct?.title || catalogProduct?.name || `Catalog product ${dto.catalogProductId}`;
-    const description = dto.description || catalogProduct?.description || catalogProduct?.shortDescription || null;
+    const description = dto.description !== undefined
+      ? dto.description
+      : generatedDescription || catalogProduct?.description || catalogProduct?.shortDescription || null;
+    const descriptionSource = dto.description !== undefined
+      ? 'request'
+      : generatedDescription
+        ? 'catalog-content-preview'
+        : catalogProduct?.description
+          ? 'catalog-description'
+          : catalogProduct?.shortDescription
+            ? 'catalog-short-description'
+            : '[MISSING: catalog description]';
     const categoryId = dto.categoryId || allegroOverrides.categoryId || catalogProduct?.allegroCategoryId || catalogProduct?.categoryId || 'UNASSIGNED';
     const requestedQuantity = this.toNonNegativeNumber(dto.quantity, allegroOverrides.quantity, catalogProduct?.stockQuantity, catalogProduct?.quantity, catalogProduct?.stock, 0);
     const warehouseAvailable = Number.isFinite(Number(catalogProduct?.warehouseAvailable)) ? Number(catalogProduct.warehouseAvailable) : requestedQuantity;
@@ -405,7 +514,10 @@ export class CatalogSellActionService {
             requestedQuantity,
             capped: quantity < requestedQuantity,
           },
+          contentPreview: this.toCatalogContentPreviewEvidence(contentPreview, descriptionSource === 'catalog-content-preview'),
+          descriptionSource,
         },
+        catalogContentPreview: this.toCatalogContentPreviewEvidence(contentPreview, descriptionSource === 'catalog-content-preview'),
       },
     };
   }
@@ -419,6 +531,72 @@ export class CatalogSellActionService {
     const safeQuantity = Number.isFinite(Number(quantity)) && Number(quantity) > 0 ? Math.floor(Number(quantity)) : 0;
     const safeAvailable = Number.isFinite(Number(warehouseAvailable)) && Number(warehouseAvailable) > 0 ? Math.floor(Number(warehouseAvailable)) : 0;
     return Math.min(safeQuantity, safeAvailable);
+  }
+
+  private getAllegroContentPreview(catalogProduct: any): CatalogContentPreview | null {
+    return catalogProduct?.allegroContentPreview || catalogProduct?.contentPreviews?.allegro || null;
+  }
+
+  private getGeneratedDescription(preview: CatalogContentPreview | null): string | null {
+    const content = preview?.content || {};
+    const value = typeof content.plainText === 'string' && content.plainText.trim()
+      ? content.plainText
+      : typeof content.html === 'string' && content.html.trim()
+        ? content.html
+        : null;
+    return value && value.trim() ? value : null;
+  }
+
+  private toCatalogContentPreview(preview: CatalogContentPreview | null): any {
+    if (!preview) return null;
+    const content = preview.content || {};
+    return {
+      marketplace: preview.marketplace || 'allegro',
+      label: preview.label || null,
+      format: preview.format || null,
+      product: preview.product || null,
+      content: {
+        title: content.title || null,
+        plainText: content.plainText || null,
+        html: content.html || null,
+        blockCount: Array.isArray(content.blocks) ? content.blocks.length : 0,
+        sectionCount: Array.isArray(content.sections) ? content.sections.length : 0,
+      },
+      source: {
+        canonicalDocumentVersion: preview.source?.canonicalDocumentVersion || null,
+        legacyDescriptionFallback: Boolean(preview.source?.legacyDescriptionFallback),
+        sourceHash: preview.source?.sourceHash || null,
+        generatedAt: preview.source?.generatedAt || null,
+      },
+      overridesApplied: Boolean(preview.overridesApplied),
+      warnings: Array.isArray(preview.warnings) ? preview.warnings : [],
+    };
+  }
+
+  private toCatalogContentPreviewEvidence(preview: CatalogContentPreview | null, descriptionApplied: boolean): any {
+    if (!preview) return null;
+    const content = preview.content || {};
+    return {
+      marketplace: preview.marketplace || 'allegro',
+      label: preview.label || null,
+      format: preview.format || null,
+      descriptionApplied,
+      content: {
+        titlePresent: Boolean(content.title),
+        plainTextLength: typeof content.plainText === 'string' ? content.plainText.length : 0,
+        htmlLength: typeof content.html === 'string' ? content.html.length : 0,
+        blockCount: Array.isArray(content.blocks) ? content.blocks.length : 0,
+        sectionCount: Array.isArray(content.sections) ? content.sections.length : 0,
+      },
+      source: {
+        canonicalDocumentVersion: preview.source?.canonicalDocumentVersion || null,
+        legacyDescriptionFallback: Boolean(preview.source?.legacyDescriptionFallback),
+        sourceHash: preview.source?.sourceHash || null,
+        generatedAt: preview.source?.generatedAt || null,
+      },
+      overridesApplied: Boolean(preview.overridesApplied),
+      warningCount: Array.isArray(preview.warnings) ? preview.warnings.length : 0,
+    };
   }
 
   private extractImageUrls(catalogProduct: any): string[] {

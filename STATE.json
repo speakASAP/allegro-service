@@ -3,13 +3,13 @@
   "project": "allegro-service",
   "stage": "production",
   "health": "ok",
-  "cycle": 7,
-  "last_cycle_at": "2026-06-30T10:20:00Z",
+  "cycle": 8,
+  "last_cycle_at": "2026-06-30T12:00:00Z",
   "tasks_active": 0,
   "tasks_failed_last_cycle": 0,
   "open_task_ids": [],
-  "last_milestone": "task010-warehouse-stock-events-automatic-allegro-quantity-sync-implemented",
-  "next_focus": "TASK-010 implemented and deployed after validation: Warehouse is the only stock source, stock.updated/stock.out events automatically queue and execute Allegro quantity commands, zero quantity sets Allegro offer quantity to 0, and the account rate limit is one request per second. Remaining sales-channel adapters outside allegro-service must mirror the same Warehouse event policy.",
+  "last_milestone": "task011-catalog-canonical-content-preview-connector-validated-no-deploy",
+  "next_focus": "TASK-011 implemented without deploy: Catalog canonical Allegro content previews feed local draft descriptions when no explicit description is supplied, preview source evidence is exposed to ProductsPage, and publish confirmation remains preview-token-gated. Remaining step is owner review/deploy decision; validation passed and no deploy was run.",
   "blockers": [],
   "budget_units_used": 0,
   "metrics": {
@@ -26,7 +26,8 @@
         "TASK-008",
         "TASK-006",
         "TASK-009",
-        "TASK-010"
+        "TASK-010",
+        "TASK-011"
       ]
     }
   },
