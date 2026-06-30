@@ -122,6 +122,12 @@ function decrypt(value: string): string {
 
 
 
+function redactSecretMessage(message: string): string {
+  return String(message || '')
+    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[REDACTED_JWT]')
+    .replace(/(access_token|refresh_token)=([^\s&]+)/gi, '$1=[REDACTED]');
+}
+
 function encrypt(value: string): string {
   const key = process.env.ENCRYPTION_KEY;
   if (!key || key.length < 32) throw new Error('ENCRYPTION_KEY must be configured and at least 32 characters.');
@@ -153,7 +159,7 @@ async function refreshAccessToken(account: any): Promise<string> {
   try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text.slice(0, 500) }; }
   if (!response.ok || !data?.access_token) {
     const message = data?.error_description || data?.error || data?.message || response.statusText;
-    throw Object.assign(new Error(`${response.status} ${message}`), { status: response.status, data });
+    throw Object.assign(new Error(`${response.status} ${redactSecretMessage(message)}`), { status: response.status, data: '[REDACTED]' });
   }
   const expiresAt = new Date(Date.now() + Number(data.expires_in || 0) * 1000);
   await prisma.allegroAccount.update({
@@ -176,7 +182,17 @@ async function accessTokenForAccount(account: any, refreshTokenBeforeRead: boole
       const token = await refreshAccessToken(account);
       return { token, tokenState: 'refreshed', refreshed: true };
     } catch (error: any) {
-      return { token: null, tokenState: 'refresh_failed', refreshed: false, error: error?.message || String(error) };
+      const latest = await prisma.allegroAccount.findUnique({
+        where: { id: account.id },
+        select: { accessToken: true, tokenExpiresAt: true },
+      });
+      const latestState = latest ? tokenState(latest) : 'missing_access_token';
+      if (latest?.accessToken && (latestState === 'present' || latestState === 'present_without_expiry')) {
+        try {
+          return { token: decrypt(latest.accessToken), tokenState: 'refresh_failed_using_current_token', refreshed: false, error: redactSecretMessage(error?.message || String(error)) };
+        } catch {}
+      }
+      return { token: null, tokenState: 'refresh_failed', refreshed: false, error: redactSecretMessage(error?.message || String(error)) };
     }
   }
   const state = tokenState(account);
@@ -209,7 +225,7 @@ async function requestJson(url: string, token: string, allow404 = false): Promis
   try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text.slice(0, 500) }; }
   if (!response.ok && !(allow404 && response.status === 404)) {
     const message = data?.errors?.[0]?.userMessage || data?.errors?.[0]?.message || data?.message || response.statusText;
-    throw Object.assign(new Error(`${response.status} ${message}`), { status: response.status, data });
+    throw Object.assign(new Error(`${response.status} ${redactSecretMessage(message)}`), { status: response.status, data: '[REDACTED]' });
   }
   return { status: response.status, data };
 }
