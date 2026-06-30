@@ -9,6 +9,7 @@ type Args = {
   userId?: string;
   accountId?: string;
   accountName?: string;
+  allAccounts: boolean;
   offerIds: string[];
   apply: boolean;
   activateAccount: boolean;
@@ -26,11 +27,14 @@ function printHelp(): void {
 Usage:
   npm run import:allegro-offers:catalog -- --account-name ClipFlop --offer-id 18106529080 --dry-run
   npm run import:allegro-offers:catalog -- --account-id <uuid> --offer-ids 18106529080,18106529081 --apply --activate-account --confirm-activate-account ${ACTIVATE_ACCOUNT_CONFIRMATION} --confirm-catalog-apply ${CATALOG_IMPORT_CONFIRMATION}
+  npm run import:allegro-offers:catalog -- --all-accounts --all --dry-run
+  npm run import:allegro-offers:catalog -- --all-accounts --all --apply --activate-account --confirm-activate-account ${ACTIVATE_ACCOUNT_CONFIRMATION} --confirm-catalog-apply ${CATALOG_IMPORT_CONFIRMATION}
   npm run import:allegro-offers:catalog -- --user-id <uuid> --all --apply --confirm-catalog-apply ${CATALOG_IMPORT_CONFIRMATION}
 
 Options:
   --account-name <name>  Resolve this Allegro account. Applying with an account selector requires explicit activation confirmation.
   --account-id <uuid>    Resolve this Allegro account. Applying with an account selector requires explicit activation confirmation.
+  --all-accounts         Resolve all Allegro accounts. Applying requires explicit activation confirmation and imports sequentially.
   --user-id <uuid>       User id to import for. Required when no account selector is provided.
   --offer-id <id>        Import one Allegro offer. Can be repeated.
   --offer-ids <ids>      Comma-separated Allegro offer ids.
@@ -50,7 +54,7 @@ function normalizeOfferId(value: string): string {
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { offerIds: [], apply: false, activateAccount: false, help: false };
+  const args: Args = { allAccounts: false, offerIds: [], apply: false, activateAccount: false, help: false };
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -71,6 +75,8 @@ function parseArgs(argv: string[]): Args {
       args.accountId = next();
     } else if (arg === '--account-name') {
       args.accountName = next();
+    } else if (arg === '--all-accounts') {
+      args.allAccounts = true;
     } else if (arg === '--offer-id') {
       args.offerIds.push(normalizeOfferId(next()));
     } else if (arg === '--offer-ids') {
@@ -93,6 +99,9 @@ function parseArgs(argv: string[]): Args {
   }
 
   args.offerIds = Array.from(new Set(args.offerIds.filter(Boolean)));
+  if (args.allAccounts && (args.accountId || args.accountName || args.userId)) {
+    throw new Error('Use --all-accounts without --account-id, --account-name, or --user-id.');
+  }
   return args;
 }
 
@@ -114,7 +123,22 @@ function buildImportSafety(args: Args): Record<string, unknown> {
   });
 }
 
-async function resolveAccount(prisma: PrismaService, args: Args): Promise<{ userId: string; accountId?: string; accountName?: string }> {
+type ResolvedImportAccount = { userId: string; accountId?: string; accountName?: string; isActive?: boolean };
+
+async function resolveAccounts(prisma: PrismaService, args: Args): Promise<ResolvedImportAccount[]> {
+  if (args.allAccounts) {
+    const accounts = await prisma.allegroAccount.findMany({
+      select: { id: true, userId: true, name: true, isActive: true, updatedAt: true },
+      orderBy: [{ isActive: 'desc' }, { updatedAt: 'desc' }],
+    });
+    return accounts.map((account) => ({
+      userId: account.userId,
+      accountId: account.id,
+      accountName: account.name,
+      isActive: account.isActive,
+    }));
+  }
+
   if (args.accountId) {
     const account = await prisma.allegroAccount.findUnique({
       where: { id: args.accountId },
@@ -126,7 +150,7 @@ async function resolveAccount(prisma: PrismaService, args: Args): Promise<{ user
     if (args.userId && args.userId !== account.userId) {
       throw new Error(`Account ${args.accountId} belongs to another user.`);
     }
-    return { userId: account.userId, accountId: account.id, accountName: account.name };
+    return [{ userId: account.userId, accountId: account.id, accountName: account.name }];
   }
 
   if (args.accountName) {
@@ -147,14 +171,14 @@ async function resolveAccount(prisma: PrismaService, args: Args): Promise<{ user
       throw new Error(`Account name is ambiguous. Use --account-id. Matches: ${choices}`);
     }
 
-    return { userId: accounts[0].userId, accountId: accounts[0].id, accountName: accounts[0].name };
+    return [{ userId: accounts[0].userId, accountId: accounts[0].id, accountName: accounts[0].name }];
   }
 
   if (!args.userId) {
     throw new Error('Provide --account-name, --account-id, or --user-id.');
   }
 
-  return { userId: args.userId };
+  return [{ userId: args.userId }];
 }
 
 async function activateAccount(prisma: PrismaService, userId: string, accountId?: string): Promise<void> {
@@ -209,7 +233,10 @@ async function main(): Promise<void> {
   try {
     const prisma = app.get(PrismaService);
     const offersService = app.get(OffersService);
-    const resolved = await resolveAccount(prisma, args);
+    const resolvedAccounts = await resolveAccounts(prisma, args);
+    if (!resolvedAccounts.length) {
+      throw new Error('No matching Allegro accounts found.');
+    }
     const safety = buildImportSafety(args);
 
     if (!args.apply) {
@@ -217,9 +244,12 @@ async function main(): Promise<void> {
         status: 'ok',
         mode: 'dry-run',
         safety,
-        userId: resolved.userId,
-        accountId: resolved.accountId || null,
-        accountName: resolved.accountName || null,
+        accounts: resolvedAccounts.map((account) => ({
+          userId: account.userId,
+          accountId: account.accountId || null,
+          accountName: account.accountName || null,
+          isActive: account.isActive ?? null,
+        })),
         offerIds: args.offerIds,
         wouldImportAll: args.offerIds.length === 0,
         note: 'No Catalog, local offer, Warehouse, active-account, orders, BizBox, or Allegro write was executed.',
@@ -227,24 +257,31 @@ async function main(): Promise<void> {
       return;
     }
 
-    if (args.activateAccount) {
-      await activateAccount(prisma, resolved.userId, resolved.accountId);
-    } else if (resolved.accountId) {
-      throw new Error('Applying with --account-id or --account-name requires --activate-account plus --confirm-activate-account because OffersService imports from the active Allegro account.');
+    if (resolvedAccounts.some((account) => account.accountId) && !args.activateAccount) {
+      throw new Error('Applying with --account-id, --account-name, or --all-accounts requires --activate-account plus --confirm-activate-account because OffersService imports from the active Allegro account.');
     }
 
-    const result = args.offerIds.length > 0
-      ? await offersService.importApprovedOffers(resolved.userId, args.offerIds)
-      : await offersService.importAllOffers(resolved.userId);
+    const results = [];
+    for (const resolved of resolvedAccounts) {
+      if (args.activateAccount) {
+        await activateAccount(prisma, resolved.userId, resolved.accountId);
+      }
+      const result = args.offerIds.length > 0
+        ? await offersService.importApprovedOffers(resolved.userId, args.offerIds)
+        : await offersService.importAllOffers(resolved.userId);
+      results.push({
+        userId: resolved.userId,
+        accountId: resolved.accountId || null,
+        accountName: resolved.accountName || null,
+        result,
+      });
+    }
 
     console.log(JSON.stringify({
       status: 'ok',
-      userId: resolved.userId,
-      accountId: resolved.accountId || null,
-      accountName: resolved.accountName || null,
       safety,
       offerIds: args.offerIds,
-      result,
+      accounts: results,
     }, null, 2));
   } finally {
     await app.close();
