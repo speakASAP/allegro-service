@@ -458,7 +458,7 @@ Date: 2026-06-29
   - `npm run ips:pre-coding`: PASS.
   - `npx prisma validate --schema prisma/schema.prisma`: PASS.
   - `python3 scripts/deployment_readiness_gate.py --root . --target TASK-010`: PASS.
-- Deployment status: not deployed in this pass.
-- Migration status: not applied in this pass.
-- Git note: `prisma/migrations/*` is ignored by existing `.gitignore`; the new
-  quantity-command migration must be force-added when committing.
+- Deployment status: PASS on 2026-06-30. `./scripts/deploy.sh ef0c610` completed successfully in 127.38s and rolled `allegro-service`, `allegro-api-gateway`, `allegro-settings`, `allegro-imports`, and `allegro-frontend` to image tag `ef0c610`.
+- Migration status: PASS on 2026-06-30. `/app/shared/node_modules/.bin/prisma migrate deploy --schema=/tmp/prisma/schema.prisma` ran inside the deployed `allegro-service` pod using runtime DB env, reported 10 migrations, and `migrate status` reported database schema up to date.
+- Live table verification: PASS on 2026-06-30. Deployed Prisma client query `allegroQuantityCommandAttempt.count()` returned 0, confirming the table exists before live quantity commands.
+- Live route verification: PASS on 2026-06-30. `https://allegro.alfares.cz/api/health` returned HTTP 200, `https://allegro.alfares.cz/` returned HTTP 200, and unauthenticated guarded routes for quantity commands and operations quantity-command attempts returned HTTP 401 `No token provided`.
