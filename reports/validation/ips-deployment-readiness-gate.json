@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-06-30T08:41:35Z",
+  "created_at": "2026-06-30T10:46:39Z",
   "gate": "deployment_readiness",
   "next_step": "ready_for_deployment_review",
   "pre_coding_gate": {
@@ -34,11 +34,6 @@
     {
       "line": 340,
       "marker": "[MISSING: governed Allegro quantity command write-back with polling and terminal state checks]",
-      "path": "12_validation/VAL-TASK-010-allegro-primary-channel-foundation.md"
-    },
-    {
-      "line": 472,
-      "marker": "[MISSING: recurring stock orchestration policy for automatic Allegro quantity commands]",
       "path": "12_validation/VAL-TASK-010-allegro-primary-channel-foundation.md"
     },
     {
@@ -297,11 +292,6 @@
       "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
     },
     {
-      "line": 667,
-      "marker": "[MISSING: governed stock write-back implementation using /sale/offer-quantity-change-commands/{commandId}, polling, terminal state, and rate-limit handling]",
-      "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
-    },
-    {
       "line": 668,
       "marker": "[UNKNOWN: whether Warehouse getTotalAvailable includes reservations or only physical available stock]",
       "path": "docs/orchestrator/ALLEGRO_IMPORT_EXPORT_MAPPING.md"
@@ -342,16 +332,6 @@
       "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
     },
     {
-      "line": 2175,
-      "marker": "[MISSING: Warehouse sellable stock semantics and reservation policy]",
-      "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
-    },
-    {
-      "line": 2176,
-      "marker": "[MISSING: recurring stock orchestration policy for automatic Allegro quantity commands]",
-      "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
-    },
-    {
       "line": 2177,
       "marker": "[MISSING: category and parameter mapping completeness for publish beyond offline readiness helper]",
       "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
@@ -369,11 +349,6 @@
     {
       "line": 2180,
       "marker": "[MISSING: fulfillment owner decision for shipment label/document creation]",
-      "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
-    },
-    {
-      "line": 2181,
-      "marker": "[MISSING: production account rate-limit policy]",
       "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
     },
     {
@@ -400,11 +375,6 @@
       "line": 2241,
       "marker": "[UNKNOWN: ...]",
       "path": "docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_PLAN.md"
-    },
-    {
-      "line": 58,
-      "marker": "[MISSING: recurring stock orchestration policy for automatic Allegro quantity commands]",
-      "path": "docs/orchestrator/STATUS.md"
     }
   ],
   "validation_reports": {

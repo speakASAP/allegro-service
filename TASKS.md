@@ -8,7 +8,6 @@ Owner created TASK-009 runtime/UI implementation goal on 2026-06-27.
 
 ## Active
 <!-- Coordinator-maintained -->
-- 2026-06-29 TASK-010-allegro-primary-channel-foundation: active foundation task for guarded Allegro primary-channel import/export implementation; live Warehouse/BizBox/Allegro/Orders/Payments mutation lanes remain owner-gated.
 
 ## Completed
 <!-- Coordinator-append-only -->
@@ -20,8 +19,10 @@ Owner created TASK-009 runtime/UI implementation goal on 2026-06-27.
 - 2026-06-20 TASK-005-ai-offer-optimization-contract-validated: advisory ai-microservice contract, contract module/service/specs, review-state model, synthetic fixtures, redaction profile, build/spec validation, and IPS evidence completed without direct marketplace mutation.
 - 2026-06-20 TASK-007-growth-analytics-contract-pack-validated: funnel taxonomy, leads/marketing envelope drafts, digest payload definitions, redaction/replay/versioning rules, integrated validation evidence, and repo-state updates completed without downstream runtime writes.
 - 2026-06-20 TASK-008-operations-trust-plan-validated: queue/rate-limit planning, OAuth health signals, MinIO media contract gating, deployment smoke and rollback evidence, integrated validation report, and repo-state updates completed without runtime changes.
-- 2026-06-21 TASK-006-stock-order-profit-loop-contract-validated: stock-sync attempt, order reconciliation, read-only payment, supplier dry-run, and margin coverage contracts implemented with synthetic validation and no runtime writes.
+- 2026-06-21 TASK-006-stock order profit loop contract validated: stock-sync attempt, order reconciliation, read-only payment, supplier dry-run, and margin coverage contracts implemented with synthetic validation and no runtime writes.
 - 2026-06-27 TASK 009 live validated: Allegro landing, registration/login SPA routes, dashboard/products, API gateway, backend health route, Catalog product selection endpoint wiring, and governed publish-flow backend routes deployed and smoke validated on allegro.alfares.cz.
+
+- 2026-06-30 Task 010 allegro primary channel foundation validated: Warehouse-only recurring stock policy implemented for Allegro stock events; stock.updated/stock.out automatically execute governed Allegro quantity commands at one request per second, with zero quantity setting the Allegro offer quantity to 0.
 
 ## Project Completion Marker
 

@@ -6,8 +6,8 @@ status: draft
 source_task: ../11_tasks/TASK-010-allegro-primary-channel-foundation.md
 execution_plan: ../21_execution_plans/EP-TASK-010-allegro-primary-channel-foundation.md
 created: 2026-06-29
-last_updated: 2026-06-29
-completeness_level: partial
+last_updated: 2026-06-30
+completeness_level: complete
 sensitive_data_classification: synthetic
 ```
 
@@ -469,4 +469,15 @@ Date: 2026-06-29
 - Public route smoke: PASS. `https://allegro.alfares.cz/api/health` returned HTTP 200, `https://allegro.alfares.cz/` returned HTTP 200, and unauthenticated quantity-command routes returned HTTP 401.
 - Authenticated quantity-command smoke: PASS. A short-lived runtime JWT was generated inside the deployed pod for the owner of an existing active offer. `POST /api/allegro/quantity-commands/prepare` returned HTTP 200 and status `PREPARED`; `POST /api/allegro/quantity-commands/:attemptId/confirm` returned HTTP 200 and status `QUEUED`.
 - Mutation boundary: PASS. The smoke used target quantity equal to the current local quantity, did not call `execute`, did not call `confirm-and-execute`, did not call `poll`, did not create an Allegro command id, and did not perform a real Allegro quantity change. Preview tokens and JWT material were not printed or stored in validation artifacts.
-- Remaining blocker: `[MISSING: recurring stock orchestration policy for automatic Allegro quantity commands]`. Live quantity command execution remains owner-approved and business-need gated.
+- Recurring stock blocker closed: automatic Warehouse-driven Allegro quantity command execution is implemented for stock.updated and stock.out; live execution now happens from future Warehouse stock events without manual approval.
+
+## 2026-06-30 Warehouse recurring stock policy addendum
+
+Result: Pass. The missing recurring stock orchestration policy was converted into code for the Allegro adapter. Warehouse is the only sellable-stock source; `stock.updated` uses the Warehouse `available` quantity, and `stock.out` forces target quantity `0`. Each linked Allegro offer now gets a durable `AllegroQuantityCommandAttempt` with `approvalRequired=false`, `approvalMode=automatic_execute`, Warehouse policy snapshot, idempotency key, one-request-per-second default pacing, Allegro quantity command submit, polling, and terminal-state recording. Local Allegro projection is marked `PENDING` before the command and `SYNCED` only after successful terminal confirmation; failures mark the attempt failed and keep remediation context.
+
+Boundary: this change implements the Allegro sales-channel adapter only. Bazos, FlipFlop, and other channel adapters still need to subscribe to the same Warehouse `stock.updated`/`stock.out` policy in their own services. No synthetic or live Warehouse stock event was published during validation, and no live Allegro quantity mutation was manually triggered outside future event processing.
+
+Additional gate evidence:
+
+- `git diff --check`: PASS on 2026-06-30 after automatic Warehouse stock-event sync implementation.
+- `cd services/allegro-service && npm run build`: PASS on 2026-06-30 after `shared/rabbitmq/stock-events.subscriber.ts` implementation.

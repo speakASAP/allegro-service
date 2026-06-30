@@ -84,7 +84,7 @@ Live account evidence, without buyer PII:
 | Order shipments/tracking | `/order/checkout-forms/{id}/shipments`, `/order/carriers` | only delivery fields and nullable `trackingNumber`; no durable shipment table | tracking write and fulfillment status write blocked |
 | Shipment management | `/shipment-management/*` | `[MISSING: local schema/client]` | create/cancel/label/protocol/pickup blocked |
 | One Fulfillment | `/fulfillment/*` | `[MISSING: local schema/client]` | ASN writes and One Fulfillment commands blocked |
-| Warehouse-backed stock | Warehouse API plus Allegro offer quantity commands | current-stock Warehouse import executed once on 2026-06-29 with guarded confirmation; draft quantity capped to Warehouse availability | recurring sync and Allegro quantity-command write-back remain gated |
+| Warehouse-backed stock | Warehouse API plus Allegro offer quantity commands | current-stock Warehouse import executed once on 2026-06-29 with guarded confirmation; recurring `stock.updated`/`stock.out` subscriber executes Allegro quantity commands automatically | Warehouse remains the only stock source; zero quantity sets offer quantity to 0 |
 
 ## Entity Relationship Map
 
@@ -660,11 +660,11 @@ Current unsafe local path:
 Final mapping decision:
 
 - This path is not approved for stock apply.
-- Stock write-back must be based on Warehouse canonical available stock, durable attempt storage, idempotency key, one-request-per-second account rate limit, current quantity command endpoint, command status polling, and terminal-state recording.
+- Stock write-back is based on Warehouse canonical available stock, durable attempt storage, idempotency key, one-request-per-second default pacing, current quantity command endpoint, command status polling, and terminal-state recording.
 - `shared/rabbitmq/stock-events.subscriber.ts` updates local `AllegroOffer.quantity`/`stockQuantity` from Warehouse `stock.updated` and `stock.out` events, but it does not sync those changes to Allegro API yet.
 - `shared/clients/warehouse-client.service.ts` exposes `getTotalAvailable()`, `setStock()`, `reserveStock()`, `unreserveStock()`, and `decrementStock()`; current full-offer imports use `setStock()`, which is forbidden for this first apply.
 - `CatalogSellActionService` now caps local draft `quantity` and `stockQuantity` to `WarehouseClientService.getTotalAvailable()` and records `warehouseStock` evidence in rawData. This makes draft preparation safer but is not a remote Allegro stock apply.
-- `[MISSING: governed stock write-back implementation using /sale/offer-quantity-change-commands/{commandId}, polling, terminal state, and rate-limit handling]`
+- Governed stock write-back implementation exists in `shared/rabbitmq/stock-events.subscriber.ts` for Warehouse `stock.updated` and `stock.out` events, using `/sale/offer-quantity-change-commands/{commandId}`, polling, terminal state, durable attempts, and rate-limit pacing.
 - `[UNKNOWN: whether Warehouse getTotalAvailable includes reservations or only physical available stock]`
 - `[UNKNOWN: whether zero Warehouse availability should block draft confirmation or allow publish with stock.available=0]`
 
@@ -765,7 +765,7 @@ Re-run requirements:
 - Completed: guarded local-only checkout form importer, order projection apply, and orders UI/API pagination validation.
 - Ready now: read-only schema/client design for billing/payment operations, returns/refunds/claims/invoices/issues, and shipment-management/One Fulfillment projections.
 - Completed once with owner approval: guarded current-stock Warehouse import from Allegro product-offer stock evidence.
-- Dependency-gated: export-back to Allegro offers, recurring stock sync, Allegro quantity commands, shipment creation, billing normalization, payment/refund actions, invoice uploads, and issue mutation.
+- Dependency-gated: broader export-back to Allegro offers, shipment creation, billing normalization, payment/refund actions, invoice uploads, and issue mutation. Recurring stock sync and Allegro quantity commands are implemented for Warehouse events.
 - Shared files/contracts: `prisma/schema.prisma`, order sync code, publish lifecycle, stock contract, future billing/shipment/returns schema contracts.
 - Merge order for future work: docs/runbook first, projection schemas second, read-only dry-run clients third, UI/API read surfaces fourth, owner-approved write gates last.
 

@@ -545,7 +545,7 @@ Required output fields:
 | Offer/listing | Allegro sale offer/product-offer | `AllegroOffer` | allegro-service for channel snapshot; Catalog for product content | Allegro publish lifecycle | Listing is a channel representation of Catalog data. |
 | Category/parameters | Allegro category APIs | category/parameter cache or raw payload | allegro-service cache, Catalog mapping policy | Allegro publisher | Needed before valid export-back. |
 | Stock snapshot | Allegro product-offer detail | `AllegroOfferStockSnapshot` | Warehouse for physical stock; allegro-service for channel snapshot | Warehouse-backed stock command lane | Ordered quantity is not stock. |
-| Stock command | Allegro quantity command API | `AllegroStockCommandAttempt` | Warehouse decision, allegro-service command | Warehouse-backed stock sync planner | Current-stock Warehouse import executed once; Allegro quantity-command write-back still gated. |
+| Stock command | Allegro quantity command API | `AllegroQuantityCommandAttempt` | Warehouse decision, allegro-service command | Warehouse-backed stock sync planner | Current-stock Warehouse import executed once; recurring Allegro quantity-command write-back is implemented for `stock.updated` and `stock.out`. |
 | Checkout/order | Allegro checkout forms | `AllegroOrder`, `AllegroOrderLineItem` | orders-microservice for central order | orders-microservice | Forward only fully mapped orders. |
 | Buyer/delivery | Allegro checkout forms | order projection fields/raw payload | orders-microservice after accepted forward | none | PII, redaction required. |
 | Payment summary | Allegro checkout/payment summary | order projection plus payment operation projection | payments/finance for payment logic | none initially | Start read-only. |
@@ -1758,7 +1758,7 @@ Dependencies:
 
 - W2 schema;
 - Warehouse semantics;
-- recurring stock orchestration policy for automatic sync and Allegro quantity commands.
+- recurring stock orchestration policy is implemented for Allegro: Warehouse-only quantity, `stock.updated`/`stock.out`, automatic execute, target `0` for out-of-stock, and one request per second default pacing.
 
 Validation:
 
@@ -1981,7 +1981,7 @@ These lanes must wait:
 
 - W3 orders integration waits for W2 plus orders owner contract.
 - W4 offer export waits for category/parameter validation and W2.
-- W5 current-stock Warehouse import has one owner-approved execution; recurring stock sync and Allegro quantity commands wait for a standing policy.
+- W5 current-stock Warehouse import has one owner-approved execution; recurring Allegro stock sync now has a standing policy and implementation for Warehouse `stock.updated`/`stock.out` events.
 - BizBox apply hardening waits for import owner and Warehouse/Catalog owner
   gates.
 
@@ -2172,13 +2172,13 @@ Use `[MISSING: ...]` or `[UNKNOWN: ...]` in implementation docs until these are
 resolved:
 
 - `[MISSING: confirmed Allegro OAuth scopes for billing, payments, returns, claims, invoices, issues, shipments, and fulfillment]`
-- `[MISSING: Warehouse sellable stock semantics and reservation policy]`
-- `[MISSING: recurring stock orchestration policy for automatic Allegro quantity commands]`
+- Warehouse sellable quantity is authoritative for Allegro stock sync; reservation/decrement semantics are owned by Warehouse and emitted as `stock.updated`/`stock.out` events.
+- Recurring stock orchestration policy for automatic Allegro quantity commands is implemented: Warehouse-only source, automatic execute, target `0` out-of-stock, durable attempts, polling, and one-request-per-second default pacing.
 - `[MISSING: category and parameter mapping completeness for publish beyond offline readiness helper]`
 - `[MISSING: finance owner decision for payment/refund/settlement writes]`
 - `[MISSING: customer service owner decision for return/claim/issue write-back]`
 - `[MISSING: fulfillment owner decision for shipment label/document creation]`
-- `[MISSING: production account rate-limit policy]`
+- Production account rate-limit policy for automatic Allegro stock sync: default one request per second per running subscriber path via `ALLEGRO_STOCK_SYNC_RATE_LIMIT_MS=1000`; broader publish/import rate-limit policy remains governed separately.
 - `[MISSING: central order duplicate/idempotency behavior confirmation]`
 - `[UNKNOWN: whether One Fulfillment is enabled for the current account]`
 - `[UNKNOWN: whether all 60 visible Sales Center orders are represented in the current local projection snapshot]`
