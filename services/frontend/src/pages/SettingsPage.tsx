@@ -413,6 +413,48 @@ const SettingsPage: React.FC = () => {
     }
   };
 
+  const handleCopyOAuthLink = async (accountId: string) => {
+    const account = accounts.find(acc => acc.id === accountId);
+    if (!account) {
+      setError('Account not found');
+      return;
+    }
+
+    if (!account.clientId) {
+      setError('Please configure Client ID and Client Secret for this account first');
+      return;
+    }
+
+    setOauthLoadingAccountId(accountId);
+    setError('');
+    setSuccess('');
+
+    try {
+      const response = await oauthApi.authorize(accountId);
+      const authorizationUrl = response.data?.data?.authorizationUrl;
+      if (!response.data.success || !authorizationUrl) {
+        setError('Failed to generate authorization URL');
+        return;
+      }
+
+      await navigator.clipboard.writeText(authorizationUrl);
+      setSuccess('OAuth link copied. Open it in the browser session where the target Allegro seller is logged in.');
+    } catch (err: unknown) {
+      if (err instanceof AxiosError) {
+        const axiosError = err as AxiosError & { isConnectionError?: boolean; serviceErrorMessage?: string };
+        if (axiosError.isConnectionError && axiosError.serviceErrorMessage) {
+          setError(axiosError.serviceErrorMessage);
+        } else {
+          setError(err.response?.data?.error?.message || 'Failed to copy OAuth link');
+        }
+      } else {
+        setError('Failed to copy OAuth link');
+      }
+    } finally {
+      setOauthLoadingAccountId(null);
+    }
+  };
+
   const handleRevokeOAuth = async (accountId: string) => {
     if (!confirm('Are you sure you want to revoke OAuth authorization? You will need to re-authorize to import offers.')) {
       return;
@@ -614,6 +656,14 @@ const SettingsPage: React.FC = () => {
                             {oauthLoadingAccountId === account.id ? 'Starting...' : 'Re-authorize OAuth'}
                           </Button>
                           <Button
+                            variant="secondary"
+                            size="small"
+                            onClick={() => handleCopyOAuthLink(account.id)}
+                            disabled={oauthLoadingAccountId === account.id || !account.clientId}
+                          >
+                            {oauthLoadingAccountId === account.id ? 'Preparing...' : 'Copy OAuth link'}
+                          </Button>
+                          <Button
                             variant="danger"
                             size="small"
                             onClick={() => handleRevokeOAuth(account.id)}
@@ -630,6 +680,14 @@ const SettingsPage: React.FC = () => {
                             disabled={oauthLoadingAccountId === account.id || !account.clientId}
                           >
                             {oauthLoadingAccountId === account.id ? 'Starting...' : 'Authorize OAuth'}
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="small"
+                            onClick={() => handleCopyOAuthLink(account.id)}
+                            disabled={oauthLoadingAccountId === account.id || !account.clientId}
+                          >
+                            {oauthLoadingAccountId === account.id ? 'Preparing...' : 'Copy OAuth link'}
                           </Button>
                           {!account.clientId && (
                             <span className="text-sm text-yellow-600">
