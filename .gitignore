@@ -105,3 +105,5 @@ local_settings.py
 
 # Claude Code local settings (may contain tokens)
 .claude/settings.local.json
+!prisma/migrations/20260630113000_add_allegro_quantity_command_attempts/
+!prisma/migrations/20260630113000_add_allegro_quantity_command_attempts/migration.sql

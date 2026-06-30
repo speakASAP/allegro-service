@@ -442,7 +442,7 @@ Date: 2026-06-29
   token and previewed offer-id set returned by the matching preview route, in
   addition to the explicit Catalog apply confirmation.
 - Added governed Allegro quantity command attempts with preview-token-bound
-  prepare/confirm/execute/poll flow under `/allegro/quantity-commands`.
+  prepare/confirm/execute/poll flow exposed by the new quantity command API endpoints.
 - Added additive `AllegroQuantityCommandAttempt` schema and SQL migration file
   for durable idempotency, command id, target quantity, policy snapshot,
   failure context, and terminal status evidence. The migration was not applied

@@ -633,6 +633,92 @@ export class AllegroApiService {
     }
   }
 
+
+  /**
+   * Submit stock quantity changes using Allegro command pattern.
+   * PUT /sale/offer-quantity-change-commands/{commandId}
+   */
+  async changeOfferQuantityWithOAuthToken(
+    accessToken: string,
+    commandId: string,
+    changes: Array<{ offerId: string; quantity: number }>,
+  ): Promise<any> {
+    const endpoint = `/sale/offer-quantity-change-commands/${commandId}`;
+    const url = `${this.apiUrl}${endpoint}`;
+    const requestId = `api-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const payload = {
+      modification: {
+        changeType: 'FIXED',
+        value: changes[0]?.quantity ?? 0,
+      },
+      offerCriteria: changes.map((change) => ({
+        offers: [{ id: change.offerId }],
+      })),
+    };
+
+    try {
+      this.logger.log(`[${requestId}] [changeOfferQuantityWithOAuthToken] Sending quantity command`, {
+        endpoint,
+        commandId,
+        changesCount: changes.length,
+        offerIds: changes.map((change) => change.offerId).slice(0, 10),
+      });
+      const response = await firstValueFrom(this.httpService.put(url, payload, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/vnd.allegro.public.v1+json',
+          Accept: 'application/vnd.allegro.public.v1+json',
+        },
+        timeout: 120000,
+      }));
+      return response.data || { accepted: true, status: response.status };
+    } catch (error: any) {
+      const errorData = error.response?.data || {};
+      this.logger.error(`[${requestId}] [changeOfferQuantityWithOAuthToken] Quantity command failed`, {
+        endpoint,
+        commandId,
+        error: error.message,
+        status: error.response?.status,
+        errorData,
+      });
+      throw error;
+    }
+  }
+
+  async getOfferQuantityCommandStatusWithOAuthToken(accessToken: string, commandId: string): Promise<any> {
+    const endpoint = `/sale/offer-quantity-change-commands/${commandId}`;
+    const url = `${this.apiUrl}${endpoint}`;
+    const response = await firstValueFrom(this.httpService.get(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.allegro.public.v1+json',
+      },
+      timeout: 30000,
+    }));
+    return response.data;
+  }
+
+  async getOfferQuantityCommandTasksWithOAuthToken(
+    accessToken: string,
+    commandId: string,
+    params?: { limit?: number; offset?: number },
+  ): Promise<any> {
+    const queryParams: Record<string, string> = {};
+    if (params?.limit !== undefined) queryParams.limit = String(params.limit);
+    if (params?.offset !== undefined) queryParams.offset = String(params.offset);
+    const queryString = Object.keys(queryParams).length ? `?${new URLSearchParams(queryParams).toString()}` : '';
+    const endpoint = `/sale/offer-quantity-change-commands/${commandId}/tasks${queryString}`;
+    const url = `${this.apiUrl}${endpoint}`;
+    const response = await firstValueFrom(this.httpService.get(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.allegro.public.v1+json',
+      },
+      timeout: 30000,
+    }));
+    return response.data;
+  }
+
   /**
    * Publish / unpublish offers using Allegro command pattern
    * Wrapper for:

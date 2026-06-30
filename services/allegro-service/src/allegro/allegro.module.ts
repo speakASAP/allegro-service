@@ -31,6 +31,8 @@ import { AdminUsersController, AllegroUsersController } from './admin-users/admi
 import { AdminUsersService } from './admin-users/admin-users.service';
 import { OperationsController } from './operations/operations.controller';
 import { OperationsService } from './operations/operations.service';
+import { QuantityCommandsController } from './quantity-commands/quantity-commands.controller';
+import { QuantityCommandsService } from './quantity-commands/quantity-commands.service';
 
 @Module({
   imports: [
@@ -59,6 +61,7 @@ import { OperationsService } from './operations/operations.service';
     AdminUsersController,
     AllegroUsersController,
     OperationsController,
+    QuantityCommandsController,
   ],
   providers: [
     AllegroApiService,
@@ -76,7 +79,8 @@ import { OperationsService } from './operations/operations.service';
     CatalogSellActionService,
     AdminUsersService,
     OperationsService,
+    QuantityCommandsService,
   ],
-  exports: [AllegroApiService, OffersService, OrdersService, CategoriesService, InventoryService, EventsService, PublishLifecycleService, MarketplacePolicyEngineService, CatalogSellActionService, AdminUsersService, OperationsService],
+  exports: [AllegroApiService, OffersService, OrdersService, CategoriesService, InventoryService, EventsService, PublishLifecycleService, MarketplacePolicyEngineService, CatalogSellActionService, AdminUsersService, OperationsService, QuantityCommandsService],
 })
 export class AllegroModule {}

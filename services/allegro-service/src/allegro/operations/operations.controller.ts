@@ -49,6 +49,12 @@ export class OperationsController {
     return { success: true, data: result };
   }
 
+  @Get('quantity-command-attempts')
+  async quantityCommandAttempts(@Query() query: any): Promise<{ success: boolean; data: any }> {
+    const result = await this.operationsService.listQuantityCommandAttempts(query);
+    return { success: true, data: result };
+  }
+
   @Get('stock-snapshots')
   async stockSnapshots(@Query() query: any): Promise<{ success: boolean; data: any }> {
     const result = await this.operationsService.listStockSnapshots(query);

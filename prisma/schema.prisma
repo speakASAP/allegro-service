@@ -119,6 +119,7 @@ model AllegroOffer {
   syncJobs        SyncJob[]
   publishAttempts AllegroPublishAttempt[]
   stockSnapshots  AllegroOfferStockSnapshot[]
+  quantityCommandAttempts AllegroQuantityCommandAttempt[]
 
   allegroProduct       AllegroProduct?        @relation(fields: [allegroProductId], references: [id], onDelete: SetNull)
   account              AllegroAccount?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
@@ -341,6 +342,52 @@ model AllegroOfferStockSnapshot {
   @@index([sourceFetchedAt])
   @@index([authorityClass])
   @@map("allegro_offer_stock_snapshots")
+}
+
+
+// Governed Allegro stock quantity command attempts. Warehouse remains physical stock owner.
+model AllegroQuantityCommandAttempt {
+  id                String   @id @default(uuid()) @db.Uuid
+  status            String   @db.VarChar(50) // PREPARED, BLOCKED, QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELLED, STALE
+  idempotencyKey    String   @unique @db.VarChar(180)
+  requestedByUserId String   @db.VarChar(255)
+
+  accountId        String @db.Uuid
+  offerId          String @db.Uuid
+  allegroOfferId   String @db.VarChar(100)
+  catalogProductId String? @db.Uuid
+  commandId        String? @db.VarChar(255)
+
+  previousQuantity Int?
+  targetQuantity   Int
+  commandPayload   Json
+  policySnapshot   Json
+  blockedReasons   Json?
+  commandResponse  Json?
+  failureContext   Json?
+  remediationContext Json?
+
+  preparedAt  DateTime  @default(now()) @db.Timestamp(6)
+  confirmedAt DateTime? @db.Timestamp(6)
+  queuedAt    DateTime? @db.Timestamp(6)
+  startedAt   DateTime? @db.Timestamp(6)
+  completedAt DateTime? @db.Timestamp(6)
+  staleAt     DateTime? @db.Timestamp(6)
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
+  updatedAt   DateTime  @updatedAt @db.Timestamp(6)
+
+  account AllegroAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  offer   AllegroOffer   @relation(fields: [offerId], references: [id], onDelete: Restrict)
+
+  @@index([status])
+  @@index([accountId])
+  @@index([offerId])
+  @@index([allegroOfferId])
+  @@index([catalogProductId])
+  @@index([commandId])
+  @@index([createdAt])
+  @@index([staleAt])
+  @@map("allegro_quantity_command_attempts")
 }
 
 // Orders from Allegro
@@ -683,6 +730,7 @@ model AllegroAccount {
   projectionAuditLogs AllegroProjectionAuditLog[]
   stockSnapshots  AllegroOfferStockSnapshot[]
   orderForwardingAttempts AllegroOrderForwardingAttempt[]
+  quantityCommandAttempts AllegroQuantityCommandAttempt[]
 
   @@index([userId])
   @@index([isActive])

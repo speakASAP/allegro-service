@@ -30,6 +30,8 @@ const OFFER_IMPORT_CATALOG_APPLY_CONFIRMATION = 'ALLEGRO_HTTP_OFFER_IMPORT_CATAL
 
 type OfferImportApprovalBody = {
   offerIds?: string[];
+  previewOfferIds?: string[];
+  previewToken?: string;
   confirmCatalogApply?: string;
 };
 
@@ -47,7 +49,18 @@ export class OffersController {
     this.logger.setContext('OffersController');
   }
 
-  private requireCatalogImportConfirmation(body: { confirmCatalogApply?: string } | undefined, route: string): void {
+  private buildOfferImportPreviewToken(userId: string, source: string, previewOfferIds: string[]): string {
+    const canonical = JSON.stringify({
+      version: 'v1',
+      source,
+      userId,
+      previewOfferIds: [...new Set(previewOfferIds)].sort(),
+      secret: process.env.ALLEGRO_PREVIEW_TOKEN_SECRET || process.env.ENCRYPTION_KEY || 'local-preview-token-secret',
+    });
+    return `alg-import-preview-v1-${createHash('sha256').update(canonical).digest('hex').slice(0, 48)}`;
+  }
+
+  private requireCatalogImportConfirmation(body: { confirmCatalogApply?: string; previewToken?: string; previewOfferIds?: string[]; offerIds?: string[] } | undefined, route: string, userId?: string, source?: string): void {
     if (body?.confirmCatalogApply !== OFFER_IMPORT_CATALOG_APPLY_CONFIRMATION) {
       throw new HttpException(
         {
@@ -60,6 +73,51 @@ export class OffersController {
         },
         HttpStatus.CONFLICT,
       );
+    }
+    if (userId && source) {
+      const previewOfferIds = body?.previewOfferIds || [];
+      const approvedOfferIds = body?.offerIds || [];
+      const previewSet = new Set(previewOfferIds);
+      if (!previewOfferIds.length || !body?.previewToken) {
+        throw new HttpException(
+          {
+            success: false,
+            error: {
+              code: 'CATALOG_IMPORT_PREVIEW_TOKEN_REQUIRED',
+              message: `Refusing ${route} without the previewToken and previewOfferIds returned by the matching preview route.`,
+              status: HttpStatus.CONFLICT,
+            },
+          },
+          HttpStatus.CONFLICT,
+        );
+      }
+      if (approvedOfferIds.some((offerId) => !previewSet.has(offerId))) {
+        throw new HttpException(
+          {
+            success: false,
+            error: {
+              code: 'CATALOG_IMPORT_APPROVAL_OUTSIDE_PREVIEW',
+              message: 'Approved offer ids must be a subset of the previewed offer ids bound to the preview token.',
+              status: HttpStatus.CONFLICT,
+            },
+          },
+          HttpStatus.CONFLICT,
+        );
+      }
+      const expected = this.buildOfferImportPreviewToken(userId, source, previewOfferIds);
+      if (body.previewToken !== expected) {
+        throw new HttpException(
+          {
+            success: false,
+            error: {
+              code: 'CATALOG_IMPORT_PREVIEW_TOKEN_MISMATCH',
+              message: 'Preview token does not match the previewed Allegro offer ids for this import approval.',
+              status: HttpStatus.CONFLICT,
+            },
+          },
+          HttpStatus.CONFLICT,
+        );
+      }
     }
   }
 
@@ -158,7 +216,8 @@ export class OffersController {
     try {
       const userId = String(req.user.id);
       const result = await this.offersService.previewOffersFromAllegro(userId);
-      return { success: true, data: result };
+      const previewOfferIds = (result.items || []).map((item: any) => String(item.allegroOfferId || item.id)).filter(Boolean);
+      return { success: true, data: { ...result, previewOfferIds, previewToken: this.buildOfferImportPreviewToken(userId, 'ALLEGRO_API', previewOfferIds), previewTokenBinding: { version: 'v1', requiredForApproval: true, tokenReturnedIn: 'preview_response_only' } } };
     } catch (error: any) {
       this.metricsService.incrementErrors();
       const errorStatus = error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR;
@@ -207,8 +266,8 @@ export class OffersController {
   @UseGuards(JwtAuthGuard)
   async importApprovedOffers(@Request() req: any, @Body() body: OfferImportApprovalBody): Promise<{ success: boolean; data: any }> {
     try {
-      this.requireCatalogImportConfirmation(body, 'POST /allegro/offers/import/approve');
       const userId = String(req.user.id);
+      this.requireCatalogImportConfirmation(body, 'POST /allegro/offers/import/approve', userId, 'ALLEGRO_API');
       this.logger.log('[importApprovedOffers] Controller received request', {
         userId,
         offerIdsCount: body.offerIds?.length || 0,
@@ -377,7 +436,8 @@ export class OffersController {
       this.logger.log('Previewing offers from Allegro Sales Center');
       const userId = String(req.user.id);
       const result = await this.offersService.previewOffersFromSalesCenter(userId);
-      return { success: true, data: result };
+      const previewOfferIds = (result.items || []).map((item: any) => String(item.allegroOfferId || item.id)).filter(Boolean);
+      return { success: true, data: { ...result, previewOfferIds, previewToken: this.buildOfferImportPreviewToken(userId, 'SALES_CENTER', previewOfferIds), previewTokenBinding: { version: 'v1', requiredForApproval: true, tokenReturnedIn: 'preview_response_only' } } };
     } catch (error: any) {
       this.metricsService.incrementErrors();
       const errorStatus = error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR;
@@ -434,8 +494,8 @@ export class OffersController {
     @Body() body: OfferImportApprovalBody,
   ): Promise<{ success: boolean; data: any }> {
     try {
-      this.requireCatalogImportConfirmation(body, 'POST /allegro/offers/import/sales-center/approve');
       const userId = String(req.user.id);
+      this.requireCatalogImportConfirmation(body, 'POST /allegro/offers/import/sales-center/approve', userId, 'SALES_CENTER');
       this.logger.log('[importApprovedOffersFromSalesCenter] Controller received request', {
         userId,
         offerIdsCount: body.offerIds?.length || 0,
@@ -499,8 +559,8 @@ export class OffersController {
   @Post('import/sales-center')
   @UseGuards(JwtAuthGuard)
   async importFromSalesCenter(@Request() req: any, @Body() body: { confirmCatalogApply?: string } = {}): Promise<{ success: boolean; data: any }> {
-    this.requireCatalogImportConfirmation(body, 'POST /allegro/offers/import/sales-center');
     const userId = String(req.user.id);
+    this.requireCatalogImportConfirmation(body, 'POST /allegro/offers/import/sales-center', userId, 'SALES_CENTER');
     const result = await this.offersService.importFromSalesCenter(userId);
     return { success: true, data: result };
   }

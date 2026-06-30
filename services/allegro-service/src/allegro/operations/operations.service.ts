@@ -16,6 +16,7 @@ type PageQuery = {
   allegroOrderId?: string;
   externalOrderId?: string;
   payloadEqualityStatus?: string;
+  offerId?: string;
 };
 
 type PageParams = {
@@ -273,6 +274,28 @@ export class OperationsService {
     return paginated(items, total, page, limit);
   }
 
+  async listQuantityCommandAttempts(query: PageQuery = {}): Promise<any> {
+    const prisma = this.prisma as any;
+    const { page, limit, skip } = pageParams(query);
+    const where: any = {
+      ...(nonEmpty(query.accountId) ? { accountId: nonEmpty(query.accountId) } : {}),
+      ...(nonEmpty(query.offerId) ? { offerId: nonEmpty(query.offerId) } : {}),
+      ...(nonEmpty(query.allegroOfferId) ? { allegroOfferId: nonEmpty(query.allegroOfferId) } : {}),
+      ...(nonEmpty(query.status) ? { status: nonEmpty(query.status) } : {}),
+    };
+    const [items, total] = await Promise.all([
+      prisma.allegroQuantityCommandAttempt.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        select: this.quantityCommandAttemptSelect(),
+      }),
+      prisma.allegroQuantityCommandAttempt.count({ where }),
+    ]);
+    return paginated(items, total, page, limit);
+  }
+
   async listStockSnapshots(query: PageQuery = {}): Promise<any> {
     const prisma = this.prisma as any;
     const { page, limit, skip } = pageParams(query);
@@ -368,6 +391,34 @@ export class OperationsService {
       redactedContext: true,
       idempotencyKey: true,
       createdAt: true,
+      account: accountSelect(),
+    };
+  }
+
+  private quantityCommandAttemptSelect(): any {
+    return {
+      id: true,
+      status: true,
+      idempotencyKey: true,
+      requestedByUserId: true,
+      accountId: true,
+      offerId: true,
+      allegroOfferId: true,
+      catalogProductId: true,
+      commandId: true,
+      previousQuantity: true,
+      targetQuantity: true,
+      blockedReasons: true,
+      failureContext: true,
+      remediationContext: true,
+      preparedAt: true,
+      confirmedAt: true,
+      queuedAt: true,
+      startedAt: true,
+      completedAt: true,
+      staleAt: true,
+      createdAt: true,
+      updatedAt: true,
       account: accountSelect(),
     };
   }
