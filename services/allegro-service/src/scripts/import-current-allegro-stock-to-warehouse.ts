@@ -356,13 +356,16 @@ async function listOfferIds(token: string, args: Args): Promise<Map<string, any>
   return offersById;
 }
 
-async function collectCandidates(account: any, args: Args): Promise<{ candidates: ImportCandidate[]; errors: any[] }> {
+async function collectCandidates(account: any, args: Args): Promise<{ account: AccountSource; candidates: ImportCandidate[]; errors: any[] }> {
   const source = accountSource(account);
   const errors: any[] = [];
   const tokenResult = await accessTokenForAccount(account, args.refreshToken);
   source.tokenState = tokenResult.tokenState;
+  if (tokenResult.error) {
+    errors.push({ source: 'local-token-refresh', accountId: account.id, tokenState: tokenResult.tokenState, message: tokenResult.error });
+  }
   if (!tokenResult.token) {
-    return { candidates: [], errors: [{ source: 'local-token', accountId: account.id, message: tokenResult.error || tokenResult.tokenState }] };
+    return { account: source, candidates: [], errors: [{ source: 'local-token', accountId: account.id, message: tokenResult.error || tokenResult.tokenState }] };
   }
   const token = tokenResult.token;
 
@@ -370,7 +373,7 @@ async function collectCandidates(account: any, args: Args): Promise<{ candidates
   try {
     listed = await listOfferIds(token, args);
   } catch (error: any) {
-    return { candidates: [], errors: [{ source: 'sale.offers', accountId: account.id, httpStatus: error.status || null, message: error.message }] };
+    return { account: source, candidates: [], errors: [...errors, { source: 'sale.offers', accountId: account.id, httpStatus: error.status || null, message: error.message }] };
   }
 
   const candidates: ImportCandidate[] = [];
@@ -408,7 +411,7 @@ async function collectCandidates(account: any, args: Args): Promise<{ candidates
     }
   }
 
-  return { candidates, errors };
+  return { account: source, candidates, errors };
 }
 
 function chooseUniqueCandidates(candidates: ImportCandidate[]): ImportCandidate[] {
@@ -553,7 +556,7 @@ async function main(): Promise<void> {
     allCandidates.push(...collected.candidates);
     errors.push(...collected.errors);
     accountReports.push({
-      ...accountSource(account),
+      ...collected.account,
       stockAuthoritativeCandidates: collected.candidates.length,
       errors: collected.errors.length,
     });

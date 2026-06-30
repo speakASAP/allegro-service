@@ -497,6 +497,14 @@ async function main(): Promise<void> {
     })
     : disabledSyncRecordingSummary();
 
+  const refreshedAccounts = reports.filter((report) => report.tokenState === 'refreshed').length;
+  const refreshFailedAccounts = reports.filter((report) => String(report.tokenState).startsWith('refresh_failed')).length;
+  const tokenRefreshInterpretation = !args.refreshToken
+    ? 'This audit does not refresh OAuth tokens or activate accounts unless --refresh-token is supplied.'
+    : refreshFailedAccounts > 0
+      ? `OAuth token refresh was attempted; ${refreshedAccounts} account(s) refreshed and ${refreshFailedAccounts} account(s) failed. No Catalog/Warehouse/Allegro writes were executed.`
+      : 'OAuth tokens were refreshed before read; no Catalog/Warehouse/Allegro writes were executed.';
+
   console.log(JSON.stringify({
     status: 'ok',
     generatedAt: new Date().toISOString(),
@@ -538,7 +546,7 @@ async function main(): Promise<void> {
       stockAuthoritative: 'Only successful /sale/product-offers/{offerId}.stock.available rows are treated as current physical stock evidence.',
       listedStock: '/sale/offers stock is listed for comparison only; final import should use product-offers current stock or owner-approved external stock source.',
       unfilteredListing: 'unfilteredListedOffers reports /sale/offers without publication.status so status filters cannot hide offer-count mismatches.',
-      tokenRefresh: args.refreshToken ? 'OAuth tokens were refreshed before read; no Catalog/Warehouse/Allegro writes were executed.' : 'This audit does not refresh OAuth tokens or activate accounts unless --refresh-token is supplied.',
+      tokenRefresh: tokenRefreshInterpretation,
     },
   }, null, 2));
 }
