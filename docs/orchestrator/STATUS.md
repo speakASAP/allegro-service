@@ -48,19 +48,21 @@ Implemented:
 
 Deployment/runtime evidence:
 
-- Runtime credential and Warehouse ID wiring is deployed on image tag
-  `54f05d0`.
+- Runtime credential and Warehouse UUID wiring is deployed on image tag
+  `ec6f97a`.
 - `allegro-service`, `allegro-api-gateway`, `allegro-settings`,
   `allegro-imports`, and `allegro-frontend` are `1/1` Available on
-  `54f05d0`.
+  `ec6f97a`.
 - Public checks returned HTTP 200 for `/`, `/health`, and `/api/health`.
 - `allegro-service-secret` ExternalSecret is `SecretSynced`; the running pod
   references `orders-microservice-secret/ALLEGRO_INTERNAL_SERVICE_TOKEN` and
-  `allegro-config/STOCK_PRIMARY_WAREHOUSE` without printing token values.
+  exposes `ALLEGRO_ORDER_FORWARDING_WAREHOUSE_ID` as a Warehouse UUID without
+  printing token values.
 - Env-name presence was verified without printing values:
   `JWT_TOKEN=present`, `ALLEGRO_INTERNAL_SERVICE_TOKEN=present`,
-  `ALLEGRO_ORDER_FORWARDING_WAREHOUSE_ID=present`, and
-  `STOCK_PRIMARY_WAREHOUSE=present`.
+  `ALLEGRO_ORDER_FORWARDING_WAREHOUSE_ID=present`,
+  `ALLEGRO_ORDER_FORWARDING_WAREHOUSE_ID` passed UUID shape validation, and
+  `STOCK_PRIMARY_WAREHOUSE=present` for legacy stock/import flows.
 - `ORDER_SERVICE_URL` and `WAREHOUSE_SERVICE_URL` are not set in the pod; the
   shared clients use their default service DNS URLs,
   `http://orders-microservice:3203` and `http://warehouse-microservice:3201`.
@@ -97,6 +99,20 @@ Live create smoke:
   `failedCount=0`, and `reasonCode=ORDER_CANCELLED`.
 - Warehouse readback for the synthetic order returned HTTP 200,
   `totalReservations=1`, `active=0`, `cancelled=1`.
+- A fresh post-deploy smoke found the old runtime mapping still forwarded
+  `warehouseId=sklad-internet`, which Warehouse rejected as a non-UUID. Commit
+  `ec6f97a` changed `ALLEGRO_ORDER_FORWARDING_WAREHOUSE_ID` to the
+  Warehouse-owned UUID while leaving `STOCK_PRIMARY_WAREHOUSE=sklad-internet`
+  untouched for legacy stock/import flows, then redeployed Allegro.
+- Fresh verification after `ec6f97a` used synthetic
+  `externalOrderId=codex-allegro-smoke-1782910694`. Create returned HTTP 201
+  with order `2fddfdc5-3ac6-4c2d-88e9-094eaa7e9d26`,
+  `warehouseHandoff.status=reserved`, `reservedCount=1`, `failedCount=0`,
+  and `reasonCode=ORDER_CREATE_RESERVATION`; exact replay returned HTTP 201
+  with `sameOrder=true`; mismatched replay returned HTTP 409; cleanup
+  cancellation returned status `cancelled`, `warehouseHandoff.status=cancelled`,
+  `reservedCount=1`, `failedCount=0`, and Warehouse readback returned HTTP 200
+  with `totalReservations=1`, `cancelled=1`.
 - Decision: Allegro-side create-order auth, stable idempotency identity,
   canonical Catalog `productId`, and Warehouse-owned `warehouseId` forwarding
   are runtime-ready for Goal 7.2B.
@@ -104,9 +120,11 @@ Live create smoke:
 Follow-up runtime wiring:
 
 - `k8s/deployment.yaml` exposes `ALLEGRO_INTERNAL_SERVICE_TOKEN` from
-  the existing synced `orders-microservice-secret` key and maps
-  `ALLEGRO_ORDER_FORWARDING_WAREHOUSE_ID` from `allegro-config`
-  `STOCK_PRIMARY_WAREHOUSE`.
+  the existing synced `orders-microservice-secret` key and sets
+  `ALLEGRO_ORDER_FORWARDING_WAREHOUSE_ID` to the Warehouse UUID used by
+  Orders reservation handoff. `STOCK_PRIMARY_WAREHOUSE` remains
+  `sklad-internet` for legacy stock/import flows and is no longer reused as
+  the Orders item `warehouseId`.
 - No token values were printed or committed.
 
 ## 2026-06-29 - TASK-STOCK-004 Allegro Complete Physical Stock Source Recheck
