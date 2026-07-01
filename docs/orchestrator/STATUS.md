@@ -42,11 +42,24 @@ Implemented:
   `channelAccountId`, stable `externalOrderId`, payload hash, and conflict
   handling retained.
 
-Runtime gate:
+Deployment/runtime evidence:
 
-- `[MISSING: Orders runtime credential/deploy gate]` live create smoke was not
-  run because this lane did not deploy or provision/verify runtime Orders
-  credentials.
+- Runtime credential and Warehouse ID wiring is deployed on image tag
+  `54f05d0`.
+- `allegro-service`, `allegro-api-gateway`, `allegro-settings`,
+  `allegro-imports`, and `allegro-frontend` are `1/1` Available on
+  `54f05d0`.
+- Public checks returned HTTP 200 for `/`, `/health`, and `/api/health`.
+- `allegro-service-secret` ExternalSecret is `SecretSynced`; the running pod
+  references `orders-microservice-secret/ALLEGRO_INTERNAL_SERVICE_TOKEN` and
+  `allegro-config/STOCK_PRIMARY_WAREHOUSE` without printing token values.
+
+Live create smoke:
+
+- `[MISSING: owner-approved non-destructive Orders create smoke]` no live
+  `POST /api/orders` smoke was run because that would create Orders database
+  state. Source/runtime readiness is verified without enabling order forwarding
+  by default.
 
 Follow-up runtime wiring:
 
