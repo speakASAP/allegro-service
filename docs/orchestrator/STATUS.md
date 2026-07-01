@@ -21,9 +21,10 @@ redaction; Code -> `shared/clients/order-client.service.ts`,
 `shared/clients/order-client.service.spec.ts`, and
 `services/allegro-service/src/allegro/orders/*`; Validation -> focused specs,
 `git diff --check`, shared build, allegro-service build, Kubernetes dry-run,
-deploy, env-name presence checks, and health/reachability checks passed; live
+deploy, env-name presence checks, health/reachability checks, and
+owner-approved synthetic fail-closed create smoke passed; live successful
 create/idempotency/Warehouse-reservation smoke remains
-`[MISSING: owner-approved synthetic smoke path]`.
+`[MISSING: Orders runtime credential/deploy gate]`.
 
 Implemented:
 
@@ -69,10 +70,27 @@ Deployment/runtime evidence:
 
 Live create smoke:
 
-- `[MISSING: owner-approved synthetic smoke path]` no live `POST /api/orders`
-  or Warehouse reservation smoke was run because the repo exposes synthetic
-  unit specs, but no owner-approved non-destructive runtime create/idempotency/
-  reservation path.
+- Owner-approved synthetic `POST /api/orders` was run from the deployed Allegro
+  pod with `orders.create.v1`, `x-internal-service-token`,
+  `x-service-name: allegro-service`, stable
+  `channelAccountId=allegro-service-synthetic-smoke`, synthetic
+  `externalOrderId=allegro-smoke-20260701081300`, a canonical Catalog
+  `productId`, quantity `1`, and the configured Warehouse ID. No token values,
+  customer data, provider payloads, or raw Warehouse response bodies were
+  printed.
+- Orders accepted the Allegro machine-auth path and reached the service-layer
+  Warehouse handoff. The request failed closed with HTTP 400 and bounded message
+  `Warehouse reservation is required for sellable channel orders; handoff status failed`.
+- Post-smoke Orders DB readback for the same
+  `channel/channelAccountId/externalOrderId` returned `persistedOrderCount=0`,
+  confirming the failed reservation rolled back the canonical order create.
+- Runtime blocker: the Orders pod has `WAREHOUSE_SERVICE_TOKEN=present` and
+  `WAREHOUSE_RESERVATION_ENABLED=present`, but Auth validation for the Warehouse
+  token returned HTTP 401 and Warehouse availability batch returned HTTP 401.
+  Successful live create/idempotent replay/conflict smoke remains
+  `[MISSING: Orders runtime credential/deploy gate]` until Orders receives an
+  Auth-compatible Warehouse service token. Warehouse reservation-expiry jobs
+  were also observed in `Error`, so this lane must not rely on TTL cleanup.
 
 Follow-up runtime wiring:
 
