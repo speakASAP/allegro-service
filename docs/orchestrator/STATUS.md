@@ -50,10 +50,8 @@ Runtime gate:
 
 Follow-up runtime wiring:
 
-- `k8s/external-secret.yaml` maps `ALLEGRO_INTERNAL_SERVICE_TOKEN` from the
-  existing Orders Vault property into `allegro-service-secret`.
 - `k8s/deployment.yaml` exposes `ALLEGRO_INTERNAL_SERVICE_TOKEN` from
-  `allegro-service-secret` and maps
+  the existing synced `orders-microservice-secret` key and maps
   `ALLEGRO_ORDER_FORWARDING_WAREHOUSE_ID` from `allegro-config`
   `STOCK_PRIMARY_WAREHOUSE`.
 - No token values were printed or committed.

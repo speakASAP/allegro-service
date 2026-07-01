@@ -59,7 +59,7 @@ spec:
             - name: ALLEGRO_INTERNAL_SERVICE_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: allegro-service-secret
+                  name: orders-microservice-secret
                   key: ALLEGRO_INTERNAL_SERVICE_TOKEN
             - name: ALLEGRO_ORDER_FORWARDING_WAREHOUSE_ID
               valueFrom:
