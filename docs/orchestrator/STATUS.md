@@ -4,7 +4,7 @@ Updated: 2026-07-01
 
 ## 2026-07-01 - Goal 7.2B Orders Canonical Create Readiness
 
-Result: source-ready, no deploy. Allegro central order forwarding remains disabled
+Result: source-ready and runtime-wired. Allegro central order forwarding remains disabled
 by default and still requires `forwardToOrdersMicroservice=true` plus exact
 confirmation `ALLEGRO_ORDER_FORWARDING_TO_ORDERS_MICROSERVICE` before any
 orders-microservice create call is attempted.
@@ -20,7 +20,10 @@ Catalog product truth, Warehouse stock authority, Orders idempotency, and secret
 redaction; Code -> `shared/clients/order-client.service.ts`,
 `shared/clients/order-client.service.spec.ts`, and
 `services/allegro-service/src/allegro/orders/*`; Validation -> focused specs,
-`git diff --check`, shared build, and allegro-service build passed.
+`git diff --check`, shared build, allegro-service build, Kubernetes dry-run,
+deploy, env-name presence checks, and health/reachability checks passed; live
+create/idempotency/Warehouse-reservation smoke remains
+`[MISSING: owner-approved synthetic smoke path]`.
 
 Implemented:
 
@@ -53,13 +56,23 @@ Deployment/runtime evidence:
 - `allegro-service-secret` ExternalSecret is `SecretSynced`; the running pod
   references `orders-microservice-secret/ALLEGRO_INTERNAL_SERVICE_TOKEN` and
   `allegro-config/STOCK_PRIMARY_WAREHOUSE` without printing token values.
+- Env-name presence was verified without printing values:
+  `JWT_TOKEN=present`, `ALLEGRO_INTERNAL_SERVICE_TOKEN=present`,
+  `ALLEGRO_ORDER_FORWARDING_WAREHOUSE_ID=present`, and
+  `STOCK_PRIMARY_WAREHOUSE=present`.
+- `ORDER_SERVICE_URL` and `WAREHOUSE_SERVICE_URL` are not set in the pod; the
+  shared clients use their default service DNS URLs,
+  `http://orders-microservice:3203` and `http://warehouse-microservice:3201`.
+- Runtime reachability checks from the Allegro pod returned Allegro local
+  `/health` HTTP 200, Orders `/health` HTTP 200, Warehouse `/api/health` HTTP
+  200, and Warehouse `/api/stock/nonexistent/total` HTTP 401 without token.
 
 Live create smoke:
 
-- `[MISSING: owner-approved non-destructive Orders create smoke]` no live
-  `POST /api/orders` smoke was run because that would create Orders database
-  state. Source/runtime readiness is verified without enabling order forwarding
-  by default.
+- `[MISSING: owner-approved synthetic smoke path]` no live `POST /api/orders`
+  or Warehouse reservation smoke was run because the repo exposes synthetic
+  unit specs, but no owner-approved non-destructive runtime create/idempotency/
+  reservation path.
 
 Follow-up runtime wiring:
 
