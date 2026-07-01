@@ -21,10 +21,10 @@ redaction; Code -> `shared/clients/order-client.service.ts`,
 `shared/clients/order-client.service.spec.ts`, and
 `services/allegro-service/src/allegro/orders/*`; Validation -> focused specs,
 `git diff --check`, shared build, allegro-service build, Kubernetes dry-run,
-deploy, env-name presence checks, health/reachability checks, and
-owner-approved synthetic fail-closed create smoke passed; live successful
-create/idempotency/Warehouse-reservation smoke remains
-`[MISSING: Orders runtime credential/deploy gate]`.
+deploy, env-name presence checks, health/reachability checks, owner-approved
+fail-closed create smoke, and owner-approved successful create/idempotency/
+Warehouse-reservation smoke passed after the Orders runtime credential/header
+trim gate was fixed and deployed.
 
 Implemented:
 
@@ -73,24 +73,33 @@ Live create smoke:
 - Owner-approved synthetic `POST /api/orders` was run from the deployed Allegro
   pod with `orders.create.v1`, `x-internal-service-token`,
   `x-service-name: allegro-service`, stable
-  `channelAccountId=allegro-service-synthetic-smoke`, synthetic
-  `externalOrderId=allegro-smoke-20260701081300`, a canonical Catalog
-  `productId`, quantity `1`, and the configured Warehouse ID. No token values,
-  customer data, provider payloads, or raw Warehouse response bodies were
-  printed.
+  `channelAccountId=codex-allegro-smoke-account`, synthetic
+  `externalOrderId=codex-allegro-smoke-1782895044726`, canonical Catalog
+  `productId=c0de0000-0000-4000-8000-000000000011`, quantity `1`, and
+  Warehouse-owned `warehouseId=c0de0000-0000-4000-8000-000000000013`. No token
+  values, customer data, provider payloads, or raw Warehouse response bodies
+  were printed.
 - Orders accepted the Allegro machine-auth path and reached the service-layer
-  Warehouse handoff. The request failed closed with HTTP 400 and bounded message
-  `Warehouse reservation is required for sellable channel orders; handoff status failed`.
-- Post-smoke Orders DB readback for the same
-  `channel/channelAccountId/externalOrderId` returned `persistedOrderCount=0`,
-  confirming the failed reservation rolled back the canonical order create.
-- Runtime blocker: the Orders pod has `WAREHOUSE_SERVICE_TOKEN=present` and
-  `WAREHOUSE_RESERVATION_ENABLED=present`, but Auth validation for the Warehouse
-  token returned HTTP 401 and Warehouse availability batch returned HTTP 401.
-  Successful live create/idempotent replay/conflict smoke remains
-  `[MISSING: Orders runtime credential/deploy gate]` until Orders receives an
-  Auth-compatible Warehouse service token. Warehouse reservation-expiry jobs
-  were also observed in `Error`, so this lane must not rely on TTL cleanup.
+  Warehouse handoff. The earlier fail-closed HTTP 400 blocker was traced to
+  Orders' Axios header construction using an untrimmed runtime Warehouse token;
+  Orders commit `43f9774` trims the token, was deployed as
+  `localhost:5000/orders-microservice:43f9774`, and post-deploy Axios
+  reserve/cancel passed from the Orders pod.
+- Successful create returned HTTP 201 with order
+  `6898c3fa-e3e8-4eed-a723-11b58fc2ea3b`,
+  `warehouseHandoff.status=reserved`, `reservedCount=1`, `failedCount=0`, and
+  `reasonCode=ORDER_CREATE_RESERVATION`.
+- Exact idempotent replay returned HTTP 201, `sameOrder=true`, the same order
+  id, and `warehouseHandoff.status=reserved`, proving replay did not create a
+  duplicate order or rerun Warehouse reservation side effects.
+- Owner-approved cleanup cancellation returned HTTP 200 with order status
+  `cancelled`, `warehouseHandoff.status=cancelled`, `reservedCount=1`,
+  `failedCount=0`, and `reasonCode=ORDER_CANCELLED`.
+- Warehouse readback for the synthetic order returned HTTP 200,
+  `totalReservations=1`, `active=0`, `cancelled=1`.
+- Decision: Allegro-side create-order auth, stable idempotency identity,
+  canonical Catalog `productId`, and Warehouse-owned `warehouseId` forwarding
+  are runtime-ready for Goal 7.2B.
 
 Follow-up runtime wiring:
 
