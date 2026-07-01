@@ -10,7 +10,11 @@ type OfferFixture = {
   title?: string | null;
 };
 
-function createServiceFixture(orders: any[], offers: OfferFixture[], options: { failForwardingAttemptWrites?: boolean; warehouseId?: string | null } = {}) {
+function createServiceFixture(
+  orders: any[],
+  offers: OfferFixture[],
+  options: { failForwardingAttemptWrites?: boolean; warehouseId?: string | null; stockPrimaryWarehouseId?: string | null } = {},
+) {
   const orderClientCalls: any[] = [];
   const warnings: any[] = [];
   const errors: any[] = [];
@@ -90,6 +94,12 @@ function createServiceFixture(orders: any[], offers: OfferFixture[], options: { 
           return options.warehouseId;
         }
         return 'warehouse-main';
+      }
+      if (key === 'STOCK_PRIMARY_WAREHOUSE') {
+        if (Object.prototype.hasOwnProperty.call(options, 'stockPrimaryWarehouseId')) {
+          return options.stockPrimaryWarehouseId;
+        }
+        return undefined;
       }
       if (key === 'PRICE_CURRENCY_TARGET') {
         return 'PLN';
@@ -290,6 +300,24 @@ async function testMissingWarehouseIdSkipsMalformedCentralForward() {
   assert.ok(fixture.forwardingAttempts[0].blockedReasons.includes('[MISSING: warehouseId]:line_0_missing_warehouse_id'));
 }
 
+async function testStockPrimaryWarehouseFallbackFeedsCentralForward() {
+  const order = buildAllegroOrder([
+    { offer: { id: 'offer-1', name: 'First line' }, quantity: 1, price: { amount: '10.00' } },
+  ]);
+  const fixture = createServiceFixture([order], [
+    { id: 'db-offer-1', allegroOfferId: 'offer-1', accountId: ACCOUNT_ID, catalogProductId: 'catalog-a' },
+  ], { warehouseId: null, stockPrimaryWarehouseId: 'stock-primary-warehouse' });
+
+  const result = await fixture.service.syncOrdersFromAllegro({
+    forwardToOrdersMicroservice: true,
+    confirmForwarding: ALLEGRO_ORDER_FORWARDING_CONFIRMATION,
+  });
+
+  assert.equal(result.forwarding.forwarded, 1);
+  assert.equal(fixture.orderClientCalls.length, 1);
+  assert.equal(fixture.orderClientCalls[0].items[0].warehouseId, 'stock-primary-warehouse');
+}
+
 
 async function testForwardedOrderStillSucceedsWhenAuditWriteFails() {
   const order = buildAllegroOrder([
@@ -317,6 +345,7 @@ export async function runOrdersServiceSpec(): Promise<void> {
   await testMissingPrimaryOfferStillPersistsCheckoutFormButSkipsCentralForward();
   await testMissingCatalogProductSkipsMalformedCentralForward();
   await testMissingWarehouseIdSkipsMalformedCentralForward();
+  await testStockPrimaryWarehouseFallbackFeedsCentralForward();
   await testForwardedOrderStillSucceedsWhenAuditWriteFails();
 }
 

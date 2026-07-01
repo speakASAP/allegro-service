@@ -56,6 +56,16 @@ spec:
                 secretKeyRef:
                   name: allegro-service-secret
                   key: CATALOG_INTERNAL_SERVICE_TOKEN
+            - name: ALLEGRO_INTERNAL_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: allegro-service-secret
+                  key: ALLEGRO_INTERNAL_SERVICE_TOKEN
+            - name: ALLEGRO_ORDER_FORWARDING_WAREHOUSE_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: allegro-config
+                  key: STOCK_PRIMARY_WAREHOUSE
           startupProbe:
             httpGet:
               path: /health

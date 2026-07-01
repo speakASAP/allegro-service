@@ -128,7 +128,8 @@ function parseDate(value: any): Date | null {
 function resolveOrderForwardingWarehouseId(configService: ConfigService): string | null {
   const configured =
     configService.get<string>('ALLEGRO_ORDER_FORWARDING_WAREHOUSE_ID') ||
-    configService.get<string>('DEFAULT_WAREHOUSE_ID');
+    configService.get<string>('DEFAULT_WAREHOUSE_ID') ||
+    configService.get<string>('STOCK_PRIMARY_WAREHOUSE');
   const normalized = configured?.trim();
   return normalized || null;
 }

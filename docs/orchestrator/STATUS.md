@@ -31,7 +31,8 @@ Implemented:
   token is present.
 - Forwarded `orders.create.v1` items now include a runtime Warehouse-owned
   `warehouseId` from `ALLEGRO_ORDER_FORWARDING_WAREHOUSE_ID` or
-  `DEFAULT_WAREHOUSE_ID`.
+  `DEFAULT_WAREHOUSE_ID`, with `STOCK_PRIMARY_WAREHOUSE` accepted as the
+  current Allegro runtime config fallback.
 - If no Warehouse-owned `warehouseId` is configured, forwarding blocks before
   calling Orders with `[MISSING: warehouseId]:line_<n>_missing_warehouse_id`.
 - Product IDs remain `AllegroOffer.catalogProductId`, preserving Catalog
@@ -46,6 +47,16 @@ Runtime gate:
 - `[MISSING: Orders runtime credential/deploy gate]` live create smoke was not
   run because this lane did not deploy or provision/verify runtime Orders
   credentials.
+
+Follow-up runtime wiring:
+
+- `k8s/external-secret.yaml` maps `ALLEGRO_INTERNAL_SERVICE_TOKEN` from the
+  existing Orders Vault property into `allegro-service-secret`.
+- `k8s/deployment.yaml` exposes `ALLEGRO_INTERNAL_SERVICE_TOKEN` from
+  `allegro-service-secret` and maps
+  `ALLEGRO_ORDER_FORWARDING_WAREHOUSE_ID` from `allegro-config`
+  `STOCK_PRIMARY_WAREHOUSE`.
+- No token values were printed or committed.
 
 ## 2026-06-29 - TASK-STOCK-004 Allegro Complete Physical Stock Source Recheck
 
