@@ -62,10 +62,7 @@ spec:
                   name: orders-microservice-secret
                   key: ALLEGRO_INTERNAL_SERVICE_TOKEN
             - name: ALLEGRO_ORDER_FORWARDING_WAREHOUSE_ID
-              valueFrom:
-                configMapKeyRef:
-                  name: allegro-config
-                  key: STOCK_PRIMARY_WAREHOUSE
+              value: "c0de0000-0000-4000-8000-000000000013"
           startupProbe:
             httpGet:
               path: /health
