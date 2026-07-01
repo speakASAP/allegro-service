@@ -20,6 +20,7 @@ interface CreateCentralOrderRequest {
     quantity: number;
     unitPrice: number;
     totalPrice: number;
+    warehouseId: string;
   }>;
   subtotal: number;
   shippingCost: number;
@@ -40,12 +41,51 @@ interface CreateCentralOrderRequest {
 @Injectable()
 export class OrderClientService {
   private readonly baseUrl: string;
+  private readonly serviceName =
+    process.env.ORDER_SERVICE_CALLER_SERVICE_NAME ||
+    process.env.ALLEGRO_CALLER_SERVICE_NAME ||
+    'allegro-service';
 
   constructor(
     private readonly httpService: HttpService,
     private readonly logger: LoggerService,
   ) {
     this.baseUrl = process.env.ORDER_SERVICE_URL || 'http://orders-microservice:3203';
+  }
+
+  private resolveInternalServiceToken(): string | null {
+    const token =
+      process.env.ALLEGRO_INTERNAL_SERVICE_TOKEN ||
+      process.env.ORDERS_INTERNAL_SERVICE_TOKEN ||
+      process.env.ORDER_SERVICE_INTERNAL_TOKEN ||
+      process.env.INTERNAL_SERVICE_TOKEN;
+    const normalized = token?.trim();
+    return normalized || null;
+  }
+
+  private requestOptions(extra: Record<string, any> = {}): Record<string, any> | null {
+    const token = this.resolveInternalServiceToken();
+    if (!token) {
+      return null;
+    }
+
+    return {
+      ...extra,
+      headers: {
+        ...(extra.headers || {}),
+        'x-internal-service-token': token,
+        'x-service-name': this.serviceName,
+      },
+    };
+  }
+
+  private requireCreateOrderRequestOptions(): Record<string, any> {
+    const options = this.requestOptions();
+    if (!options) {
+      this.logger.warn('Refusing to call orders-microservice create without [MISSING: Orders runtime credential]', 'OrderClient');
+      throw new HttpException('[MISSING: Orders runtime credential]', HttpStatus.SERVICE_UNAVAILABLE);
+    }
+    return options;
   }
 
   async createOrder(orderData: CreateCentralOrderRequest): Promise<any> {
@@ -55,9 +95,10 @@ export class OrderClientService {
       channelAccountId: this.normalizeChannelAccountId(orderData.channelAccountId),
     };
 
+    const requestOptions = this.requireCreateOrderRequestOptions();
     try {
       const response = await firstValueFrom(
-        this.httpService.post(this.baseUrl + '/api/orders', payload),
+        this.httpService.post(this.baseUrl + '/api/orders', payload, requestOptions),
       );
       this.logger.log('Order accepted by orders-microservice: ' + response.data.data?.id, 'OrderClient');
       return response.data.data;
@@ -75,7 +116,7 @@ export class OrderClientService {
   async updateOrderStatus(orderId: string, status: string): Promise<any> {
     try {
       const response = await firstValueFrom(
-        this.httpService.put(this.baseUrl + '/api/orders/' + orderId + '/status', { status }),
+        this.httpService.put(this.baseUrl + '/api/orders/' + orderId + '/status', { status }, this.requestOptions() || {}),
       );
       return response.data.data;
     } catch (error: unknown) {
@@ -87,15 +128,15 @@ export class OrderClientService {
   }
 
   async findByExternalId(externalOrderId: string, channel: string, channelAccountId?: string): Promise<any | null> {
+    const params = {
+      channel,
+      externalOrderId,
+      channelAccountId: channelAccountId ? this.normalizeChannelAccountId(channelAccountId) : undefined,
+    };
+
     try {
       const response = await firstValueFrom(
-        this.httpService.get(this.baseUrl + '/api/orders', {
-          params: {
-            channel,
-            externalOrderId,
-            channelAccountId: channelAccountId ? this.normalizeChannelAccountId(channelAccountId) : undefined,
-          },
-        }),
+        this.httpService.get(this.baseUrl + '/api/orders', this.requestOptions({ params }) || { params }),
       );
       const orders = response.data.data || [];
       return orders.find((order: any) => order.externalOrderId === externalOrderId) || null;

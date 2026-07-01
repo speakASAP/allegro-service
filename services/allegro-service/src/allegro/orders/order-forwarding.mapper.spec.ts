@@ -39,6 +39,7 @@ async function testMultiLineOrderUsesEachLineOfferCatalogProductId() {
       { allegroOfferId: "allegro-offer-1", catalogProductId: "11111111-1111-1111-1111-111111111111", accountId: "account-1", title: "Stored first" },
       { allegroOfferId: "allegro-offer-2", catalogProductId: "22222222-2222-2222-2222-222222222222", accountId: "account-1", title: "Stored second" },
     ]),
+    { warehouseId: "warehouse-main" },
   );
 
   assert.deepEqual(result.blockedReasons, []);
@@ -47,6 +48,7 @@ async function testMultiLineOrderUsesEachLineOfferCatalogProductId() {
   assert.equal(result.orderData?.items[1].productId, "22222222-2222-2222-2222-222222222222");
   assert.equal(result.orderData?.items[1].totalPrice, 32);
   assert.equal(result.orderData?.total, 42);
+  assert.equal(result.orderData?.items[0].warehouseId, "warehouse-main");
   assert.equal(result.orderData?.paymentStatus, "PAID");
 }
 
@@ -59,6 +61,7 @@ async function testMissingLineOfferMappingBlocksForwarding() {
     offerMap([
       { allegroOfferId: "allegro-offer-1", catalogProductId: "11111111-1111-1111-1111-111111111111", accountId: "account-1" },
     ]),
+    { warehouseId: "warehouse-main" },
   );
 
   assert.equal(result.orderData, null);
@@ -74,6 +77,7 @@ async function testMissingCatalogProductIdBlocksForwarding() {
     offerMap([
       { allegroOfferId: "allegro-offer-1", catalogProductId: null, accountId: "account-1" },
     ]),
+    { warehouseId: "warehouse-main" },
   );
 
   assert.equal(result.orderData, null);
@@ -81,10 +85,25 @@ async function testMissingCatalogProductIdBlocksForwarding() {
   assert.deepEqual(result.missingCatalogOfferIds, ["allegro-offer-1"]);
 }
 
+async function testMissingWarehouseIdBlocksForwarding() {
+  const result = buildOrderForwardingPayload(
+    syntheticOrder([
+      { offer: { id: "allegro-offer-1", name: "First product" }, quantity: 1, price: { amount: "10.00" } },
+    ]),
+    offerMap([
+      { allegroOfferId: "allegro-offer-1", catalogProductId: "11111111-1111-1111-1111-111111111111", accountId: "account-1" },
+    ]),
+  );
+
+  assert.equal(result.orderData, null);
+  assert.ok(result.blockedReasons.includes("[MISSING: warehouseId]:line_0_missing_warehouse_id"));
+}
+
 export async function runOrderForwardingMapperSpec(): Promise<void> {
   await testMultiLineOrderUsesEachLineOfferCatalogProductId();
   await testMissingLineOfferMappingBlocksForwarding();
   await testMissingCatalogProductIdBlocksForwarding();
+  await testMissingWarehouseIdBlocksForwarding();
 }
 
 if (require.main === module) {

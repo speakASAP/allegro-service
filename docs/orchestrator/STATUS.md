@@ -1,6 +1,51 @@
 # Allegro Service Orchestrator Status
 
-Updated: 2026-06-30
+Updated: 2026-07-01
+
+## 2026-07-01 - Goal 7.2B Orders Canonical Create Readiness
+
+Result: source-ready, no deploy. Allegro central order forwarding remains disabled
+by default and still requires `forwardToOrdersMicroservice=true` plus exact
+confirmation `ALLEGRO_ORDER_FORWARDING_TO_ORDERS_MICROSERVICE` before any
+orders-microservice create call is attempted.
+
+IPS chain: Vision -> canonical Orders lifecycle for sellable channels; Goal
+Impact -> Allegro can forward only complete, Warehouse-reservable orders; System
+-> allegro-service order projection and shared Orders client; Feature ->
+`orders.create.v1` forwarding readiness; Task -> add accepted machine-auth
+headers and Warehouse-owned `warehouseId` requirement; Execution Plan -> keep
+forwarding gated, fail closed on missing runtime prerequisites, validate with
+focused client/mapper/service specs and builds; Coding Prompt -> preserve
+Catalog product truth, Warehouse stock authority, Orders idempotency, and secret
+redaction; Code -> `shared/clients/order-client.service.ts`,
+`shared/clients/order-client.service.spec.ts`, and
+`services/allegro-service/src/allegro/orders/*`; Validation -> focused specs,
+`git diff --check`, shared build, and allegro-service build passed.
+
+Implemented:
+
+- Orders create now sends `x-internal-service-token` and
+  `x-service-name: allegro-service` when `ALLEGRO_INTERNAL_SERVICE_TOKEN` or a
+  compatible fallback env is configured, and fails closed with
+  `[MISSING: Orders runtime credential]` before HTTP create when no internal
+  token is present.
+- Forwarded `orders.create.v1` items now include a runtime Warehouse-owned
+  `warehouseId` from `ALLEGRO_ORDER_FORWARDING_WAREHOUSE_ID` or
+  `DEFAULT_WAREHOUSE_ID`.
+- If no Warehouse-owned `warehouseId` is configured, forwarding blocks before
+  calling Orders with `[MISSING: warehouseId]:line_<n>_missing_warehouse_id`.
+- Product IDs remain `AllegroOffer.catalogProductId`, preserving Catalog
+  canonical product truth instead of using Allegro offer/listing IDs.
+- Existing idempotency fields are preserved:
+  `orders.create.v1:allegro:<channelAccountId>:<externalOrderId>`, with stable
+  `channelAccountId`, stable `externalOrderId`, payload hash, and conflict
+  handling retained.
+
+Runtime gate:
+
+- `[MISSING: Orders runtime credential/deploy gate]` live create smoke was not
+  run because this lane did not deploy or provision/verify runtime Orders
+  credentials.
 
 ## 2026-06-29 - TASK-STOCK-004 Allegro Complete Physical Stock Source Recheck
 

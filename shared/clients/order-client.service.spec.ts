@@ -1,0 +1,133 @@
+import { strict as assert } from 'assert';
+import { of } from 'rxjs';
+import { OrderClientService } from './order-client.service';
+
+type EnvKeys =
+  | 'ALLEGRO_INTERNAL_SERVICE_TOKEN'
+  | 'ORDERS_INTERNAL_SERVICE_TOKEN'
+  | 'ORDER_SERVICE_INTERNAL_TOKEN'
+  | 'INTERNAL_SERVICE_TOKEN'
+  | 'ORDER_SERVICE_CALLER_SERVICE_NAME'
+  | 'ALLEGRO_CALLER_SERVICE_NAME';
+
+const ENV_KEYS: EnvKeys[] = [
+  'ALLEGRO_INTERNAL_SERVICE_TOKEN',
+  'ORDERS_INTERNAL_SERVICE_TOKEN',
+  'ORDER_SERVICE_INTERNAL_TOKEN',
+  'INTERNAL_SERVICE_TOKEN',
+  'ORDER_SERVICE_CALLER_SERVICE_NAME',
+  'ALLEGRO_CALLER_SERVICE_NAME',
+];
+
+function syntheticOrderPayload() {
+  return {
+    externalOrderId: 'allegro-order-1',
+    channel: 'allegro',
+    channelAccountId: 'account-1',
+    items: [
+      {
+        productId: 'catalog-product-1',
+        sku: null,
+        title: 'Catalog product',
+        quantity: 1,
+        unitPrice: 10,
+        totalPrice: 10,
+        warehouseId: 'warehouse-main',
+      },
+    ],
+    subtotal: 10,
+    shippingCost: 0,
+    taxAmount: 0,
+    total: 10,
+    currency: 'PLN',
+    orderedAt: new Date('2026-06-26T10:00:00.000Z'),
+  };
+}
+
+async function withCleanOrderEnv<T>(env: Partial<Record<EnvKeys, string>>, run: () => Promise<T>): Promise<T> {
+  const previous = new Map<EnvKeys, string | undefined>();
+  for (const key of ENV_KEYS) {
+    previous.set(key, process.env[key]);
+    delete process.env[key];
+  }
+
+  for (const [key, value] of Object.entries(env) as Array<[EnvKeys, string]>) {
+    process.env[key] = value;
+  }
+
+  try {
+    return await run();
+  } finally {
+    for (const key of ENV_KEYS) {
+      const value = previous.get(key);
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+}
+
+function createFixture() {
+  const postCalls: any[] = [];
+  const warnings: any[] = [];
+  const logs: any[] = [];
+  const errors: any[] = [];
+  const httpService = {
+    post: (...args: any[]) => {
+      postCalls.push(args);
+      return of({ data: { data: { id: 'central-order-1' } } });
+    },
+    put: (...args: any[]) => of({ data: { data: { ok: true, args } } }),
+    get: (...args: any[]) => of({ data: { data: [] } }),
+  };
+  const logger = {
+    log: (...args: any[]) => logs.push(args),
+    warn: (...args: any[]) => warnings.push(args),
+    error: (...args: any[]) => errors.push(args),
+  };
+  const service = new OrderClientService(httpService as any, logger as any);
+  return { service, postCalls, warnings, logs, errors };
+}
+
+async function testCreateOrderSendsMachineAuthHeaders() {
+  await withCleanOrderEnv({
+    ALLEGRO_INTERNAL_SERVICE_TOKEN: 'synthetic-orders-token',
+  }, async () => {
+    const fixture = createFixture();
+
+    await fixture.service.createOrder(syntheticOrderPayload() as any);
+
+    assert.equal(fixture.postCalls.length, 1);
+    assert.equal(fixture.postCalls[0][0], 'http://orders-microservice:3203/api/orders');
+    assert.equal(fixture.postCalls[0][1].contractVersion, 'orders.create.v1');
+    assert.equal(fixture.postCalls[0][1].items[0].warehouseId, 'warehouse-main');
+    assert.equal(fixture.postCalls[0][2].headers['x-internal-service-token'], 'synthetic-orders-token');
+    assert.equal(fixture.postCalls[0][2].headers['x-service-name'], 'allegro-service');
+  });
+}
+
+async function testCreateOrderFailsClosedWithoutMachineCredential() {
+  await withCleanOrderEnv({}, async () => {
+    const fixture = createFixture();
+
+    await assert.rejects(() => fixture.service.createOrder(syntheticOrderPayload() as any), /\[MISSING: Orders runtime credential\]/);
+    assert.equal(fixture.postCalls.length, 0);
+    assert.equal(fixture.warnings.length, 1);
+  });
+}
+
+export async function runOrderClientServiceSpec(): Promise<void> {
+  await testCreateOrderSendsMachineAuthHeaders();
+  await testCreateOrderFailsClosedWithoutMachineCredential();
+}
+
+if (require.main === module) {
+  runOrderClientServiceSpec()
+    .then(() => process.stdout.write('order-client.service.spec: PASS\n'))
+    .catch((error) => {
+      process.stderr.write('order-client.service.spec: FAIL\n' + (error.stack || error.message) + '\n');
+      process.exitCode = 1;
+    });
+}

@@ -63,6 +63,7 @@ function summarizeForwardingRequest(payload: ForwardedOrderPayload): any {
     externalOrderId: payload.externalOrderId,
     itemCount: payload.items.length,
     productIds: payload.items.map((item) => item.productId).sort(),
+    warehouseIds: Array.from(new Set(payload.items.map((item) => item.warehouseId))).sort(),
     currency: payload.currency,
     total: payload.total,
     paymentStatus: payload.paymentStatus || null,
@@ -122,6 +123,14 @@ function parseDate(value: any): Date | null {
   }
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function resolveOrderForwardingWarehouseId(configService: ConfigService): string | null {
+  const configured =
+    configService.get<string>('ALLEGRO_ORDER_FORWARDING_WAREHOUSE_ID') ||
+    configService.get<string>('DEFAULT_WAREHOUSE_ID');
+  const normalized = configured?.trim();
+  return normalized || null;
 }
 
 function getOrderTotal(order: any): { amount: number; currency: string } {
@@ -399,6 +408,7 @@ export class OrdersService {
   async syncOrdersFromAllegro(options: SyncOrdersFromAllegroOptions = {}) {
     this.logger.log('Syncing orders from Allegro');
     const forwardingEnabled = resolveOrderForwardingEnabled(options);
+    const forwardingWarehouseId = resolveOrderForwardingWarehouseId(this.configService);
 
     let offset = 0;
     const limit = 100;
@@ -514,7 +524,9 @@ export class OrdersService {
 
             // Central order forwarding is an explicit replay/apply action. Local projection remains the default.
             if (savedOrder) {
-              const forwarding = buildOrderForwardingPayload(allegroOrder, offersByAllegroOfferId);
+              const forwarding = buildOrderForwardingPayload(allegroOrder, offersByAllegroOfferId, {
+                warehouseId: forwardingWarehouseId,
+              });
 
               if (!forwardingEnabled) {
                 forwardingSkipped += 1;
@@ -549,7 +561,7 @@ export class OrdersService {
                   missingOfferIds: forwarding.missingOfferIds,
                   missingCatalogOfferIds: forwarding.missingCatalogOfferIds,
                 });
-                this.logger.warn('Skipped forwarding Allegro order to orders-microservice because catalog mapping is incomplete', {
+                this.logger.warn('Skipped forwarding Allegro order to orders-microservice because forwarding requirements are incomplete', {
                   allegroOrderId: allegroOrder.id,
                   localOrderId: savedOrder.id,
                   blockedReasons: forwarding.blockedReasons,

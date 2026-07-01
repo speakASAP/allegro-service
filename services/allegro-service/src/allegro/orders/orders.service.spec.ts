@@ -10,7 +10,7 @@ type OfferFixture = {
   title?: string | null;
 };
 
-function createServiceFixture(orders: any[], offers: OfferFixture[], options: { failForwardingAttemptWrites?: boolean } = {}) {
+function createServiceFixture(orders: any[], offers: OfferFixture[], options: { failForwardingAttemptWrites?: boolean; warehouseId?: string | null } = {}) {
   const orderClientCalls: any[] = [];
   const warnings: any[] = [];
   const errors: any[] = [];
@@ -84,7 +84,18 @@ function createServiceFixture(orders: any[], offers: OfferFixture[], options: { 
   };
 
   const configService = {
-    get: () => 'PLN',
+    get: (key: string) => {
+      if (key === 'ALLEGRO_ORDER_FORWARDING_WAREHOUSE_ID' || key === 'DEFAULT_WAREHOUSE_ID') {
+        if (Object.prototype.hasOwnProperty.call(options, 'warehouseId')) {
+          return options.warehouseId;
+        }
+        return 'warehouse-main';
+      }
+      if (key === 'PRICE_CURRENCY_TARGET') {
+        return 'PLN';
+      }
+      return undefined;
+    },
   };
 
   const orderClient = {
@@ -183,6 +194,8 @@ async function testMultiLineOrderForwardsEachLineCatalogProductId() {
   assert.equal(fixture.orderClientCalls[0].items[0].productId, 'catalog-a');
   assert.equal(fixture.orderClientCalls[0].items[0].quantity, 2);
   assert.equal(fixture.orderClientCalls[0].items[0].totalPrice, 20);
+  assert.equal(fixture.orderClientCalls[0].items[0].warehouseId, 'warehouse-main');
+  assert.equal(fixture.orderClientCalls[0].items[1].warehouseId, 'warehouse-main');
   assert.equal(fixture.orderClientCalls[0].items[1].productId, 'catalog-b');
   assert.equal(fixture.orderClientCalls[0].items[1].quantity, 1);
   assert.equal(fixture.orderClientCalls[0].items[1].totalPrice, 5);
@@ -222,7 +235,7 @@ async function testMissingPrimaryOfferStillPersistsCheckoutFormButSkipsCentralFo
   assert.equal(fixture.captured.lineItemCreateMany.data[1].allegroOfferId, 'db-offer-2');
   assert.equal(fixture.orderClientCalls.length, 0);
   assert.equal(fixture.warnings.length, 1);
-  assert.equal(fixture.warnings[0][0], 'Skipped forwarding Allegro order to orders-microservice because catalog mapping is incomplete');
+  assert.equal(fixture.warnings[0][0], 'Skipped forwarding Allegro order to orders-microservice because forwarding requirements are incomplete');
   assert.deepEqual(fixture.warnings[0][1].missingOfferIds, ['offer-missing']);
   assert.equal(fixture.forwardingAttempts.length, 1);
   assert.equal(fixture.forwardingAttempts[0].status, 'BLOCKED');
@@ -252,6 +265,31 @@ async function testMissingCatalogProductSkipsMalformedCentralForward() {
   assert.deepEqual(fixture.forwardingAttempts[0].missingCatalogOfferIds, ['offer-2']);
 }
 
+async function testMissingWarehouseIdSkipsMalformedCentralForward() {
+  const order = buildAllegroOrder([
+    { offer: { id: 'offer-1', name: 'First line' }, quantity: 1, price: { amount: '10.00' } },
+  ]);
+  const fixture = createServiceFixture([order], [
+    { id: 'db-offer-1', allegroOfferId: 'offer-1', accountId: ACCOUNT_ID, catalogProductId: 'catalog-a' },
+  ], { warehouseId: null });
+
+  const result = await fixture.service.syncOrdersFromAllegro({
+    forwardToOrdersMicroservice: true,
+    confirmForwarding: ALLEGRO_ORDER_FORWARDING_CONFIRMATION,
+  });
+
+  assert.equal(result.totalSynced, 1);
+  assert.equal(result.forwarding.enabled, true);
+  assert.equal(result.forwarding.skipped, 1);
+  assert.equal(result.forwarding.forwarded, 0);
+  assert.equal(fixture.orderClientCalls.length, 0);
+  assert.equal(fixture.warnings.length, 1);
+  assert.ok(fixture.warnings[0][1].blockedReasons.includes('[MISSING: warehouseId]:line_0_missing_warehouse_id'));
+  assert.equal(fixture.forwardingAttempts.length, 1);
+  assert.equal(fixture.forwardingAttempts[0].status, 'BLOCKED');
+  assert.ok(fixture.forwardingAttempts[0].blockedReasons.includes('[MISSING: warehouseId]:line_0_missing_warehouse_id'));
+}
+
 
 async function testForwardedOrderStillSucceedsWhenAuditWriteFails() {
   const order = buildAllegroOrder([
@@ -278,6 +316,7 @@ export async function runOrdersServiceSpec(): Promise<void> {
   await testMultiLineOrderForwardsEachLineCatalogProductId();
   await testMissingPrimaryOfferStillPersistsCheckoutFormButSkipsCentralForward();
   await testMissingCatalogProductSkipsMalformedCentralForward();
+  await testMissingWarehouseIdSkipsMalformedCentralForward();
   await testForwardedOrderStillSucceedsWhenAuditWriteFails();
 }
 

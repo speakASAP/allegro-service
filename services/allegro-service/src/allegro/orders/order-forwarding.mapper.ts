@@ -13,6 +13,7 @@ export interface ForwardedOrderItem {
   quantity: number;
   unitPrice: number;
   totalPrice: number;
+  warehouseId: string;
 }
 
 export interface ForwardedOrderPayload {
@@ -41,6 +42,10 @@ export interface OrderForwardingBuildResult {
   lineOfferIds: string[];
 }
 
+export interface OrderForwardingBuildOptions {
+  warehouseId?: string | null;
+}
+
 function parseMoney(value: any, fallback = 0): number {
   const amount = typeof value === "object" && value !== null ? value.amount : value;
   const parsed = parseFloat(String(amount ?? fallback));
@@ -63,10 +68,17 @@ export function getAllegroLineOfferIds(lineItems: any[] = []): string[] {
   ));
 }
 
+function normalizeWarehouseId(warehouseId?: string | null): string | null {
+  const normalized = warehouseId?.trim();
+  return normalized || null;
+}
+
 export function buildOrderForwardingPayload(
   allegroOrder: any,
   offersByAllegroOfferId: Map<string, AllegroForwardingOffer>,
+  options: OrderForwardingBuildOptions = {},
 ): OrderForwardingBuildResult {
+  const warehouseId = normalizeWarehouseId(options.warehouseId);
   const lineItems = allegroOrder?.lineItems || [];
   const blockedReasons: string[] = [];
   const missingOfferIds: string[] = [];
@@ -100,6 +112,11 @@ export function buildOrderForwardingPayload(
       continue;
     }
 
+    if (!warehouseId) {
+      blockedReasons.push(`[MISSING: warehouseId]:line_${index}_missing_warehouse_id`);
+      continue;
+    }
+
     const quantity = item?.quantity || 1;
     const unitPrice = parseMoney(item?.price);
 
@@ -110,6 +127,7 @@ export function buildOrderForwardingPayload(
       quantity,
       unitPrice,
       totalPrice: unitPrice * quantity,
+      warehouseId,
     });
   }
 
