@@ -1,29 +1,103 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: allegro-service-config
-  namespace: statex-apps
-  labels:
-    app: allegro-service
-    managed-by: k8s-migration
-data:
-  NODE_ENV: "production"
-  SERVICE_NAME: "allegro-service"
-  DOMAIN: "allegro.alfares.cz"
-  PORT: "3000"
-  # Add environment variables from .env that are non-sensitive (no secrets, API keys, passwords)
-  # Examples:
-  # DATABASE_POOL_SIZE: "10"
-  # LOG_LEVEL: "info"
-  DB_HOST: "192.168.88.53"
-  DB_PORT: "5432"
-  DB_USER: "dbadmin"
-  DB_NAME: "allegro"
-  DB_SYNC: "false"
-  DB_AUTO_CREATE: "true"
-  LOGGING_SERVICE_URL: "http://logging-microservice:3367"
-  RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672"
-  CATALOG_EVENTS_EXCHANGE: "catalog.events"
-  CATALOG_EVENTS_QUEUE: "catalog.allegro-service"
-  CATALOG_EVENTS_ROUTING_KEYS: "catalog.product.archived.v1,catalog.product.deleted.v1,catalog.product.sellability_changed.v1"
-  # TIMEOUT_MS: "30000"
+{
+  "apiVersion": "v1",
+  "kind": "ConfigMap",
+  "metadata": {
+    "name": "allegro-config",
+    "namespace": "statex-apps",
+    "labels": {}
+  },
+  "data": {
+    "ALLEGRO_API_SANDBOX_URL": "https://api.allegro.pl.allegrosandbox.pl",
+    "ALLEGRO_API_URL": "https://api.allegro.pl",
+    "ALLEGRO_AUTH_SANDBOX_URL": "https://allegro.pl.allegrosandbox.pl/auth/oauth/token",
+    "ALLEGRO_AUTH_URL": "https://allegro.pl/auth/oauth/token",
+    "ALLEGRO_FRONTEND_SERVICE_PORT": "3410",
+    "ALLEGRO_OAUTH_AUTHORIZE_URL": "https://allegro.pl/auth/oauth/authorize",
+    "ALLEGRO_OAUTH_TOKEN_URL": "https://allegro.pl/auth/oauth/token",
+    "ALLEGRO_REDIRECT_URI": "https://allegro.alfares.cz/api/allegro/oauth/callback",
+    "ALLEGRO_SERVICE_PORT": "3403",
+    "ALLEGRO_SERVICE_URL": "http://gateway-proxy",
+    "ALLEGRO_SETTINGS_SERVICE_PORT": "3408",
+    "ALLEGRO_USE_SANDBOX": "false",
+    "API_GATEWAY_PORT": "3411",
+    "AUTH_RETRY_DELAY_MS": "1000",
+    "AUTH_RETRY_MAX_ATTEMPTS": "3",
+    "AUTH_SERVICE_PORT": "3371",
+    "AUTH_SERVICE_TIMEOUT": "5000",
+    "AUTH_SERVICE_URL": "http://auth-microservice:3370",
+    "CATALOG_EVENTS_EXCHANGE": "catalog.events",
+    "CATALOG_EVENTS_QUEUE": "catalog.allegro-service",
+    "CATALOG_EVENTS_ROUTING_KEYS": "catalog.product.archived.v1,catalog.product.deleted.v1,catalog.product.sellability_changed.v1",
+    "CORS_ORIGIN": "https://allegro.alfares.cz",
+    "DB_HOST": "db-server-postgres",
+    "DB_NAME": "allegro",
+    "DB_PORT": "5432",
+    "DB_USER": "dbadmin",
+    "DOMAIN": "allegro.alfares.cz",
+    "EVENT_POLLING_INTERVAL": "*/37 * * * *",
+    "FRONTEND_API_URL": "https://allegro.alfares.cz/api",
+    "FRONTEND_URL": "https://allegro.alfares.cz",
+    "GATEWAY_PROXY_PORT": "3409",
+    "GATEWAY_TIMEOUT": "5000",
+    "HTTP_TIMEOUT": "5000",
+    "IMPORT_CSV_ALLOWED_MIME_TYPES": "text/csv,application/vnd.ms-excel",
+    "IMPORT_CSV_BATCH_SIZE": "50",
+    "IMPORT_CSV_MAX_SIZE": "104857600",
+    "IMPORT_SERVICE_PORT": "3406",
+    "IMPORT_SERVICE_URL": "http://gateway-proxy",
+    "LOGGING_SERVICE_TIMEOUT": "5000",
+    "LOGGING_SERVICE_URL": "http://logging-microservice:3367",
+    "LOG_LEVEL": "info",
+    "LOG_TIMESTAMP_FORMAT": "YYYY-MM-DD HH:mm:ss",
+    "NGINX_NETWORK_NAME": "nginx-network",
+    "NODE_ENV": "production",
+    "NOTIFICATION_EMAIL_TO": "ssfskype@gmail.com",
+    "NOTIFICATION_ORDER_CREATED": "true",
+    "NOTIFICATION_ORDER_UPDATED": "true",
+    "NOTIFICATION_SERVICE_TIMEOUT": "5000",
+    "NOTIFICATION_SERVICE_URL": "http://notifications-microservice:3368",
+    "NOTIFICATION_STOCK_LOW": "true",
+    "NOTIFICATION_SYNC_ERROR": "true",
+    "PAYMENT_APPLICATION_ID": "allegro-service",
+    "PAYMENT_CALLBACK_URL": "https://allegro.alfares.cz/api/webhooks/payment-result",
+    "PAYMENT_CANCEL_URL": "https://allegro.alfares.cz/payment-result?status=cancelled",
+    "PAYMENT_SERVICE_URL": "https://payments.alfares.cz",
+    "PAYMENT_SUCCESS_URL": "https://allegro.alfares.cz/payment-result?status=completed",
+    "PRICE_CURRENCY_CONVERSION": "true",
+    "PRICE_CURRENCY_SOURCE": "CZK",
+    "PRICE_CURRENCY_TARGET": "PLN",
+    "PRICE_EXCHANGE_RATE": "1.0",
+    "PRICE_MARGIN_PERCENT": "20",
+    "PRODUCT_SERVICE_PORT": "3402",
+    "PRODUCT_SERVICE_URL": "http://product:3402",
+    "RABBITMQ_URL": "amqp://guest:guest@rabbitmq:5672",
+    "REDIS_DB": "0",
+    "REDIS_HOST": "db-server-redis",
+    "REDIS_PORT": "6379",
+    "RETRY_DELAY_MS": "1000",
+    "RETRY_MAX_ATTEMPTS": "3",
+    "SCHEDULER_SERVICE_PORT": "3407",
+    "SCHEDULER_SERVICE_URL": "http://scheduler:3407",
+    "SERVICE_NAME": "allegro-service",
+    "SETTINGS_SERVICE_URL": "http://gateway-proxy",
+    "STOCK_AUTO_REORDER": "false",
+    "STOCK_MINIMUM_THRESHOLD": "1",
+    "STOCK_PRIMARY_WAREHOUSE": "sklad-internet",
+    "SUPPLIER_API_ENABLED": "false",
+    "SUPPLIER_ORDER_THRESHOLD": "10",
+    "SUPPLIER_SYNC_INTERVAL": "0 */7 * * *",
+    "SYNC_ALLEGRO_TO_DB_INTERVAL": "*/33 * * * *",
+    "SYNC_BATCH_SIZE": "100",
+    "SYNC_CONFLICT_STRATEGY": "TIMESTAMP",
+    "SYNC_DB_TO_ALLEGRO_INTERVAL": "*/17 * * * *",
+    "SYNC_INVENTORY_INTERVAL": "*/13 * * * *",
+    "SYNC_SERVICE_PORT": "3404",
+    "SYNC_SERVICE_URL": "http://sync:3404",
+    "TEST_LOGIN_EMAIL": "ssfskype@gmail.com",
+    "WEBHOOK_MAX_RETRIES": "3",
+    "WEBHOOK_RETRY_DELAY": "5000",
+    "WEBHOOK_SERVICE_PORT": "3405",
+    "WEBHOOK_SERVICE_URL": "http://webhook:3405",
+    "WEBHOOK_TIMEOUT": "30000"
+  }
+}
