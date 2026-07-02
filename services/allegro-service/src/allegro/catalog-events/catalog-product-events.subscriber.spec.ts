@@ -124,6 +124,21 @@ async function testSellabilityFalseDisablesOffer() {
   assert.equal(harness.offerUpdates[0].data.syncSource, 'CATALOG_NOT_SELLABLE');
 }
 
+async function testContractEnvelopeSellabilityFalseDisablesOffer() {
+  const harness = createHarness();
+  const result = await harness.service.handleCatalogProductEvent({
+    eventType: 'catalog.product.sellability_changed.v1',
+    eventId: 'catalog-evt-contract-1',
+    occurredAt: '2026-07-02T08:05:00.000Z',
+    data: {
+      product: { id: catalogProductId, isActive: false, updatedAt: '2026-07-02T08:05:00.000Z' },
+      change: { afterSellable: false },
+    },
+  });
+  assert.equal(result.status, 'processed');
+  assert.equal(harness.offerUpdates[0].data.syncSource, 'CATALOG_NOT_SELLABLE');
+}
+
 async function testSellabilityTrueIsIgnored() {
   const harness = createHarness();
   const result = await harness.service.handleCatalogProductEvent({
@@ -155,6 +170,7 @@ export async function runCatalogProductEventsSpec(): Promise<void> {
   await testArchivedDisablesLocalOfferAndCreatesBlockedEndIntent();
   await testDeletedUsesDeletedReason();
   await testSellabilityFalseDisablesOffer();
+  await testContractEnvelopeSellabilityFalseDisablesOffer();
   await testSellabilityTrueIsIgnored();
   await testDuplicateEventIdIsSkipped();
 }

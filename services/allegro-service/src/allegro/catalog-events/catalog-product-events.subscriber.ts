@@ -19,6 +19,7 @@ type CatalogProductEvent = {
   product?: Record<string, unknown>;
   before?: Record<string, unknown>;
   after?: Record<string, unknown>;
+  data?: Record<string, any>;
   [key: string]: unknown;
 };
 
@@ -360,6 +361,8 @@ export class CatalogProductEventsSubscriber implements OnModuleInit, OnModuleDes
     const product = event.product || {};
     const before = event.before || {};
     const after = event.after || {};
+    const data = event.data || {};
+    const dataProduct = data.product || {};
     const candidates = [
       event.catalogProductId,
       event.productId,
@@ -368,6 +371,9 @@ export class CatalogProductEventsSubscriber implements OnModuleInit, OnModuleDes
       product.id,
       after.id,
       before.id,
+      data.catalogProductId,
+      data.productId,
+      dataProduct.id,
     ];
     const value = candidates.find((candidate) => typeof candidate === 'string' && candidate.length > 0);
     return value ? String(value) : undefined;
@@ -377,6 +383,9 @@ export class CatalogProductEventsSubscriber implements OnModuleInit, OnModuleDes
     const payload = event.payload || {};
     const after = event.after || {};
     const product = event.product || {};
+    const data = event.data || {};
+    const dataChange = data.change || {};
+    const dataProduct = data.product || {};
     const candidates = [
       event.afterSellable,
       payload.afterSellable,
@@ -384,6 +393,11 @@ export class CatalogProductEventsSubscriber implements OnModuleInit, OnModuleDes
       after.isSellable,
       product.sellable,
       product.isSellable,
+      data.afterSellable,
+      dataChange.afterSellable,
+      dataProduct.sellable,
+      dataProduct.isSellable,
+      typeof dataProduct.isActive === 'boolean' ? dataProduct.isActive : undefined,
     ];
     const value = candidates.find((candidate) => typeof candidate === 'boolean');
     return typeof value === 'boolean' ? value : undefined;
