@@ -93,8 +93,23 @@ Merge order: single batch.
 
 ## Blockers And Unknowns
 
-- `[UNKNOWN: live Catalog runtime response shape]` source validation used the current Catalog source contract and Allegro synthetic tests; no live authenticated smoke was run.
+- `[UNKNOWN: live Catalog runtime response shape]` source validation used the current Catalog source contract and Allegro synthetic tests; no live authenticated product-flow smoke was run. Public frontend/API/service health smoke passed.
 - `[KNOWN: deploy script timeout recovered]` `./scripts/deploy.sh` exited 1 during rollout wait because local-registry image pulls took about 6-7 minutes. A follow-up read-only `kubectl rollout status` confirmed all Allegro deployments successfully rolled out on `2e365ac`.
+
+## Runtime Smoke Evidence
+
+```bash
+curl -k -sS -o /tmp/allegro-smoke-body.txt -w "HTTP %{http_code} time=%{time_total}\n" https://allegro.alfares.cz/
+# HTTP 200, frontend HTML returned
+
+curl -k -sS -o /tmp/allegro-smoke-body.txt -w "HTTP %{http_code} time=%{time_total}\n" https://allegro.alfares.cz/api/health
+# HTTP 200, {"status":"ok","service":"api-gateway"}
+
+curl -k -sS -o /tmp/allegro-smoke-body.txt -w "HTTP %{http_code} time=%{time_total}\n" https://allegro.alfares.cz/health
+# HTTP 200, {"status":"ok","service":"allegro-service"}
+```
+
+In-cluster temporary curl pods were also attempted for service DNS targets; the pods cleaned up successfully but the terminal output did not include response bodies, so public ingress and Kubernetes rollout status remain the recorded runtime evidence.
 
 ## Deploy Attempt Evidence
 
