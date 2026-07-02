@@ -13,7 +13,8 @@
     "audit:current-stock-source": "node dist/scripts/audit-current-stock-source.js",
     "audit:raw-payload-retention": "node dist/scripts/audit-raw-payload-retention.js",
     "import:current-stock:warehouse": "node dist/scripts/import-current-allegro-stock-to-warehouse.js",
-    "export:catalog-products:allegro": "node dist/scripts/export-catalog-products-to-allegro.js"
+    "export:catalog-products:allegro": "node dist/scripts/export-catalog-products-to-allegro.js",
+    "reconcile:availability": "node dist/scripts/reconcile-catalog-availability.js"
   },
   "dependencies": {
     "@allegro/shared": "file:../../shared",

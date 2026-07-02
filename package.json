@@ -20,7 +20,8 @@
     "ips:readiness": "python3 scripts/deployment_readiness_gate.py --root . --target TASK-001",
     "ips:check": "npm run ips:audit && npm run ips:pre-coding && npm run ips:readiness",
     "import:allegro-orders:catalog": "cd services/allegro-service && npm run import:order-offers:catalog --",
-    "export:catalog-products:allegro": "cd services/allegro-service && npm run export:catalog-products:allegro --"
+    "export:catalog-products:allegro": "cd services/allegro-service && npm run export:catalog-products:allegro --",
+    "reconcile:availability": "cd services/allegro-service && npm run reconcile:availability --"
   },
   "dependencies": {
     "@nestjs/axios": "^3.0.1",
