@@ -158,6 +158,30 @@ function summarizeLatestForwardingAttempt(attempt: any): any {
   };
 }
 
+function buildOrderQueryWhere(query: any = {}): any {
+  const where: any = {};
+  if (query.status) {
+    where.status = query.status;
+  }
+  if (query.paymentStatus) {
+    where.paymentStatus = query.paymentStatus;
+  }
+  return where;
+}
+
+function formatStatisticGroups(rows: any[], field: string): Array<{ value: string; count: number }> {
+  return rows
+    .map((row) => ({
+      value: normalizeReadModelString(row[field]) || "UNKNOWN",
+      count: Number(row._count?._all || 0),
+    }))
+    .sort((left, right) => right.count - left.count || left.value.localeCompare(right.value));
+}
+
+function statisticCount(groups: Array<{ value: string; count: number }>, value: string): number {
+  return groups.find((group) => group.value === value)?.count || 0;
+}
+
 
 export type SyncOrdersFromAllegroOptions = {
   forwardToOrdersMicroservice?: boolean;
@@ -392,6 +416,97 @@ export class OrdersService {
     };
   }
 
+  private async groupOrderCounts(field: string, where: any): Promise<Array<{ value: string; count: number }>> {
+    const rows = await (this.prisma as any).allegroOrder.groupBy({
+      by: [field],
+      where,
+      _count: { _all: true },
+    });
+    return formatStatisticGroups(rows, field);
+  }
+
+  private async groupOrderForwardingAttemptCounts(): Promise<Array<{ value: string; count: number }>> {
+    const rows = await (this.prisma as any).allegroOrderForwardingAttempt.groupBy({
+      by: ["status"],
+      _count: { _all: true },
+    });
+    return formatStatisticGroups(rows, "status");
+  }
+
+  /**
+   * Get aggregate order and delivery statistics without returning customer rows.
+   */
+  async getOrderStatistics(query: any = {}): Promise<any> {
+    const where = buildOrderQueryWhere(query);
+    const trackingWhere = { ...where, trackingNumber: { not: null } };
+    const missingTrackingWhere = { ...where, trackingNumber: null };
+    const deliveryMethodWhere = { ...where, deliveryMethod: { not: null } };
+    const missingDeliveryMethodWhere = { ...where, deliveryMethod: null };
+
+    const [
+      totalOrders,
+      statusCounts,
+      paymentStatusCounts,
+      fulfillmentStatusCounts,
+      deliveryMethodCounts,
+      withTrackingNumber,
+      missingTrackingNumber,
+      withDeliveryMethod,
+      missingDeliveryMethod,
+      centralForwardingStatusCounts,
+    ] = await Promise.all([
+      this.prisma.allegroOrder.count({ where }),
+      this.groupOrderCounts("status", where),
+      this.groupOrderCounts("paymentStatus", where),
+      this.groupOrderCounts("fulfillmentStatus", where),
+      this.groupOrderCounts("deliveryMethod", where),
+      this.prisma.allegroOrder.count({ where: trackingWhere }),
+      this.prisma.allegroOrder.count({ where: missingTrackingWhere }),
+      this.prisma.allegroOrder.count({ where: deliveryMethodWhere }),
+      this.prisma.allegroOrder.count({ where: missingDeliveryMethodWhere }),
+      this.groupOrderForwardingAttemptCounts(),
+    ]);
+
+    const centralForwardingAttempts = centralForwardingStatusCounts.reduce((sum, group) => sum + group.count, 0);
+
+    return {
+      generatedAt: new Date().toISOString(),
+      filters: {
+        status: query.status || null,
+        paymentStatus: query.paymentStatus || null,
+      },
+      totals: {
+        orders: totalOrders,
+        centralForwardingAttempts,
+        withTrackingNumber,
+        missingTrackingNumber,
+        withDeliveryMethod,
+        missingDeliveryMethod,
+      },
+      statusCounts,
+      paymentStatusCounts,
+      centralForwarding: {
+        statusCounts: centralForwardingStatusCounts,
+        forwarded: statisticCount(centralForwardingStatusCounts, "FORWARDED"),
+        blocked: statisticCount(centralForwardingStatusCounts, "BLOCKED"),
+        failed: statisticCount(centralForwardingStatusCounts, "FAILED"),
+        disabled: statisticCount(centralForwardingStatusCounts, "DISABLED"),
+      },
+      delivery: {
+        fulfillmentStatusCounts,
+        deliveryMethodCounts,
+        tracking: {
+          withTrackingNumber,
+          missingTrackingNumber,
+        },
+        deliveryMethodCoverage: {
+          withDeliveryMethod,
+          missingDeliveryMethod,
+        },
+      },
+    };
+  }
+
   /**
    * Get orders from database
    */
@@ -402,13 +517,7 @@ export class OrdersService {
     const limit = Math.min(100, Math.max(1, Number.parseInt(String(query.limit || "20"), 10) || 20));
     const skip = (page - 1) * limit;
 
-    const where: any = {};
-    if (query.status) {
-      where.status = query.status;
-    }
-    if (query.paymentStatus) {
-      where.paymentStatus = query.paymentStatus;
-    }
+    const where = buildOrderQueryWhere(query);
 
     this.logger.log(`[${timestamp}] [TIMING] OrdersService.getOrders START`, {
       filters: {

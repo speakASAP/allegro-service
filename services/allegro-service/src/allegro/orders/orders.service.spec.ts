@@ -21,6 +21,7 @@ function createServiceFixture(
     stockPrimaryWarehouseId?: string | null;
     localOrders?: any[];
     centralLifecycleReads?: Record<string, any>;
+    forwardingAttempts?: any[];
   } = {},
 ) {
   const orderClientCalls: any[] = [];
@@ -28,8 +29,25 @@ function createServiceFixture(
   const warnings: any[] = [];
   const errors: any[] = [];
   const logs: any[] = [];
-  const forwardingAttempts: any[] = [];
+  const forwardingAttempts: any[] = [...(options.forwardingAttempts || [])];
   const captured: any = {};
+
+  const filterRows = (rows: any[], where: any = {}) => rows.filter((row) => Object.entries(where || {}).every(([key, condition]) => {
+    const value = row[key];
+    if (condition && typeof condition === "object" && Object.prototype.hasOwnProperty.call(condition, "not")) {
+      return value !== (condition as any).not;
+    }
+    return value === condition;
+  }));
+
+  const groupRows = (rows: any[], field: string, where: any = {}) => {
+    const counts = new Map<any, number>();
+    for (const row of filterRows(rows, where)) {
+      const value = row[field] ?? null;
+      counts.set(value, (counts.get(value) || 0) + 1);
+    }
+    return Array.from(counts.entries()).map(([value, count]) => ({ [field]: value, _count: { _all: count } }));
+  };
 
   const prisma = {
     allegroOffer: {
@@ -44,9 +62,14 @@ function createServiceFixture(
         captured.orderFindMany = args;
         return options.localOrders || [];
       },
-      count: async (args: any) => {
+      count: async (args: any = {}) => {
         captured.orderCount = args;
-        return (options.localOrders || []).length;
+        return filterRows(options.localOrders || [], args.where).length;
+      },
+      groupBy: async (args: any) => {
+        captured.orderGroupBy = captured.orderGroupBy || [];
+        captured.orderGroupBy.push(args);
+        return groupRows(options.localOrders || [], args.by[0], args.where);
       },
       findUnique: async (args: any) => {
         captured.orderFindUnique = args;
@@ -58,6 +81,10 @@ function createServiceFixture(
       },
     },
     allegroOrderForwardingAttempt: {
+      groupBy: async (args: any) => {
+        captured.forwardingAttemptGroupBy = args;
+        return groupRows(forwardingAttempts, args.by[0], args.where);
+      },
       findUnique: async (args: any) => {
         captured.forwardingAttemptFindUnique = args;
         return forwardingAttempts.find((attempt) => attempt.idempotencyKey === args.where.idempotencyKey) || null;
@@ -473,6 +500,35 @@ async function testGetOrdersFlagsOrdersLifecycleReadFailureStale() {
   assert.equal(readModel.reason, ORDERS_LIFECYCLE_READ_UNAVAILABLE);
 }
 
+async function testGetOrderStatisticsReturnsAggregateOrderDeliveryAndCentralCountsOnly() {
+  const fixture = createServiceFixture([], [], {
+    localOrders: [
+      buildLocalOrder({ status: "READY_FOR_PROCESSING", paymentStatus: "PAID", fulfillmentStatus: "NEW", deliveryMethod: "Courier", trackingNumber: "track-1" }),
+      buildLocalOrder({ id: "local-order-2", allegroOrderId: "allegro-order-2", status: "SENT", paymentStatus: "PAID", fulfillmentStatus: "SENT", deliveryMethod: null, trackingNumber: null }),
+      buildLocalOrder({ id: "local-order-3", allegroOrderId: "allegro-order-3", status: "READY_FOR_PROCESSING", paymentStatus: null, fulfillmentStatus: null, deliveryMethod: "Pickup", trackingNumber: null }),
+    ],
+    forwardingAttempts: [
+      buildForwardedAttempt({ id: "attempt-forwarded", status: "FORWARDED" }),
+      buildForwardedAttempt({ id: "attempt-blocked", status: "BLOCKED" }),
+      buildForwardedAttempt({ id: "attempt-failed", status: "FAILED" }),
+    ],
+  });
+
+  const statistics = await fixture.service.getOrderStatistics();
+
+  assert.equal(statistics.totals.orders, 3);
+  assert.equal(statistics.totals.withTrackingNumber, 1);
+  assert.equal(statistics.totals.missingTrackingNumber, 2);
+  assert.equal(statistics.totals.withDeliveryMethod, 2);
+  assert.equal(statistics.centralForwarding.forwarded, 1);
+  assert.equal(statistics.centralForwarding.blocked, 1);
+  assert.equal(statistics.centralForwarding.failed, 1);
+  assert.deepEqual(statistics.statusCounts[0], { value: "READY_FOR_PROCESSING", count: 2 });
+  assert.equal(statistics.delivery.fulfillmentStatusCounts.some((entry: any) => entry.value === "UNKNOWN" && entry.count === 1), true);
+  assert.equal(JSON.stringify(statistics).includes("buyer@example.invalid"), false);
+  assert.equal(JSON.stringify(statistics).includes("rawData"), false);
+}
+
 export async function runOrdersServiceSpec(): Promise<void> {
   await testDefaultSyncProjectsLocallyWithoutCentralForwarding();
   await testMultiLineOrderForwardsEachLineCatalogProductId();
@@ -484,6 +540,7 @@ export async function runOrdersServiceSpec(): Promise<void> {
   await testGetOrdersProjectsCentralLifecycleFromLatestForwardingAttempt();
   await testGetOrdersFlagsMissingForwardingAttemptUnknown();
   await testGetOrdersFlagsOrdersLifecycleReadFailureStale();
+  await testGetOrderStatisticsReturnsAggregateOrderDeliveryAndCentralCountsOnly();
 }
 
 if (require.main === module) {

@@ -2,6 +2,17 @@
 
 Updated: 2026-07-02
 
+## 2026-07-02 - A2 Cabinet Order Stats And Delivery Admin Summary
+
+Result: implemented on branch `codex/orders-lifecycle-cabinet-allegro` without deploy. The protected Orders dashboard now loads aggregate order, central forwarding, and delivery or fulfillment statistics from a new read-only `GET /api/allegro/orders/statistics` endpoint before the central lifecycle order table.
+
+IPS chain: Vision -> central Orders lifecycle and delivery progress are visible in the Allegro cabinet; Goal Impact -> admin users can see order and delivery health without querying customer rows; System -> `allegro-service` orders read API and frontend dashboard; Feature -> aggregate order and delivery stats; Task -> add non-PII aggregate stats endpoint and dashboard cards; Execution Plan -> reuse local Allegro order projection plus central forwarding attempts, keep shipment-management gaps explicit, and do not deploy; Coding Prompt -> edit only Allegro files and preserve auth and privacy boundaries; Code -> `services/allegro-service/src/allegro/orders/orders.controller.ts`, `services/allegro-service/src/allegro/orders/orders.service.ts`, `services/allegro-service/src/allegro/orders/orders.service.spec.ts`, `services/frontend/src/pages/OrdersPage.tsx`; Validation -> `git diff --check`, `LOGGING_SERVICE_URL=http://logging-microservice:3367 npx ts-node shared/clients/order-client.service.spec.ts`, `LOGGING_SERVICE_URL=http://logging-microservice:3367 npx ts-node services/allegro-service/src/allegro/orders/orders.service.spec.ts`, `cd shared && npm run build`, `cd services/allegro-service && LOGGING_SERVICE_URL=http://logging-microservice:3367 npm run build`, and `cd services/frontend && npm run build` passed on 2026-07-02.
+
+Blockers/unknowns:
+
+- `[MISSING: shipment-management implementation]`; the dashboard exposes local delivery/tracking and fulfillment aggregates only, not Allegro shipment labels/packages/protocols.
+- `[UNKNOWN: deployed Orders lifecycle field naming]` remains covered by the fail-soft central lifecycle read model from A1.
+
 ## 2026-07-02 - A1 Central Orders Status Read Model
 
 Result: implemented and locally validated for the Allegro order read model. The read path now joins each local `AllegroOrder` with the latest `AllegroOrderForwardingAttempt`, extracts the central Orders id from `responseSummary.id`, and exposes a `centralOrderReadModel` on order list/detail responses.

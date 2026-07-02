@@ -37,6 +37,13 @@ export class OrdersController {
     return { success: true, data: result };
   }
 
+  @Get("statistics")
+  @UseGuards(JwtAuthGuard)
+  async getOrderStatistics(@Query() query: any): Promise<{ success: boolean; data: any }> {
+    const statistics = await this.ordersService.getOrderStatistics(query);
+    return { success: true, data: statistics };
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   async getOrder(@Param('id') id: string): Promise<{ success: boolean; data: any }> {

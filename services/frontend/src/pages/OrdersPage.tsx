@@ -50,6 +50,44 @@ interface Pagination {
   totalPages: number;
 }
 
+interface StatisticCount {
+  value: string;
+  count: number;
+}
+
+interface OrderStatistics {
+  generatedAt: string;
+  totals: {
+    orders: number;
+    centralForwardingAttempts: number;
+    withTrackingNumber: number;
+    missingTrackingNumber: number;
+    withDeliveryMethod: number;
+    missingDeliveryMethod: number;
+  };
+  statusCounts: StatisticCount[];
+  paymentStatusCounts: StatisticCount[];
+  centralForwarding: {
+    statusCounts: StatisticCount[];
+    forwarded: number;
+    blocked: number;
+    failed: number;
+    disabled: number;
+  };
+  delivery: {
+    fulfillmentStatusCounts: StatisticCount[];
+    deliveryMethodCounts: StatisticCount[];
+    tracking: {
+      withTrackingNumber: number;
+      missingTrackingNumber: number;
+    };
+    deliveryMethodCoverage: {
+      withDeliveryMethod: number;
+      missingDeliveryMethod: number;
+    };
+  };
+}
+
 const OrdersPage: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [page, setPage] = useState(1);
@@ -59,6 +97,8 @@ const OrdersPage: React.FC = () => {
     total: 0,
     totalPages: 0,
   });
+  const [statistics, setStatistics] = useState<OrderStatistics | null>(null);
+  const [statisticsLoading, setStatisticsLoading] = useState(false);
   const [loading, setLoading] = useState(false); // Start as false to render immediately
   const [error, setError] = useState<string | null>(null);
 
@@ -66,6 +106,24 @@ const OrdersPage: React.FC = () => {
     // Load orders in background (non-blocking)
     loadOrders(page);
   }, [page]);
+
+  useEffect(() => {
+    loadOrderStatistics();
+  }, []);
+
+  const loadOrderStatistics = async () => {
+    setStatisticsLoading(true);
+    try {
+      const response = await api.get("/allegro/orders/statistics", { timeout: 5000 });
+      if (response.data.success) {
+        setStatistics(response.data.data || null);
+      }
+    } catch (err) {
+      console.error("Failed to load order statistics", err);
+    } finally {
+      setStatisticsLoading(false);
+    }
+  };
 
   const loadOrders = async (requestedPage = 1) => {
     setLoading(true); // Set loading only during the API call
@@ -157,7 +215,14 @@ const OrdersPage: React.FC = () => {
 
   const centralLifecycleLabel = (model?: CentralOrderReadModel) => {
     const label = model?.displayStatus || model?.lifecycleStage || model?.status;
-    return label || 'Unavailable';
+    return label || "Unavailable";
+  };
+
+  const formatStatisticList = (items?: StatisticCount[], limit = 3) => {
+    if (!items || items.length === 0) {
+      return "-";
+    }
+    return items.slice(0, limit).map((item) => `${item.value}: ${item.count}`).join(" / ");
   };
 
   const goToPage = (nextPage: number) => {
@@ -180,6 +245,25 @@ const OrdersPage: React.FC = () => {
           <div className="text-sm">{error}</div>
         </div>
       )}
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Card title="Order total">
+          <p className="text-3xl font-semibold text-gray-900">{statistics?.totals.orders ?? (statisticsLoading ? "..." : 0)}</p>
+          <p className="mt-2 text-sm text-gray-600">{formatStatisticList(statistics?.statusCounts)}</p>
+        </Card>
+        <Card title="Central lifecycle">
+          <p className="text-3xl font-semibold text-gray-900">{statistics?.centralForwarding.forwarded ?? (statisticsLoading ? "..." : 0)}</p>
+          <p className="mt-2 text-sm text-gray-600">Forwarded / blocked {statistics?.centralForwarding.blocked ?? 0} / failed {statistics?.centralForwarding.failed ?? 0}</p>
+        </Card>
+        <Card title="Delivery tracking">
+          <p className="text-3xl font-semibold text-gray-900">{statistics?.delivery.tracking.withTrackingNumber ?? (statisticsLoading ? "..." : 0)}</p>
+          <p className="mt-2 text-sm text-gray-600">Missing tracking {statistics?.delivery.tracking.missingTrackingNumber ?? 0}</p>
+        </Card>
+        <Card title="Fulfillment">
+          <p className="text-sm font-medium text-gray-900">{formatStatisticList(statistics?.delivery.fulfillmentStatusCounts)}</p>
+          <p className="mt-2 text-sm text-gray-600">Delivery methods {statistics?.delivery.deliveryMethodCoverage.withDeliveryMethod ?? 0}</p>
+        </Card>
+      </div>
 
       <Card>
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
