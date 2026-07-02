@@ -2,7 +2,7 @@
 
 ```yaml
 id: VAL-GOAL-25-ALLEGRO-CATALOG-QUALITY-CONSUMER
-status: source-validated-deploy-rollout-blocked
+status: validated-deployed
 created: 2026-07-02
 last_updated: 2026-07-02
 repository: /home/ssf/Documents/Github/allegro
@@ -34,7 +34,7 @@ Code:
 - `services/frontend/src/pages/ProductsPage.tsx`
 - focused specs under the same Allegro modules
 
-Validation: focused specs, shared build, Allegro service build, frontend build, diff check passed; approved deploy built/pushed images and applied manifests, then timed out during Kubernetes rollout while new pods remained ContainerCreating.
+Validation: focused specs, shared build, Allegro service build, frontend build, diff check passed; approved deploy built/pushed images, applied manifests, initially timed out on slow local-registry pulls, then all Allegro deployments rolled out successfully on tag `2e365ac`.
 
 ## Implementation Summary
 
@@ -93,8 +93,8 @@ Merge order: single batch.
 
 ## Blockers And Unknowns
 
-- `[BLOCKED: Kubernetes rollout incomplete]` approved deploy attempt built and pushed image tag `2e365ac`, applied manifests, and updated deployment templates, but `./scripts/deploy.sh` exited 1 after rollout timeout. New Allegro pods for service, API gateway, settings, imports, and frontend remained `ContainerCreating` while old `087eec8` pods stayed ready. Events only showed local-registry image pulls, not application crashes.
 - `[UNKNOWN: live Catalog runtime response shape]` source validation used the current Catalog source contract and Allegro synthetic tests; no live authenticated smoke was run.
+- `[KNOWN: deploy script timeout recovered]` `./scripts/deploy.sh` exited 1 during rollout wait because local-registry image pulls took about 6-7 minutes. A follow-up read-only `kubectl rollout status` confirmed all Allegro deployments successfully rolled out on `2e365ac`.
 
 ## Deploy Attempt Evidence
 
@@ -103,13 +103,16 @@ Merge order: single batch.
 # Built service, API gateway, settings, imports, and frontend images with tag 2e365ac.
 # Pushed all 2e365ac and latest tags to localhost:5000.
 # Applied Kubernetes manifests and set deployment images.
-# Exited 1 after rollout timeout: old replicas pending termination, new 2e365ac pods ContainerCreating.
+# Exited 1 after rollout timeout while new 2e365ac pods were still pulling/ContainerCreating.
 
-kubectl get pod -n statex-apps -l "app in (allegro-service,allegro-api-gateway,allegro-settings,allegro-imports,allegro-frontend)"
-# Old 087eec8 pods remained Running/ready.
-# New 2e365ac pods remained Pending/ContainerCreating.
+kubectl rollout status deployment/allegro-service -n statex-apps --timeout=10s
+kubectl rollout status deployment/allegro-api-gateway -n statex-apps --timeout=10s
+kubectl rollout status deployment/allegro-settings -n statex-apps --timeout=10s
+kubectl rollout status deployment/allegro-imports -n statex-apps --timeout=10s
+kubectl rollout status deployment/allegro-frontend -n statex-apps --timeout=10s
+# All five deployments successfully rolled out after the delayed image pulls completed.
 ```
 
 ## Handoff
 
-Goal 25 source changes are committed as `2e365ac feat: consume catalog quality blockers` and present on `origin/main`. Approved deploy was attempted but did not complete rollout. No rollback or destructive action was run.
+Goal 25 source changes are committed as `2e365ac feat: consume catalog quality blockers` and present on `origin/main`. Approved deploy was attempted; the script timed out during slow image pulls, then read-only rollout checks confirmed successful rollout. No rollback or destructive action was run.
