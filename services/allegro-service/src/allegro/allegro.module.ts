@@ -33,6 +33,7 @@ import { OperationsController } from './operations/operations.controller';
 import { OperationsService } from './operations/operations.service';
 import { QuantityCommandsController } from './quantity-commands/quantity-commands.controller';
 import { QuantityCommandsService } from './quantity-commands/quantity-commands.service';
+import { CatalogProductEventsSubscriber } from './catalog-events/catalog-product-events.subscriber';
 
 @Module({
   imports: [
@@ -80,7 +81,8 @@ import { QuantityCommandsService } from './quantity-commands/quantity-commands.s
     AdminUsersService,
     OperationsService,
     QuantityCommandsService,
+    CatalogProductEventsSubscriber,
   ],
-  exports: [AllegroApiService, OffersService, OrdersService, CategoriesService, InventoryService, EventsService, PublishLifecycleService, MarketplacePolicyEngineService, CatalogSellActionService, AdminUsersService, OperationsService, QuantityCommandsService],
+  exports: [AllegroApiService, OffersService, OrdersService, CategoriesService, InventoryService, EventsService, PublishLifecycleService, MarketplacePolicyEngineService, CatalogSellActionService, AdminUsersService, OperationsService, QuantityCommandsService, CatalogProductEventsSubscriber],
 })
 export class AllegroModule {}

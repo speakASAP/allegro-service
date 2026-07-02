@@ -13,8 +13,17 @@ type WarehouseStockEvent = {
   productId?: string;
   available?: number;
   eventId?: string;
+  id?: string;
+  messageId?: string;
   occurredAt?: string;
+  metadata?: Record<string, unknown>;
+  payload?: Record<string, unknown>;
   [key: string]: unknown;
+};
+
+type EventClaim = {
+  eventId: string;
+  skip: boolean;
 };
 
 @Injectable()
@@ -97,23 +106,40 @@ export class StockEventsSubscriber implements OnModuleInit, OnModuleDestroy {
 
   private async handleStockEvent(event: WarehouseStockEvent) {
     const { type, productId } = event;
-    if (!productId) {
-      this.logger.warn(`Ignoring stock event without productId: ${JSON.stringify(this.redact(event))}`, 'StockEventsSubscriber');
-      return;
+    const claim = await this.claimEvent(event, type || 'unknown', productId);
+    if (claim.skip) {
+      this.logger.log(`Skipping duplicate Warehouse stock event ${claim.eventId}`, 'StockEventsSubscriber');
+      return { status: 'duplicate', eventId: claim.eventId, type, productId };
     }
-    this.logger.log(`Received stock event: ${type} for product ${productId}, available: ${event.available}`, 'StockEventsSubscriber');
-    switch (type) {
-      case 'stock.updated':
-        await this.syncWarehouseQuantityToAllegro(event, this.requireAvailable(event));
-        break;
-      case 'stock.low':
-        this.logger.warn(`Low stock alert for product ${productId}: ${event.available} available`, 'StockEventsSubscriber');
-        break;
-      case 'stock.out':
-        await this.syncWarehouseQuantityToAllegro(event, 0);
-        break;
-      default:
-        this.logger.warn(`Ignoring unsupported stock event type: ${type}`, 'StockEventsSubscriber');
+
+    try {
+      let result: any = { status: 'ignored', eventId: claim.eventId, type, productId };
+      if (!productId) {
+        this.logger.warn(`Ignoring stock event without productId: ${JSON.stringify(this.redact(event))}`, 'StockEventsSubscriber');
+        result = { ...result, reason: 'missing_product_id' };
+      } else {
+        this.logger.log(`Received stock event: ${type} for product ${productId}, available: ${event.available}`, 'StockEventsSubscriber');
+        switch (type) {
+          case 'stock.updated':
+            result = await this.syncWarehouseQuantityToAllegro(event, this.requireAvailable(event));
+            break;
+          case 'stock.low':
+            this.logger.warn(`Low stock alert for product ${productId}: ${event.available} available`, 'StockEventsSubscriber');
+            result = { ...result, reason: 'stock_low_only' };
+            break;
+          case 'stock.out':
+            result = await this.syncWarehouseQuantityToAllegro(event, 0);
+            break;
+          default:
+            this.logger.warn(`Ignoring unsupported stock event type: ${type}`, 'StockEventsSubscriber');
+            result = { ...result, reason: 'unsupported_stock_event_type' };
+        }
+      }
+      await this.markEventProcessed(claim.eventId);
+      return result;
+    } catch (error: unknown) {
+      await this.markEventFailed(claim.eventId, error);
+      throw error;
     }
   }
 
@@ -135,10 +161,11 @@ export class StockEventsSubscriber implements OnModuleInit, OnModuleDestroy {
       await prismaAny.allegroOffer.update({
         where: { id: offer.id },
         data: {
+          ...(targetQuantity === 0 ? { status: 'INACTIVE', publicationStatus: 'INACTIVE' } : {}),
           stockQuantity: targetQuantity,
           quantity: targetQuantity,
           syncStatus: 'PENDING',
-          syncSource: event.type === 'stock.out' ? 'WAREHOUSE_STOCK_OUT' : 'WAREHOUSE_STOCK_UPDATED',
+          syncSource: this.buildWarehouseSyncSource(event, targetQuantity),
           syncError: null,
         },
       });
@@ -150,6 +177,13 @@ export class StockEventsSubscriber implements OnModuleInit, OnModuleDestroy {
       await this.sleep(this.rateLimitMs);
       await this.executeWarehouseAttempt(attempt.id);
     }
+    return { status: 'processed', productId, targetQuantity, offersProcessed: offers.length };
+  }
+
+  private buildWarehouseSyncSource(event: WarehouseStockEvent, targetQuantity: number): string {
+    if (event.type === 'stock.out') return 'WAREHOUSE_STOCK_OUT';
+    if (targetQuantity === 0) return 'WAREHOUSE_ZERO_AVAILABLE';
+    return 'WAREHOUSE_STOCK_UPDATED';
   }
 
   private async createWarehouseAttempt(offer: any, event: WarehouseStockEvent, targetQuantity: number) {
@@ -196,7 +230,8 @@ export class StockEventsSubscriber implements OnModuleInit, OnModuleDestroy {
           approvalMode: 'automatic_execute',
           automaticExecutionApproved: true,
           rateLimit: { scope: 'allegro-account', minIntervalMs: this.rateLimitMs, maxRequestsPerSecond: this.rateLimitMs >= 1000 ? 1 : null },
-          zeroQuantityPolicy: 'set_allegro_offer_quantity_to_0_so_offer_is_not_sellable',
+          zeroQuantityPolicy: 'set_local_offer_inactive_and_set_allegro_offer_quantity_to_0_so_offer_is_not_sellable',
+          localProjectionDisabled: targetQuantity === 0,
           oversellPrevention: 'warehouse_decrement_event_fans_out_to_all_sales_channels',
         },
         blockedReasons,
@@ -272,6 +307,47 @@ export class StockEventsSubscriber implements OnModuleInit, OnModuleDestroy {
         },
       });
     }
+  }
+
+  private async claimEvent(event: WarehouseStockEvent, eventType: string, productId?: string): Promise<EventClaim> {
+    const eventId = this.buildLedgerEventId('WAREHOUSE', event, eventType, productId);
+    const prismaAny = this.prisma as any;
+    const existing = await prismaAny.webhookEvent.findUnique({ where: { eventId } });
+    if (existing) return { eventId, skip: true };
+    await prismaAny.webhookEvent.create({
+      data: {
+        eventId,
+        eventType,
+        source: 'WAREHOUSE',
+        payload: this.redact(event),
+        processed: false,
+      },
+    });
+    return { eventId, skip: false };
+  }
+
+  private async markEventProcessed(eventId: string): Promise<void> {
+    await (this.prisma as any).webhookEvent.update({
+      where: { eventId },
+      data: { processed: true, processedAt: new Date(), processingError: null },
+    });
+  }
+
+  private async markEventFailed(eventId: string, error: unknown): Promise<void> {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    await (this.prisma as any).webhookEvent.update({
+      where: { eventId },
+      data: { processingError: message, retryCount: { increment: 1 } },
+    });
+  }
+
+  private buildLedgerEventId(source: 'WAREHOUSE', event: WarehouseStockEvent, eventType: string, productId?: string): string {
+    const rawEventId = event.eventId || event.messageId || event.metadata?.eventId || event.payload?.eventId || event.id || null;
+    const candidate = rawEventId
+      ? `${source}:${rawEventId}`
+      : `${source}:derived:${createHash('sha256').update(this.stableStringify({ eventType, productId, event })).digest('hex').slice(0, 64)}`;
+    if (candidate.length <= 255) return candidate;
+    return `${source}:sha256:${createHash('sha256').update(candidate).digest('hex')}`;
   }
 
   private requireAvailable(event: WarehouseStockEvent): number {
