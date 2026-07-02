@@ -27,6 +27,19 @@ function createServiceHarness() {
     },
   };
 
+  let catalogQualityPreflight: any = {
+    policyId: 'catalog.product_quality.v1',
+    productId: offerRecord.catalogProductId,
+    canActivate: true,
+    canPublish: true,
+    blockingIssues: [],
+    blockingMissingFields: [],
+    optionalOpportunities: [],
+    nextAction: 'ready_for_allegro_publish',
+    sourceEndpoint: 'GET /api/products/:id/readiness',
+    reviewContractEndpoint: 'GET /api/products/review/quality',
+  };
+
   const prisma = {
     allegroOffer: {
       findUnique: async ({ where }: any) => (where.id === offerRecord.id ? { ...offerRecord } : null),
@@ -88,6 +101,7 @@ function createServiceHarness() {
 
   const catalogClient = {
     getProductById: async (catalogProductId: string) => ({ id: catalogProductId, name: 'Synthetic product' }),
+    getProductQualityPreflight: async (catalogProductId: string) => ({ ...catalogQualityPreflight, productId: catalogProductId }),
   };
 
   const updateCalls: any[] = [];
@@ -117,7 +131,7 @@ function createServiceHarness() {
   };
 
   const policyEngine = new MarketplacePolicyEngineService(prisma as any, catalogClient as any);
-  const service = new PublishLifecycleService(prisma as any, logger as any, offersService as any, policyEngine as any);
+  const service = new PublishLifecycleService(prisma as any, logger as any, offersService as any, policyEngine as any, catalogClient as any);
 
   return {
     service,
@@ -125,6 +139,9 @@ function createServiceHarness() {
     terminalCalls,
     setTerminalFailure: (value: any) => {
       terminalFailure = value;
+    },
+    setCatalogQualityPreflight: (value: any) => {
+      catalogQualityPreflight = value;
     },
   };
 }
@@ -174,6 +191,36 @@ async function testConfirmRequiresPreviewToken() {
   await assert.rejects(
     () => harness.service.confirm(attempt.id, 'user-1'),
     (error: any) => error.getResponse?.().code === 'PREVIEW_TOKEN_REQUIRED',
+  );
+}
+
+async function testConfirmBlocksWhenCatalogQualityRegresses() {
+  const harness = createServiceHarness();
+  const prepared = await harness.service.prepare(
+    {
+      action: 'UPDATE',
+      offerId: '11111111-1111-1111-1111-111111111111',
+      idempotencyKey: 'confirm-update-catalog-quality-regressed',
+      commandPayload: { title: 'Updated title' },
+    },
+    'user-1',
+  );
+  harness.setCatalogQualityPreflight({
+    policyId: 'catalog.product_quality.v1',
+    productId: '33333333-3333-3333-3333-333333333333',
+    canActivate: false,
+    canPublish: false,
+    blockingIssues: [{ code: 'missing_current_price', field: 'pricing', severity: 'blocking', message: 'Price is required.' }],
+    blockingMissingFields: ['price'],
+    optionalOpportunities: [],
+    nextAction: 'resolve_catalog_quality_blockers:price',
+    sourceEndpoint: 'GET /api/products/:id/readiness',
+    reviewContractEndpoint: 'GET /api/products/review/quality',
+  });
+
+  await assert.rejects(
+    () => harness.service.confirm(prepared.id, 'user-1', prepared.previewToken),
+    (error: any) => error.getResponse?.().code === 'CATALOG_QUALITY_BLOCKED',
   );
 }
 
@@ -251,6 +298,7 @@ async function testUpdateAttemptExecutesToFailedTerminalResult() {
 export async function runPublishLifecycleUpdateTerminalSpec(): Promise<void> {
   await testUpdateAttemptPreparesWithoutBlocking();
   await testConfirmRequiresPreviewToken();
+  await testConfirmBlocksWhenCatalogQualityRegresses();
   await testUpdateAttemptExecutesToSucceededTerminalResult();
   await testUpdateAttemptExecutesToFailedTerminalResult();
 }

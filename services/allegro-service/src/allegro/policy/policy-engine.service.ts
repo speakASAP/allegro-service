@@ -2,6 +2,18 @@ import { Injectable } from '@nestjs/common';
 import { CatalogClientService, PrismaService } from '@allegro/shared';
 import { PublishLifecycleAction } from '../publish-lifecycle/publish-lifecycle.dto';
 
+type CatalogProductQualityPreflight = {
+  policyId?: string;
+  productId?: string;
+  canActivate?: boolean;
+  canPublish?: boolean;
+  blockingIssues?: Array<{ code?: string }>;
+  blockingMissingFields?: string[];
+  nextAction?: string;
+  sourceEndpoint?: string;
+  reviewContractEndpoint?: string;
+};
+
 export type MarketplacePolicyStatus = 'PASS' | 'BLOCK' | 'WARN' | 'RECOMMEND';
 
 export type MarketplacePolicyGateResult = {
@@ -51,6 +63,7 @@ export class MarketplacePolicyEngineService {
     const now = new Date();
 
     results.push(await this.evaluateCatalogGate(input));
+    results.push(await this.evaluateCatalogProductQualityGate(input));
     results.push(await this.evaluateAccountGate(input, now));
     results.push(this.pass('rate-limit-readiness', 'allegro-service', 'Confirmed attempts enter the governed queue before Allegro execution.', {
       policy: 'Allegro account max 1 request per second unless an approved newer policy exists',
@@ -109,6 +122,60 @@ export class MarketplacePolicyEngineService {
         errorCode: error.status || error.response?.status || 'CATALOG_UNAVAILABLE',
       });
     }
+  }
+
+  private async evaluateCatalogProductQualityGate(input: MarketplacePolicyInput): Promise<MarketplacePolicyGateResult> {
+    if (!input.catalogProductId) {
+      return this.block('catalog-product-quality', 'catalog-microservice', 'catalogProductId is required for Catalog product quality preflight', 'Attach the offer to a Catalog product before preparing Allegro publication.');
+    }
+
+    try {
+      const getProductQualityPreflight = (this.catalogClient as any).getProductQualityPreflight;
+      if (typeof getProductQualityPreflight !== 'function') {
+        throw new Error('[MISSING: CatalogClientService.getProductQualityPreflight]');
+      }
+      const preflight = await getProductQualityPreflight.call(this.catalogClient, input.catalogProductId);
+      const blockingIssues = Array.isArray(preflight.blockingIssues) ? preflight.blockingIssues : [];
+      const evidence = this.catalogQualityEvidence(preflight);
+      if (blockingIssues.length > 0 || preflight.canPublish === false) {
+        const codes = blockingIssues.map((issue) => issue.code).filter(Boolean).join(',') || 'unknown_catalog_quality_blocker';
+        return this.block(
+          'catalog-product-quality',
+          'catalog-microservice',
+          `${preflight.policyId} blockers remain: ${codes}`,
+          'Resolve mandatory Catalog product quality blockers before preparing Allegro publication.',
+          evidence,
+        );
+      }
+
+      return this.pass('catalog-product-quality', 'catalog-microservice', 'Catalog product quality preflight passed.', evidence);
+    } catch (error: any) {
+      return this.block(
+        'catalog-product-quality',
+        'catalog-microservice',
+        `catalog product quality preflight unavailable: ${error.message}`,
+        'Retry after Catalog product quality readiness is reachable; Allegro must fail closed meanwhile.',
+        {
+          policyId: 'catalog.product_quality.v1',
+          catalogProductId: input.catalogProductId,
+          errorCode: error.status || error.response?.status || 'CATALOG_QUALITY_UNAVAILABLE',
+        },
+      );
+    }
+  }
+
+  private catalogQualityEvidence(preflight: CatalogProductQualityPreflight): Record<string, unknown> {
+    return {
+      policyId: preflight.policyId,
+      productId: preflight.productId,
+      canActivate: preflight.canActivate,
+      canPublish: preflight.canPublish,
+      blockingIssueCodes: Array.isArray(preflight.blockingIssues) ? preflight.blockingIssues.map((issue) => issue.code) : [],
+      blockingMissingFields: Array.isArray(preflight.blockingMissingFields) ? preflight.blockingMissingFields : [],
+      nextAction: preflight.nextAction,
+      sourceEndpoint: preflight.sourceEndpoint,
+      reviewContractEndpoint: preflight.reviewContractEndpoint,
+    };
   }
 
   private async evaluateAccountGate(input: MarketplacePolicyInput, now: Date): Promise<MarketplacePolicyGateResult> {

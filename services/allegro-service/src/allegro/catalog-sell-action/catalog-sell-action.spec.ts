@@ -51,6 +51,21 @@ import { strict as assert } from 'assert';
             getProductMarketplaceFields: async () => overrides.marketplaceFields || null,
             getProductPricing: async () => overrides.currentPricing || null,
             getProductContentPreview: async () => overrides.contentPreview || null,
+            getProductQualityPreflight: async (catalogProductId: string) => {
+              if (overrides.catalogQualityThrows) throw Object.assign(new Error('Synthetic Catalog quality outage'), { status: 503 });
+              return overrides.catalogQualityPreflight || {
+                policyId: 'catalog.product_quality.v1',
+                productId: catalogProductId,
+                canActivate: true,
+                canPublish: true,
+                blockingIssues: [],
+                blockingMissingFields: [],
+                optionalOpportunities: [],
+                nextAction: 'ready_for_allegro_publish',
+                sourceEndpoint: 'GET /api/products/:id/readiness',
+                reviewContractEndpoint: 'GET /api/products/review/quality',
+              };
+            },
           };
 
           const offersService = {
@@ -131,6 +146,26 @@ import { strict as assert } from 'assert';
           assert.equal(result.draftCreated, true);
           assert.equal(result.nextAction, 'confirm_publish');
           assert.equal(result.draft.accountId, '22222222-2222-2222-2222-222222222222');
+        }
+
+        async function testPrepareRejectsCatalogQualityBlockersBeforeDraft() {
+          const catalogQualityPreflight = {
+            policyId: 'catalog.product_quality.v1',
+            productId: '33333333-3333-3333-3333-333333333333',
+            canActivate: false,
+            canPublish: false,
+            blockingIssues: [{ code: 'missing_title', field: 'title', severity: 'blocking', message: 'Title is required.' }],
+            blockingMissingFields: ['title'],
+            optionalOpportunities: [],
+            nextAction: 'resolve_catalog_quality_blockers:title',
+          };
+          const { service, createdOffers } = createHarness({ catalogQualityPreflight });
+
+          await assert.rejects(
+            () => service.prepare({ catalogProductId: '33333333-3333-3333-3333-333333333333' }, 'user-1'),
+            (error: any) => error.getStatus?.() === 409 && error.getResponse?.().code === 'CATALOG_QUALITY_BLOCKED',
+          );
+          assert.equal(createdOffers.length, 0);
         }
 
         async function testPrepareUsesCatalogContentPreviewDescriptionWhenMissing() {
@@ -320,6 +355,49 @@ import { strict as assert } from 'assert';
           assert.equal(result.listingUrl, 'https://allegro.cz/nabidka/offer-123');
         }
 
+        async function testProductStatusSurfacesCatalogQualityBlockers() {
+          const existingDraft = {
+            id: 'existing-offer',
+            accountId: '22222222-2222-2222-2222-222222222222',
+            catalogProductId: '33333333-3333-3333-3333-333333333333',
+            title: 'Existing draft',
+            categoryId: 'cat-123',
+            price: 109,
+            currency: 'PLN',
+            quantity: 5,
+            publicationStatus: 'INACTIVE',
+            status: 'DRAFT',
+            updatedAt: '2026-06-19T00:00:00Z',
+          };
+          const catalogQualityPreflight = {
+            policyId: 'catalog.product_quality.v1',
+            productId: existingDraft.catalogProductId,
+            canActivate: false,
+            canPublish: false,
+            blockingIssues: [{ code: 'missing_description', field: 'description', severity: 'blocking', message: 'Description is required.' }],
+            blockingMissingFields: ['description'],
+            optionalOpportunities: [],
+            nextAction: 'resolve_catalog_quality_blockers:description',
+          };
+          const { service } = createHarness({
+            existingDraft,
+            catalogQualityPreflight,
+            attempts: [{
+              id: 'attempt-1',
+              status: 'PREPARED',
+              catalogProductId: existingDraft.catalogProductId,
+              requestedByUserId: 'user-1',
+            }],
+          });
+
+          const result = await service.getProductStatus(existingDraft.catalogProductId, 'user-1');
+
+          assert.equal(result.nextAction, 'resolve_catalog_quality_blockers');
+          assert.equal(result.canConfirmPublish, false);
+          assert.equal(result.canEditDraft, false);
+          assert.equal(result.catalogQualityPreflight.blockingIssues[0].code, 'missing_description');
+        }
+
         async function testProductDraftEditStaysLocal() {
           const existingDraft = {
             id: 'existing-offer',
@@ -374,6 +452,7 @@ import { strict as assert } from 'assert';
 
         export async function runCatalogSellActionSpec(): Promise<void> {
           await testPrepareCreatesNewDraftAndReturnsConfirmAction();
+          await testPrepareRejectsCatalogQualityBlockersBeforeDraft();
           await testPrepareUsesCatalogContentPreviewDescriptionWhenMissing();
           await testPrepareKeepsExplicitDescriptionOverCatalogContentPreview();
           await testPrepareCapsRequestedQuantityToWarehouseAvailability();
@@ -382,6 +461,7 @@ import { strict as assert } from 'assert';
           await testBulkPrepareAssignsSequentialRateLimitSlots();
           await testConfirmQueuesWithoutExecuting();
           await testProductStatusFindsLatestDraftAndAttempt();
+          await testProductStatusSurfacesCatalogQualityBlockers();
           await testProductDraftEditStaysLocal();
           await testConfirmProductPublishUsesLatestAttempt();
         }

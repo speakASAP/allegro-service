@@ -9,6 +9,44 @@ export interface CatalogClientRequestOptions {
   catalogSources?: string | string[];
 }
 
+export const CATALOG_PRODUCT_QUALITY_POLICY_ID = 'catalog.product_quality.v1';
+export const CATALOG_PRODUCT_QUALITY_MANDATORY_BLOCKER_CODES = [
+  'missing_sku',
+  'duplicate_sku',
+  'missing_title',
+  'missing_description',
+  'missing_current_price',
+  'missing_image',
+  'placeholder_image_only',
+  'archived_product',
+  'invalid_lifecycle_for_quality',
+] as const;
+
+const CATALOG_PRODUCT_QUALITY_MANDATORY_BLOCKER_SET = new Set<string>(CATALOG_PRODUCT_QUALITY_MANDATORY_BLOCKER_CODES);
+
+export interface CatalogProductQualityIssue {
+  code: string;
+  field?: string;
+  severity?: string;
+  message?: string;
+  source?: string;
+}
+
+export interface CatalogProductQualityPreflight {
+  policyId: string;
+  productId: string;
+  canActivate: boolean;
+  canPublish: boolean;
+  blockingIssues: CatalogProductQualityIssue[];
+  blockingMissingFields: string[];
+  optionalOpportunities: CatalogProductQualityIssue[];
+  nextAction: string;
+  readiness: any;
+  sourceEndpoint: string;
+  reviewContractEndpoint: string;
+  evaluatedAt: string;
+}
+
 /**
  * API client for catalog-microservice
  * Fetches product data from the central catalog
@@ -311,6 +349,122 @@ export class CatalogClientService {
       this.logger.warn(`Failed to upsert catalog pricing: ${error.response?.data?.message || errorMessage}`, 'CatalogClient');
       throw new HttpException(`Failed to upsert catalog pricing: ${error.response?.data?.message || errorMessage}`, HttpStatus.BAD_REQUEST);
     }
+  }
+
+  async getProductReadiness(productId: string, options: CatalogClientRequestOptions = {}): Promise<any> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(`${this.baseUrl}/api/products/${productId}/readiness`, this.requestOptions({}, options))
+      );
+      return response.data?.data || response.data;
+    } catch (error: any) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+
+      if (this.isServiceUnavailableError(error)) {
+        this.logger.error(`Catalog service unavailable when getting readiness for product ${productId}: ${errorMessage}`, errorStack, 'CatalogClient');
+        throw new HttpException(
+          `Catalog service is unavailable: ${errorMessage}`,
+          HttpStatus.SERVICE_UNAVAILABLE,
+        );
+      }
+
+      const status = error.status || error.response?.status || HttpStatus.BAD_GATEWAY;
+      const responseMessage = error.response?.data?.message || error.response?.data?.error?.message || errorMessage;
+      this.logger.warn(`Product readiness unavailable for ${productId}: ${responseMessage}`, 'CatalogClient');
+      throw new HttpException(`Product readiness unavailable for ${productId}: ${responseMessage}`, status);
+    }
+  }
+
+  async getProductQualityReview(query: Record<string, any> = {}, options: CatalogClientRequestOptions = {}): Promise<any> {
+    try {
+      const params: Record<string, any> = { ...query };
+      for (const [key, value] of Object.entries(this.catalogAccessParams(options))) {
+        if (params[key] === undefined) params[key] = value;
+      }
+      if (Array.isArray(params.catalogSources)) {
+        params.catalogSources = params.catalogSources.join(',');
+      }
+
+      const response = await firstValueFrom(
+        this.httpService.get(`${this.baseUrl}/api/products/review/quality`, this.requestOptions({ params }, options))
+      );
+      return {
+        policyId: response.data?.policyId || CATALOG_PRODUCT_QUALITY_POLICY_ID,
+        blockers: response.data?.blockers || [],
+        items: response.data?.data || response.data?.items || [],
+        pagination: response.data?.pagination || null,
+        raw: response.data,
+      };
+    } catch (error: any) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+
+      if (this.isServiceUnavailableError(error)) {
+        this.logger.error(`Catalog service unavailable when getting product quality review: ${errorMessage}`, errorStack, 'CatalogClient');
+        throw new HttpException(
+          `Catalog service is unavailable: ${errorMessage}`,
+          HttpStatus.SERVICE_UNAVAILABLE,
+        );
+      }
+
+      const status = error.status || error.response?.status || HttpStatus.BAD_GATEWAY;
+      const responseMessage = error.response?.data?.message || error.response?.data?.error?.message || errorMessage;
+      this.logger.warn(`Product quality review unavailable: ${responseMessage}`, 'CatalogClient');
+      throw new HttpException(`Product quality review unavailable: ${responseMessage}`, status);
+    }
+  }
+
+  async getProductQualityPreflight(productId: string, options: CatalogClientRequestOptions = {}): Promise<CatalogProductQualityPreflight> {
+    const readiness = await this.getProductReadiness(productId, options);
+    const issues = Array.isArray(readiness?.issues) ? readiness.issues : null;
+    if (!issues) {
+      throw new HttpException(
+        `Catalog product readiness returned no issues array for ${productId}`,
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+
+    const blockingIssues = issues
+      .filter((issue: any) => issue?.severity === 'blocking' && CATALOG_PRODUCT_QUALITY_MANDATORY_BLOCKER_SET.has(String(issue?.code || '')))
+      .map((issue: any) => this.toCatalogProductQualityIssue(issue));
+    const optionalOpportunities = issues
+      .filter((issue: any) => issue?.severity !== 'blocking')
+      .map((issue: any) => this.toCatalogProductQualityIssue(issue));
+    const blockingMissingFields: string[] = Array.from(new Set<string>(blockingIssues.map((issue) => this.productQualityFieldKey(issue))));
+
+    return {
+      policyId: CATALOG_PRODUCT_QUALITY_POLICY_ID,
+      productId: String(readiness?.productId || productId),
+      canActivate: blockingIssues.length === 0,
+      canPublish: blockingIssues.length === 0,
+      blockingIssues,
+      blockingMissingFields,
+      optionalOpportunities,
+      nextAction: blockingIssues.length
+        ? `resolve_catalog_quality_blockers:${blockingMissingFields.join(',')}`
+        : 'ready_for_allegro_publish',
+      readiness,
+      sourceEndpoint: 'GET /api/products/:id/readiness',
+      reviewContractEndpoint: 'GET /api/products/review/quality',
+      evaluatedAt: new Date().toISOString(),
+    };
+  }
+
+  private toCatalogProductQualityIssue(issue: any): CatalogProductQualityIssue {
+    return {
+      code: String(issue?.code || 'unknown_quality_issue'),
+      field: issue?.field ? String(issue.field) : undefined,
+      severity: issue?.severity ? String(issue.severity) : undefined,
+      message: issue?.message ? String(issue.message) : undefined,
+      source: issue?.source ? String(issue.source) : CATALOG_PRODUCT_QUALITY_POLICY_ID,
+    };
+  }
+
+  private productQualityFieldKey(issue: CatalogProductQualityIssue): string {
+    if (issue.code === 'missing_current_price') return 'price';
+    if (issue.code === 'missing_image' || issue.code === 'placeholder_image_only') return 'image';
+    return issue.field || issue.code;
   }
 
   async getProductMarketplaceFields(productId: string, marketplace: string, options: CatalogClientRequestOptions = {}): Promise<any | null> {

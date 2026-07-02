@@ -1,6 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';
-import { LoggerService, PrismaService } from '@allegro/shared';
+import { CatalogClientService, LoggerService, PrismaService } from '@allegro/shared';
 import { OffersService } from '../offers/offers.service';
 import { MarketplacePolicyEngineService, MarketplacePolicyGateResult } from '../policy/policy-engine.service';
 import {
@@ -9,6 +9,9 @@ import {
   PublishLifecycleAction,
   PublishLifecycleStatus,
 } from './publish-lifecycle.dto';
+
+const CATALOG_PRODUCT_QUALITY_POLICY_ID = 'catalog.product_quality.v1';
+type CatalogProductQualityPreflight = any;
 
 const SECRET_KEYS = ['authorization', 'token', 'accessToken', 'refreshToken', 'clientSecret', 'secret', 'apiKey', 'password'];
 const TERMINAL_STATUSES = ['SUCCEEDED', 'FAILED', 'CANCELLED'] as const;
@@ -21,6 +24,7 @@ export class PublishLifecycleService {
     private readonly logger: LoggerService,
     private readonly offersService: OffersService,
     private readonly policyEngine: MarketplacePolicyEngineService,
+    private readonly catalogClient: CatalogClientService,
   ) {}
 
   async prepare(dto: PreparePublishAttemptDto, requestedByUserId: string): Promise<any> {
@@ -57,7 +61,8 @@ export class PublishLifecycleService {
 
     const existing = await prismaAny.allegroPublishAttempt.findUnique({ where: { idempotencyKey } });
     if (existing) {
-      return this.withPreviewToken(existing);
+      const blockedExisting = await this.blockAttemptIfCatalogQualityBlocked(existing);
+      return blockedExisting ? this.withDerivedStatus(blockedExisting) : this.withPreviewToken(existing);
     }
 
     const policyEvaluation = await this.policyEngine.evaluate({
@@ -164,6 +169,10 @@ export class PublishLifecycleService {
       throw new HttpException(`Cannot confirm attempt in ${attempt.status} status`, HttpStatus.CONFLICT);
     }
     this.requirePreviewToken(attempt, previewToken);
+    const blockedForQuality = await this.blockAttemptIfCatalogQualityBlocked(attempt);
+    if (blockedForQuality) {
+      throw this.catalogQualityBlockedException(blockedForQuality);
+    }
     if (attempt.status === 'QUEUED') {
       return this.withDerivedStatus(attempt);
     }
@@ -253,6 +262,10 @@ export class PublishLifecycleService {
     }
     if (attempt.status !== 'QUEUED') {
       throw new HttpException(`Cannot execute attempt in ${attempt.status} status`, HttpStatus.CONFLICT);
+    }
+    const blockedForQuality = await this.blockAttemptIfCatalogQualityBlocked(attempt);
+    if (blockedForQuality) {
+      return this.withDerivedStatus(blockedForQuality);
     }
     if (!attempt.offerId) {
       const failed = await this.markFailed(attempt.id, 'MISSING_OFFER_ID', 'Queued attempt has no local offer id', null);
@@ -395,6 +408,110 @@ export class PublishLifecycleService {
   }
 
 
+
+  private async blockAttemptIfCatalogQualityBlocked(attempt: any): Promise<any | null> {
+    if (!attempt?.catalogProductId || attempt.status === 'BLOCKED' || (TERMINAL_STATUSES as readonly string[]).includes(attempt.status)) {
+      return null;
+    }
+
+    const preflight = await this.loadCatalogQualityPreflightForAttempt(attempt.catalogProductId);
+    if (!this.catalogQualityBlocks(preflight)) {
+      return null;
+    }
+
+    return this.markBlockedForCatalogQuality(attempt, preflight);
+  }
+
+  private async loadCatalogQualityPreflightForAttempt(catalogProductId: string): Promise<CatalogProductQualityPreflight | any> {
+    try {
+      const getProductQualityPreflight = (this.catalogClient as any).getProductQualityPreflight;
+      if (typeof getProductQualityPreflight !== 'function') {
+        throw new Error('[MISSING: CatalogClientService.getProductQualityPreflight]');
+      }
+      return await getProductQualityPreflight.call(this.catalogClient, catalogProductId);
+    } catch (error: any) {
+      return {
+        policyId: CATALOG_PRODUCT_QUALITY_POLICY_ID,
+        productId: catalogProductId,
+        canActivate: false,
+        canPublish: false,
+        blockingIssues: [{
+          code: 'catalog_quality_preflight_unavailable',
+          field: 'catalog',
+          severity: 'blocking',
+          message: 'Catalog product quality preflight is unavailable; Allegro must fail closed.',
+          source: CATALOG_PRODUCT_QUALITY_POLICY_ID,
+        }],
+        blockingMissingFields: ['catalog_quality_preflight'],
+        optionalOpportunities: [],
+        nextAction: 'retry_catalog_quality_preflight',
+        readiness: null,
+        sourceEndpoint: 'GET /api/products/:id/readiness',
+        reviewContractEndpoint: 'GET /api/products/review/quality',
+        evaluatedAt: new Date().toISOString(),
+        unavailable: true,
+        detail: error?.message || 'Catalog quality preflight unavailable',
+      };
+    }
+  }
+
+  private catalogQualityBlocks(preflight: any): boolean {
+    return !preflight || preflight.canPublish === false || (Array.isArray(preflight.blockingIssues) && preflight.blockingIssues.length > 0);
+  }
+
+  private async markBlockedForCatalogQuality(attempt: any, preflight: any): Promise<any> {
+    const existingReasons = Array.isArray(attempt.blockedReasons) ? attempt.blockedReasons : [];
+    const blockedReasons = [
+      ...existingReasons,
+      ...this.catalogQualityBlockedReasons(preflight),
+    ];
+    const policySnapshot = attempt.policySnapshot && typeof attempt.policySnapshot === 'object'
+      ? { ...(attempt.policySnapshot as Record<string, unknown>) }
+      : {};
+
+    return (this.prisma as any).allegroPublishAttempt.update({
+      where: { id: attempt.id },
+      data: {
+        status: 'BLOCKED',
+        blockedReasons,
+        policySnapshot: {
+          ...policySnapshot,
+          catalogQualityPreflight: this.redact(preflight),
+          catalogQualityBlockedAt: new Date().toISOString(),
+        },
+        remediationContext: {
+          nextAction: preflight?.nextAction || 'resolve_catalog_quality_blockers',
+          policyId: preflight?.policyId || CATALOG_PRODUCT_QUALITY_POLICY_ID,
+        },
+      },
+    });
+  }
+
+  private catalogQualityBlockedReasons(preflight: any): any[] {
+    const issues = Array.isArray(preflight?.blockingIssues) ? preflight.blockingIssues : [];
+    if (!issues.length) {
+      return [{ gate: 'catalog-product-quality', reason: 'Catalog product quality preflight did not prove publishability.' }];
+    }
+
+    return issues.map((issue: any) => ({
+      gate: 'catalog-product-quality',
+      reason: `${issue.code || 'catalog_quality_blocker'}${issue.message ? `: ${issue.message}` : ''}`,
+    }));
+  }
+
+  private catalogQualityBlockedException(attempt: any): HttpException {
+    return new HttpException(
+      {
+        code: 'CATALOG_QUALITY_BLOCKED',
+        message: 'Catalog product quality blockers must be resolved before Allegro publish confirmation.',
+        attemptId: attempt.id,
+        policyId: CATALOG_PRODUCT_QUALITY_POLICY_ID,
+        blockedReasons: attempt.blockedReasons || [],
+        nextAction: attempt.remediationContext?.nextAction || 'resolve_catalog_quality_blockers',
+      },
+      HttpStatus.CONFLICT,
+    );
+  }
 
   private requirePreviewToken(attempt: any, previewToken?: string): void {
     if (!previewToken) {

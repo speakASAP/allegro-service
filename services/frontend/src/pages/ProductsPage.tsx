@@ -152,14 +152,38 @@ interface CatalogContentPreview {
   }>;
 }
 
+interface CatalogQualityIssue {
+  code?: string;
+  field?: string;
+  severity?: string;
+  message?: string;
+}
+
+interface CatalogQualityPreflight {
+  policyId?: string;
+  productId?: string;
+  canActivate?: boolean;
+  canPublish?: boolean;
+  blockingIssues?: CatalogQualityIssue[];
+  blockingMissingFields?: string[];
+  nextAction?: string;
+  sourceEndpoint?: string;
+  reviewContractEndpoint?: string;
+  unavailable?: boolean;
+  detail?: string;
+}
+
+type BlockedReason = string | { gate?: string; reason?: string; code?: string; message?: string };
+
 interface CatalogSellStatus {
   status?: string | null;
   nextAction?: string | null;
   draft?: DraftSummary | null;
-  attempt?: { id?: string; status?: string; blockedReasons?: string[]; previewToken?: string; previewTokenBinding?: Record<string, unknown> } | null;
+  attempt?: { id?: string; status?: string; blockedReasons?: BlockedReason[]; previewToken?: string; previewTokenBinding?: Record<string, unknown> } | null;
   accountChoices?: AccountChoice[];
   categoryChoice?: { selectedCategoryId?: string | null; source?: string | null };
   catalogProduct?: { id?: string; sku?: string; title?: string; brand?: string; ean?: string } | null;
+  catalogQualityPreflight?: CatalogQualityPreflight | null;
   catalogContentPreview?: CatalogContentPreview | null;
   listingUrl?: string | null;
   canEditDraft?: boolean;
@@ -335,6 +359,20 @@ const contentPreviewDescription = (preview?: CatalogContentPreview | null) => {
   return '';
 };
 
+const catalogQualityBlocked = (preflight?: CatalogQualityPreflight | null) => (
+  Boolean(preflight && (preflight.canPublish === false || (preflight.blockingIssues?.length || 0) > 0))
+);
+
+const catalogQualityIssueText = (issue: CatalogQualityIssue) => {
+  const code = issue.code || 'catalog_quality_blocker';
+  return issue.message ? `${code}: ${issue.message}` : code;
+};
+
+const blockedReasonText = (reason: BlockedReason) => {
+  if (typeof reason === 'string') return reason;
+  return reason.reason || reason.message || reason.code || reason.gate || 'blocked';
+};
+
 const contentPreviewReview = (preview?: CatalogContentPreview | null) => {
   const staleManualFields = Array.isArray(preview?.propagation?.staleManualFields)
     ? preview?.propagation?.staleManualFields.filter(Boolean)
@@ -494,13 +532,16 @@ const ProductsPage: React.FC = () => {
   const selectedResaleMutationBlockedReason = productResaleMutationBlockReason(selectedProduct, user?.id);
   const selectedResaleUpdating = Boolean(selectedProduct && resaleUpdatingId === selectedProduct.id);
   const selectedContentPreview = selectedStatus?.catalogContentPreview || null;
+  const selectedCatalogQualityPreflight = selectedStatus?.catalogQualityPreflight || null;
+  const selectedCatalogQualityBlocked = catalogQualityBlocked(selectedCatalogQualityPreflight);
   const selectedContentPreviewDescription = contentPreviewDescription(selectedContentPreview);
   const selectedContentPreviewReview = contentPreviewReview(selectedContentPreview);
   const accountChoices = selectedStatus?.accountChoices || [];
   const sellActionUnavailable = Boolean(selectedStatusError);
+  const draftControlsDisabled = sellActionUnavailable || selectedCatalogQualityBlocked;
   const hasPreparedDraft = Boolean(selectedStatus?.draft?.id);
-  const canEditDraft = Boolean(selectedStatus?.canEditDraft && hasPreparedDraft && !sellActionUnavailable);
-  const canConfirmPublish = Boolean(selectedStatus?.canConfirmPublish && !sellActionUnavailable);
+  const canEditDraft = Boolean(selectedStatus?.canEditDraft && hasPreparedDraft && !draftControlsDisabled);
+  const canConfirmPublish = Boolean(selectedStatus?.canConfirmPublish && !draftControlsDisabled);
   const soldProducts = useMemo(
     () => products.filter((product) => isSoldOnAllegro(product, statusByProduct[product.id])),
     [products, statusByProduct],
@@ -516,6 +557,7 @@ const ProductsPage: React.FC = () => {
       [catalogProductId]: {
         ...prev[catalogProductId],
         ...status,
+        catalogQualityPreflight: status.catalogQualityPreflight ?? prev[catalogProductId]?.catalogQualityPreflight ?? null,
         catalogContentPreview: status.catalogContentPreview ?? prev[catalogProductId]?.catalogContentPreview ?? null,
       },
     }));
@@ -1041,6 +1083,15 @@ const ProductsPage: React.FC = () => {
                     Draft controls are disabled because the product-scoped Allegro sell-action endpoint is not reachable: {selectedStatusError}
                   </div>
                 )}
+                {selectedCatalogQualityBlocked && selectedCatalogQualityPreflight && (
+                  <div className="rounded border border-red-200 bg-red-50 p-2 text-red-700">
+                    <div className="font-medium">Catalog quality preflight blocks Allegro draft and publish.</div>
+                    <div className="mt-1 text-xs">
+                      {(selectedCatalogQualityPreflight.blockingIssues || []).map(catalogQualityIssueText).join(', ') || selectedCatalogQualityPreflight.nextAction || 'Resolve Catalog quality blockers.'}
+                    </div>
+                    <div className="mt-1 text-xs text-red-600">Policy: {selectedCatalogQualityPreflight.policyId || 'catalog.product_quality.v1'}</div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="text-sm text-gray-500">Select a Catalog product to prepare an Allegro draft.</div>
@@ -1050,10 +1101,10 @@ const ProductsPage: React.FC = () => {
           <Card title="Prepare Allegro draft">
             <div className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-2">
-                <Input label="Title" value={draftForm.title} onChange={(event) => setDraftForm({ ...draftForm, title: event.target.value })} disabled={!selectedProduct || sellActionUnavailable} />
-                <Input label="Category ID" value={draftForm.categoryId} onChange={(event) => setDraftForm({ ...draftForm, categoryId: event.target.value })} disabled={!selectedProduct || sellActionUnavailable} />
-                <Input label="Price" type="number" min="0" step="0.01" value={draftForm.price} onChange={(event) => setDraftForm({ ...draftForm, price: event.target.value })} disabled={!selectedProduct || sellActionUnavailable} />
-                <Input label="Quantity" type="number" min="0" step="1" value={draftForm.quantity} onChange={(event) => setDraftForm({ ...draftForm, quantity: event.target.value })} disabled={!selectedProduct || sellActionUnavailable} />
+                <Input label="Title" value={draftForm.title} onChange={(event) => setDraftForm({ ...draftForm, title: event.target.value })} disabled={!selectedProduct || draftControlsDisabled} />
+                <Input label="Category ID" value={draftForm.categoryId} onChange={(event) => setDraftForm({ ...draftForm, categoryId: event.target.value })} disabled={!selectedProduct || draftControlsDisabled} />
+                <Input label="Price" type="number" min="0" step="0.01" value={draftForm.price} onChange={(event) => setDraftForm({ ...draftForm, price: event.target.value })} disabled={!selectedProduct || draftControlsDisabled} />
+                <Input label="Quantity" type="number" min="0" step="1" value={draftForm.quantity} onChange={(event) => setDraftForm({ ...draftForm, quantity: event.target.value })} disabled={!selectedProduct || draftControlsDisabled} />
               </div>
 
               {accountChoices.length > 0 && (
@@ -1063,7 +1114,7 @@ const ProductsPage: React.FC = () => {
                     className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     value={draftForm.accountId}
                     onChange={(event) => setDraftForm({ ...draftForm, accountId: event.target.value })}
-                    disabled={!selectedProduct || sellActionUnavailable}
+                    disabled={!selectedProduct || draftControlsDisabled}
                   >
                     {accountChoices.map((account) => (
                       <option key={account.id} value={account.id}>
@@ -1083,7 +1134,7 @@ const ProductsPage: React.FC = () => {
                         {(selectedContentPreview.label || 'Allegro')}{selectedContentPreview.format ? ` · ${selectedContentPreview.format}` : ''}{selectedContentPreview.source?.generatedAt ? ` · ${formatDate(selectedContentPreview.source.generatedAt)}` : ''}
                       </div>
                     </div>
-                    <Button variant="secondary" size="small" onClick={applyCatalogPreviewDescription} disabled={!selectedContentPreviewDescription || !selectedProduct || sellActionUnavailable}>
+                    <Button variant="secondary" size="small" onClick={applyCatalogPreviewDescription} disabled={!selectedContentPreviewDescription || !selectedProduct || draftControlsDisabled}>
                       Use preview
                     </Button>
                   </div>
@@ -1131,7 +1182,7 @@ const ProductsPage: React.FC = () => {
                   className="mt-1 min-h-28 w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   value={draftForm.description}
                   onChange={(event) => setDraftForm({ ...draftForm, description: event.target.value })}
-                  disabled={!selectedProduct || sellActionUnavailable}
+                  disabled={!selectedProduct || draftControlsDisabled}
                 />
               </label>
 
@@ -1140,13 +1191,13 @@ const ProductsPage: React.FC = () => {
                   type="checkbox"
                   checked={draftForm.forceNewDraft}
                   onChange={(event) => setDraftForm({ ...draftForm, forceNewDraft: event.target.checked })}
-                  disabled={!selectedProduct || sellActionUnavailable}
+                  disabled={!selectedProduct || draftControlsDisabled}
                 />
                 Prepare a new draft instead of reusing an inactive draft
               </label>
 
               <div className="flex flex-wrap gap-2">
-                <Button onClick={handlePrepareDraft} disabled={!selectedProduct || sellActionUnavailable || preparing}>
+                <Button onClick={handlePrepareDraft} disabled={!selectedProduct || draftControlsDisabled || preparing}>
                   {preparing ? 'Preparing...' : hasPreparedDraft ? 'Prepare again' : 'Prepare draft'}
                 </Button>
                 <Button variant="secondary" onClick={handleSaveDraft} disabled={!canEditDraft || savingDraft}>
@@ -1159,7 +1210,9 @@ const ProductsPage: React.FC = () => {
 
               {!canConfirmPublish && (
                 <p className="text-sm text-gray-500">
-                  Confirm publish unlocks only after a prepared attempt exists and the backend returns `canConfirmPublish`.
+                  {selectedCatalogQualityBlocked
+                    ? 'Confirm publish is blocked until Catalog product quality blockers are resolved.'
+                    : 'Confirm publish unlocks only after a prepared attempt exists and the backend returns `canConfirmPublish`.'}
                 </p>
               )}
             </div>
@@ -1182,7 +1235,7 @@ const ProductsPage: React.FC = () => {
                 </div>
                 {selectedStatus.attempt?.blockedReasons && selectedStatus.attempt.blockedReasons.length > 0 && (
                   <div className="rounded border border-red-200 bg-red-50 p-2 text-red-700">
-                    {selectedStatus.attempt.blockedReasons.join(', ')}
+                    {selectedStatus.attempt.blockedReasons.map(blockedReasonText).join(', ')}
                   </div>
                 )}
                 {selectedProduct && previewTokensByProduct[selectedProduct.id] && (

@@ -36,6 +36,21 @@ function createPolicyHarness(overrides: Record<string, any> = {}) {
       if (overrides.catalogMissing) return null;
       return { id: catalogProductId, name: 'Synthetic catalog product' };
     },
+    getProductQualityPreflight: async (catalogProductId: string) => {
+      if (overrides.catalogQualityThrows) throw Object.assign(new Error('Synthetic quality outage'), { status: 503 });
+      return overrides.catalogQualityPreflight || {
+        policyId: 'catalog.product_quality.v1',
+        productId: catalogProductId,
+        canActivate: true,
+        canPublish: true,
+        blockingIssues: [],
+        blockingMissingFields: [],
+        optionalOpportunities: [],
+        nextAction: 'ready_for_allegro_publish',
+        sourceEndpoint: 'GET /api/products/:id/readiness',
+        reviewContractEndpoint: 'GET /api/products/review/quality',
+      };
+    },
   };
 
   return { service: new MarketplacePolicyEngineService(prisma as any, catalogClient as any), offer };
@@ -57,6 +72,10 @@ async function testPassingPolicyIsDeterministicAndReusable() {
   const catalogGate = result.results.find((entry) => entry.gate === 'catalog-validation');
   assert.equal(catalogGate?.status, 'PASS');
   assert.equal(catalogGate?.ownerService, 'catalog-microservice');
+
+  const qualityGate = result.results.find((entry) => entry.gate === 'catalog-product-quality');
+  assert.equal(qualityGate?.status, 'PASS');
+  assert.equal(qualityGate?.evidence?.policyId, 'catalog.product_quality.v1');
 }
 
 async function testBlockedPolicyIncludesOwnersAndRemediation() {
@@ -78,6 +97,29 @@ async function testBlockedPolicyIncludesOwnersAndRemediation() {
   assert.equal(result.results.find((entry) => entry.gate === 'stock-readiness')?.ownerService, 'warehouse-microservice');
 }
 
+async function testCatalogQualityBlockersBlockPolicy() {
+  const { service, offer } = createPolicyHarness({
+    catalogQualityPreflight: {
+      policyId: 'catalog.product_quality.v1',
+      productId: '33333333-3333-3333-3333-333333333333',
+      canActivate: false,
+      canPublish: false,
+      blockingIssues: [{ code: 'missing_image', field: 'media', severity: 'blocking', message: 'Image is required.' }],
+      blockingMissingFields: ['image'],
+      optionalOpportunities: [],
+      nextAction: 'resolve_catalog_quality_blockers:image',
+      sourceEndpoint: 'GET /api/products/:id/readiness',
+      reviewContractEndpoint: 'GET /api/products/review/quality',
+    },
+  });
+  const result = await service.evaluate({ action: 'PUBLISH', offer, accountId: offer.accountId, catalogProductId: offer.catalogProductId, requestedByUserId: 'user-1' });
+  const qualityGate = result.results.find((entry) => entry.gate === 'catalog-product-quality');
+
+  assert.equal(qualityGate?.status, 'BLOCK');
+  assert.equal(qualityGate?.ownerService, 'catalog-microservice');
+  assert.deepEqual(qualityGate?.evidence?.blockingIssueCodes, ['missing_image']);
+}
+
 async function testCatalogOutageBlocksWithoutSecrets() {
   const { service, offer } = createPolicyHarness({ catalogThrows: true });
   const result = await service.evaluate({ action: 'UPDATE', offer, accountId: offer.accountId, catalogProductId: offer.catalogProductId, requestedByUserId: 'user-1' });
@@ -91,6 +133,7 @@ async function testCatalogOutageBlocksWithoutSecrets() {
 export async function runPolicyEngineSpec(): Promise<void> {
   await testPassingPolicyIsDeterministicAndReusable();
   await testBlockedPolicyIncludesOwnersAndRemediation();
+  await testCatalogQualityBlockersBlockPolicy();
   await testCatalogOutageBlocksWithoutSecrets();
 }
 

@@ -4,6 +4,9 @@ import { OffersService } from '../offers/offers.service';
 import { PublishLifecycleService } from '../publish-lifecycle/publish-lifecycle.service';
 import { BulkPrepareCatalogSellActionDto, PrepareCatalogSellActionDto } from './catalog-sell-action.dto';
 
+const CATALOG_PRODUCT_QUALITY_POLICY_ID = 'catalog.product_quality.v1';
+type CatalogProductQualityPreflight = any;
+
 interface CatalogContentPreview {
   marketplace?: string;
   label?: string;
@@ -59,6 +62,7 @@ export class CatalogSellActionService {
   async prepare(dto: PrepareCatalogSellActionDto, requestedByUserId: string, humanAuthorization?: string): Promise<any> {
     const catalogAccess = this.catalogAccessOptions(humanAuthorization);
     const catalogProduct = await this.loadCatalogProduct(dto.catalogProductId, catalogAccess);
+    const catalogQualityPreflight = await this.assertCatalogQualityAllowsAllegro(catalogProduct.id || dto.catalogProductId, catalogAccess);
     const accountChoices = await this.listAccountChoices(requestedByUserId);
     const selectedAccountId = dto.accountId || accountChoices[0]?.id || null;
 
@@ -106,6 +110,7 @@ export class CatalogSellActionService {
       accountChoices,
       categoryChoice: this.buildCategoryChoice(dto, draft, catalogProduct),
       catalogProduct: this.toCatalogSummary(catalogProduct),
+      catalogQualityPreflight,
       catalogContentPreview: this.toCatalogContentPreview(this.getAllegroContentPreview(catalogProduct)),
     };
   }
@@ -174,6 +179,8 @@ export class CatalogSellActionService {
       });
       return null;
     });
+    const catalogQualityPreflight = await this.loadCatalogQualityPreflightForStatus(catalogProductId, this.catalogAccessOptions(humanAuthorization));
+    const catalogQualityBlocked = this.catalogQualityBlocks(catalogQualityPreflight);
     const draft = await prismaAny.allegroOffer.findFirst({
       where: {
         catalogProductId,
@@ -191,16 +198,17 @@ export class CatalogSellActionService {
 
     return {
       status: attempt?.status || draft?.publicationStatus || null,
-      nextAction: attempt ? this.deriveNextAction(attempt) : draft ? 'confirm_publish' : 'prepare_draft',
+      nextAction: catalogQualityBlocked ? 'resolve_catalog_quality_blockers' : attempt ? this.deriveNextAction(attempt) : draft ? 'confirm_publish' : 'prepare_draft',
       draft: this.toDraftSummary(draft),
       attempt: attempt || null,
       accountChoices,
       categoryChoice: this.buildCategoryChoice({ catalogProductId } as any, draft, catalogProduct),
       catalogProduct: this.toCatalogSummary(catalogProduct),
+      catalogQualityPreflight,
       catalogContentPreview: this.toCatalogContentPreview(this.getAllegroContentPreview(catalogProduct)),
       listingUrl: this.toListingUrl(draft),
-      canEditDraft: Boolean(draft && !['ACTIVE'].includes(String(draft.publicationStatus || '').toUpperCase())),
-      canConfirmPublish: Boolean(attempt && attempt.status === 'PREPARED'),
+      canEditDraft: !catalogQualityBlocked && Boolean(draft && !['ACTIVE'].includes(String(draft.publicationStatus || '').toUpperCase())),
+      canConfirmPublish: !catalogQualityBlocked && Boolean(attempt && attempt.status === 'PREPARED'),
     };
   }
 
@@ -211,6 +219,7 @@ export class CatalogSellActionService {
     if (!draftId) {
       throw new HttpException('Prepare an Allegro draft before editing the product presentation', HttpStatus.CONFLICT);
     }
+    this.ensureCatalogQualityAllowsAllegro(current.catalogQualityPreflight);
 
     const updatePayload = this.toDraftUpdatePayload(dto);
     if (dto.quantity !== undefined) {
@@ -233,6 +242,7 @@ export class CatalogSellActionService {
       accountChoices: current.accountChoices || [],
       categoryChoice: current.categoryChoice || null,
       catalogProduct: current.catalogProduct || null,
+      catalogQualityPreflight: current.catalogQualityPreflight || null,
       catalogContentPreview: current.catalogContentPreview || null,
       listingUrl: this.toListingUrl(draft),
       canEditDraft: Boolean(draft && !['ACTIVE'].includes(String(draft.publicationStatus || '').toUpperCase())),
@@ -242,6 +252,7 @@ export class CatalogSellActionService {
 
   async confirmProductPublish(catalogProductId: string, requestedByUserId: string, previewToken: string, humanAuthorization?: string): Promise<any> {
     const current = await this.getProductStatus(catalogProductId, requestedByUserId, humanAuthorization);
+    this.ensureCatalogQualityAllowsAllegro(current.catalogQualityPreflight);
     if (!current.attempt?.id) {
       throw new HttpException('Prepare an Allegro publish attempt before confirmation', HttpStatus.CONFLICT);
     }
@@ -251,10 +262,102 @@ export class CatalogSellActionService {
       accountChoices: current.accountChoices || [],
       categoryChoice: current.categoryChoice || null,
       catalogProduct: current.catalogProduct || null,
+      catalogQualityPreflight: current.catalogQualityPreflight || null,
       catalogContentPreview: current.catalogContentPreview || null,
       listingUrl: this.toListingUrl(confirmed.draft),
       canEditDraft: Boolean(confirmed.draft && !['ACTIVE'].includes(String(confirmed.draft.publicationStatus || '').toUpperCase())),
       canConfirmPublish: false,
+    };
+  }
+
+  private async assertCatalogQualityAllowsAllegro(catalogProductId: string, catalogAccess: CatalogClientRequestOptions): Promise<CatalogProductQualityPreflight> {
+    const preflight = await this.loadCatalogQualityPreflight(catalogProductId, catalogAccess);
+    this.ensureCatalogQualityAllowsAllegro(preflight);
+    return preflight;
+  }
+
+  private async loadCatalogQualityPreflight(catalogProductId: string, catalogAccess: CatalogClientRequestOptions): Promise<CatalogProductQualityPreflight> {
+    try {
+      const getProductQualityPreflight = (this.catalogClient as any).getProductQualityPreflight;
+      if (typeof getProductQualityPreflight !== 'function') {
+        throw new Error('[MISSING: CatalogClientService.getProductQualityPreflight]');
+      }
+      return await getProductQualityPreflight.call(this.catalogClient, catalogProductId, catalogAccess);
+    } catch (error: any) {
+      const response = typeof error?.getResponse === 'function' ? error.getResponse() : null;
+      const responseMessage = response && typeof response === 'object' && 'message' in response
+        ? String((response as any).message)
+        : error?.message || 'Catalog quality preflight unavailable';
+      throw new HttpException(
+        {
+          code: 'CATALOG_QUALITY_PREFLIGHT_UNAVAILABLE',
+          message: 'Catalog product quality preflight is unavailable; Allegro must fail closed.',
+          catalogProductId,
+          policyId: CATALOG_PRODUCT_QUALITY_POLICY_ID,
+          detail: responseMessage,
+        },
+        error.status || error.response?.status || HttpStatus.BAD_GATEWAY,
+      );
+    }
+  }
+
+  private async loadCatalogQualityPreflightForStatus(catalogProductId: string, catalogAccess: CatalogClientRequestOptions): Promise<any> {
+    try {
+      return await this.loadCatalogQualityPreflight(catalogProductId, catalogAccess);
+    } catch (error: any) {
+      return this.unavailableCatalogQualityPreflight(catalogProductId, error);
+    }
+  }
+
+  private ensureCatalogQualityAllowsAllegro(preflight: any): void {
+    if (!this.catalogQualityBlocks(preflight)) {
+      return;
+    }
+
+    throw new HttpException(
+      {
+        code: 'CATALOG_QUALITY_BLOCKED',
+        message: 'Catalog product quality blockers must be resolved before Allegro draft or publish.',
+        policyId: preflight?.policyId || CATALOG_PRODUCT_QUALITY_POLICY_ID,
+        catalogProductId: preflight?.productId || null,
+        blockers: Array.isArray(preflight?.blockingIssues) ? preflight.blockingIssues : [],
+        nextAction: preflight?.nextAction || 'resolve_catalog_quality_blockers',
+        catalogQualityPreflight: preflight || null,
+      },
+      HttpStatus.CONFLICT,
+    );
+  }
+
+  private catalogQualityBlocks(preflight: any): boolean {
+    return !preflight || preflight.canPublish === false || (Array.isArray(preflight.blockingIssues) && preflight.blockingIssues.length > 0);
+  }
+
+  private unavailableCatalogQualityPreflight(catalogProductId: string, error: any): any {
+    const response = typeof error?.getResponse === 'function' ? error.getResponse() : null;
+    const detail = response && typeof response === 'object' && 'message' in response
+      ? String((response as any).message)
+      : error?.message || 'Catalog quality preflight unavailable';
+    return {
+      policyId: CATALOG_PRODUCT_QUALITY_POLICY_ID,
+      productId: catalogProductId,
+      canActivate: false,
+      canPublish: false,
+      blockingIssues: [{
+        code: 'catalog_quality_preflight_unavailable',
+        field: 'catalog',
+        severity: 'blocking',
+        message: 'Catalog product quality preflight is unavailable; Allegro must fail closed.',
+        source: CATALOG_PRODUCT_QUALITY_POLICY_ID,
+      }],
+      blockingMissingFields: ['catalog_quality_preflight'],
+      optionalOpportunities: [],
+      nextAction: 'retry_catalog_quality_preflight',
+      readiness: null,
+      sourceEndpoint: 'GET /api/products/:id/readiness',
+      reviewContractEndpoint: 'GET /api/products/review/quality',
+      evaluatedAt: new Date().toISOString(),
+      unavailable: true,
+      detail,
     };
   }
 
