@@ -15,6 +15,11 @@ import {
 
 type CallbackStatus = 'loading' | 'success' | 'error';
 
+interface HostedAuthSession {
+  accessToken: string;
+  returnTo: string;
+}
+
 interface AuthJwtPayload {
   sub?: string | number;
   id?: string | number;
@@ -38,9 +43,13 @@ const decodeJwtPayload = (token: string): AuthJwtPayload => {
   return JSON.parse(json) as AuthJwtPayload;
 };
 
-const registerAllegroWorkspaceAccess = (accessToken: string) => {
+const getApiBase = (): string => {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const apiBase = origin ? `${origin}/api` : '/api';
+  return origin ? `${origin}/api` : '/api';
+};
+
+const registerAllegroWorkspaceAccess = (accessToken: string) => {
+  const apiBase = getApiBase();
 
   fetch(`${apiBase}/allegro/users/register-access`, {
     method: 'POST',
@@ -54,7 +63,22 @@ const registerAllegroWorkspaceAccess = (accessToken: string) => {
   });
 };
 
-const storeHostedAuthSession = (fragment: URLSearchParams): string => {
+const provisionCatalogAccess = async (accessToken: string): Promise<void> => {
+  const response = await fetch(`${getApiBase()}/catalog/access/provision`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ sourceApplication: 'allegro-service' }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Could not provision Catalog access (${response.status}).`);
+  }
+};
+
+const storeHostedAuthSession = (fragment: URLSearchParams): HostedAuthSession => {
   const accessToken = fragment.get('access_token');
   const returnedState = fragment.get('state');
   const expectedState = localStorage.getItem(HOSTED_AUTH_STATE_KEY);
@@ -85,7 +109,7 @@ const storeHostedAuthSession = (fragment: URLSearchParams): string => {
   localStorage.setItem('user', JSON.stringify(user));
   registerAllegroWorkspaceAccess(accessToken);
 
-  return consumeHostedAuthReturnTo();
+  return { accessToken, returnTo: consumeHostedAuthReturnTo() };
 };
 
 const AllegroOAuthCallbackPage: React.FC = () => {
@@ -99,27 +123,46 @@ const AllegroOAuthCallbackPage: React.FC = () => {
     const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ''));
 
     if (fragment.has('access_token')) {
+      let cancelled = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+
       setTitle('Alfares Auth');
 
-      try {
-        const returnTo = storeHostedAuthSession(fragment);
-        clearHostedAuthState();
-        window.history.replaceState(null, document.title, window.location.pathname);
-        setStatus('success');
-        setMessage('Sign-in successful. Redirecting...');
+      const completeHostedAuth = async () => {
+        try {
+          const { accessToken, returnTo } = storeHostedAuthSession(fragment);
+          setMessage('Preparing your Catalog workspace...');
+          await provisionCatalogAccess(accessToken);
 
-        const timer = setTimeout(() => {
-          navigate(returnTo, { replace: true });
-        }, 300);
+          if (cancelled) return;
 
-        return () => clearTimeout(timer);
-      } catch (error) {
-        clearHostedAuthState();
-        window.history.replaceState(null, document.title, window.location.pathname);
-        setStatus('error');
-        setMessage(error instanceof Error ? error.message : 'Could not complete Auth sign-in.');
-        return;
-      }
+          clearHostedAuthState();
+          window.history.replaceState(null, document.title, window.location.pathname);
+          setStatus('success');
+          setMessage('Sign-in successful. Redirecting...');
+
+          timer = setTimeout(() => {
+            navigate(returnTo, { replace: true });
+          }, 300);
+        } catch (error) {
+          if (cancelled) return;
+
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+          localStorage.removeItem('user');
+          clearHostedAuthState();
+          window.history.replaceState(null, document.title, window.location.pathname);
+          setStatus('error');
+          setMessage(error instanceof Error ? error.message : 'Could not complete Auth sign-in.');
+        }
+      };
+
+      void completeHostedAuth();
+
+      return () => {
+        cancelled = true;
+        if (timer) clearTimeout(timer);
+      };
     }
 
     setTitle('Allegro OAuth Authorization');

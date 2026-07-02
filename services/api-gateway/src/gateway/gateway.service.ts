@@ -284,10 +284,17 @@ export class GatewayService implements OnModuleInit {
       return '';
     };
 
+    const getCatalogServiceUrl = (): string => {
+      const configuredUrl = getServiceUrl('CATALOG_SERVICE_URL', 'CATALOG_SERVICE_PORT');
+      if (configuredUrl) return configuredUrl;
+      return isDevelopment ? 'http://localhost:3200' : 'http://catalog-microservice:3200';
+    };
+
     this.serviceUrls = {
       allegro: getServiceUrl('ALLEGRO_SERVICE_URL', 'ALLEGRO_SERVICE_PORT', 'allegro'),
       import: getServiceUrl('IMPORT_SERVICE_URL', 'IMPORT_SERVICE_PORT', 'import'),
       settings: getServiceUrl('SETTINGS_SERVICE_URL', 'ALLEGRO_SETTINGS_SERVICE_PORT', 'settings'),
+      catalog: getCatalogServiceUrl(),
       // In development, use localhost (via SSH tunnel) if AUTH_SERVICE_PORT is set or AUTH_SERVICE_URL is localhost
       // Otherwise fallback to AUTH_SERVICE_URL (HTTPS for production)
       auth: isDevelopment 
@@ -538,7 +545,7 @@ export class GatewayService implements OnModuleInit {
 
     // Determine if this is an internal Docker service or external service
     // Auth service is now included in internal services to use keep-alive for better performance
-    const isInternalService = ['allegro', 'import', 'settings', 'auth'].includes(serviceName);
+    const isInternalService = ['allegro', 'import', 'settings', 'auth', 'catalog'].includes(serviceName);
     const isExternalService = serviceName === 'auth' && isHttps;
 
     // Generate request ID for tracking (must be before config to use in metadata)

@@ -192,6 +192,40 @@ export class GatewayController {
   }
 
   /**
+   * Route Catalog access/settings requests with the human bearer token.
+   */
+  @All('catalog/*')
+  @UseGuards(JwtAuthGuard)
+  async catalogRoute(@Req() req: ExpressRequest, @Res() res: ExpressResponse) {
+    const path = req.url.replace('/api/catalog', '');
+    return this.routeRequest('catalog', `/api/catalog${path}`, req, res);
+  }
+
+  @All('catalog')
+  @UseGuards(JwtAuthGuard)
+  async catalogBaseRoute(@Req() req: ExpressRequest, @Res() res: ExpressResponse) {
+    const path = req.url.replace('/api/catalog', '') || '';
+    return this.routeRequest('catalog', `/api/catalog${path}`, req, res);
+  }
+
+  /**
+   * Route user-facing Catalog product selection with the human bearer token.
+   */
+  @All('products/*')
+  @UseGuards(JwtAuthGuard)
+  async catalogProductsRoute(@Req() req: ExpressRequest, @Res() res: ExpressResponse) {
+    const path = req.url.replace('/api/products', '');
+    return this.routeRequest('catalog', `/api/products${path}`, req, res);
+  }
+
+  @All('products')
+  @UseGuards(JwtAuthGuard)
+  async catalogProductsBaseRoute(@Req() req: ExpressRequest, @Res() res: ExpressResponse) {
+    const path = req.url.replace('/api/products', '') || '';
+    return this.routeRequest('catalog', `/api/products${path}`, req, res);
+  }
+
+  /**
    * Route auth requests (no auth required for register/login)
    * Must be before catch-all to match correctly
    * Use explicit routes for common endpoints and catch-all for others
@@ -266,7 +300,7 @@ export class GatewayController {
       success: false,
       error: {
         code: 'NOT_FOUND',
-        message: `Cannot ${req.method} ${req.url}. Available endpoints: /api/auth/*, /api/allegro/*, /api/import/*, /api/settings/*`,
+        message: `Cannot ${req.method} ${req.url}. Available endpoints: /api/auth/*, /api/allegro/*, /api/import/*, /api/settings/*, /api/catalog/*, /api/products`,
       },
       path: req.url,
       originalUrl: req.originalUrl,

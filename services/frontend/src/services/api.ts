@@ -462,11 +462,14 @@ export const allegroAccountApi = {
 };
 
 
+export type CatalogProductScope = 'own' | 'effective' | 'alfares' | 'community' | 'all';
+
 export interface CatalogProductsQuery {
   page?: number;
   limit?: number;
   search?: string;
   includeRaw?: boolean;
+  catalogScope?: CatalogProductScope;
 }
 
 export interface PrepareCatalogSellActionPayload {
@@ -484,11 +487,16 @@ export interface PrepareCatalogSellActionPayload {
 
 export const catalogProductsApi = {
   getProducts: (query: CatalogProductsQuery = {}) => {
-    return api.get('/allegro/products', { params: query });
+    return api.get('/products', {
+      params: {
+        ...query,
+        catalogScope: query.catalogScope ?? 'effective',
+      },
+    });
   },
 
   getProduct: (id: string) => {
-    return api.get(`/allegro/products/${id}`);
+    return api.get(`/products/${id}`, { params: { catalogScope: 'effective' } });
   },
 };
 

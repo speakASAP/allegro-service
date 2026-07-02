@@ -20,6 +20,9 @@ interface ProductRawData {
 
 interface CatalogProduct {
   id: string;
+  sku?: string | null;
+  ownerUserId?: string | null;
+  resaleEnabled?: boolean | null;
   allegroProductId?: string;
   name?: string | null;
   title?: string | null;
@@ -53,6 +56,8 @@ interface CatalogProduct {
     quantity?: number;
     stock?: number;
     stockQuantity?: number;
+    ownerUserId?: string | null;
+    resaleEnabled?: boolean | null;
     images?: ProductImage[];
     media?: ProductImage[];
   } | null;
@@ -63,6 +68,12 @@ interface Pagination {
   limit: number;
   total: number;
   totalPages: number;
+}
+
+interface CatalogProductsResponse {
+  items?: CatalogProduct[];
+  data?: CatalogProduct[];
+  pagination?: Partial<Pagination> & { pages?: number };
 }
 
 interface DraftSummary {
@@ -147,9 +158,31 @@ interface DraftForm {
 
 const defaultPagination: Pagination = { page: 1, limit: 20, total: 0, totalPages: 1 };
 
+const normalizePagination = (pagination?: CatalogProductsResponse['pagination']): Pagination => ({
+  page: pagination?.page ?? defaultPagination.page,
+  limit: pagination?.limit ?? defaultPagination.limit,
+  total: pagination?.total ?? defaultPagination.total,
+  totalPages: pagination?.totalPages ?? pagination?.pages ?? defaultPagination.totalPages,
+});
+
 const unwrapData = <T,>(body: unknown): T => {
   const response = body as { data?: T };
   return (response?.data ?? body) as T;
+};
+
+const normalizeCatalogProductsResponse = (body: unknown): { items: CatalogProduct[]; pagination: Pagination } => {
+  const response = body as CatalogProductsResponse;
+  if (Array.isArray(response?.data)) {
+    return { items: response.data, pagination: normalizePagination(response.pagination) };
+  }
+
+  const unwrapped = unwrapData<CatalogProductsResponse | CatalogProduct[]>(body);
+  if (Array.isArray(unwrapped)) {
+    return { items: unwrapped, pagination: { ...defaultPagination, total: unwrapped.length } };
+  }
+
+  const items = Array.isArray(unwrapped.items) ? unwrapped.items : [];
+  return { items, pagination: normalizePagination(unwrapped.pagination) };
 };
 
 const getErrorMessage = (err: unknown, fallback: string) => {
@@ -169,7 +202,16 @@ const productTitle = (product: CatalogProduct | null) => (
   || ''
 );
 
-const productSku = (product: CatalogProduct | null) => product?.catalogProduct?.sku || product?.allegroProductId || product?.id || '';
+const productSku = (product: CatalogProduct | null) => product?.catalogProduct?.sku || product?.sku || product?.allegroProductId || product?.id || '';
+
+const productSourceLabel = (product: CatalogProduct | null) => {
+  if (!product) return '';
+  const ownerUserId = product.ownerUserId ?? product.catalogProduct?.ownerUserId;
+  const resaleEnabled = product.resaleEnabled ?? product.catalogProduct?.resaleEnabled;
+  if (ownerUserId === null) return 'Alfares catalog';
+  if (resaleEnabled === true) return 'Community resale';
+  return 'Seller catalog';
+};
 
 const productPrice = (product: CatalogProduct | null) => {
   const price = product?.catalogProduct?.price;
@@ -255,6 +297,7 @@ interface ProductTileProps {
 const ProductTile: React.FC<ProductTileProps> = ({ product, active, onSelect }) => {
   const photoUrl = productImageUrl(product);
   const title = productTitle(product) || 'Untitled product';
+  const sourceLabel = productSourceLabel(product);
 
   return (
     <button
@@ -287,6 +330,7 @@ const ProductTile: React.FC<ProductTileProps> = ({ product, active, onSelect }) 
       >
         {title}
       </p>
+      {sourceLabel && <p className="mt-1 truncate text-[11px] font-medium text-gray-500">{sourceLabel}</p>}
     </button>
   );
 };
@@ -399,11 +443,12 @@ const ProductsPage: React.FC = () => {
         limit: pagination.limit,
         search: search || undefined,
         includeRaw: true,
+        catalogScope: 'effective',
       });
-      const data = unwrapData<{ items?: CatalogProduct[]; pagination?: Pagination }>(res.data);
-      const nextProducts = data.items || [];
+      const data = normalizeCatalogProductsResponse(res.data);
+      const nextProducts = data.items;
       setProducts(nextProducts);
-      setPagination(data.pagination || defaultPagination);
+      setPagination(data.pagination);
       setSelectedId((current) => current && nextProducts.some((product) => product.id === current)
         ? current
         : nextProducts[0]?.id || null);
@@ -679,6 +724,7 @@ const ProductsPage: React.FC = () => {
                 <div className="grid grid-cols-2 gap-3">
                   <div><span className="font-medium">Brand:</span> {selectedProduct.brand || selectedProduct.catalogProduct?.brand || '-'}</div>
                   <div><span className="font-medium">EAN:</span> {selectedProduct.ean || selectedProduct.catalogProduct?.ean || '-'}</div>
+                  <div><span className="font-medium">Source:</span> {productSourceLabel(selectedProduct) || '-'}</div>
                   <div><span className="font-medium">Catalog category:</span> {productCategory(selectedProduct) || '[MISSING: catalog category]'}</div>
                   <div><span className="font-medium">Updated:</span> {formatDate(selectedProduct.updatedAt)}</div>
                 </div>
