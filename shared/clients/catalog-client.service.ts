@@ -3,6 +3,12 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { LoggerService } from '../logger/logger.service';
 
+export interface CatalogClientRequestOptions {
+  authorization?: string;
+  catalogScope?: 'own' | 'effective' | 'alfares' | 'community' | 'all';
+  catalogSources?: string | string[];
+}
+
 /**
  * API client for catalog-microservice
  * Fetches product data from the central catalog
@@ -24,15 +30,19 @@ export class CatalogClientService {
     this.timeout = parseInt(process.env.CATALOG_SERVICE_TIMEOUT || process.env.HTTP_TIMEOUT || '5000');
   }
 
-  private requestOptions(extra: Record<string, any> = {}): Record<string, any> {
+  private requestOptions(extra: Record<string, any> = {}, options: CatalogClientRequestOptions = {}): Record<string, any> {
     const internalToken = process.env.CATALOG_INTERNAL_SERVICE_TOKEN || process.env.INTERNAL_SERVICE_TOKEN;
     const headers: Record<string, any> = {
       ...(extra.headers || {}),
     };
+    const authorization = this.toAuthorizationHeader(options.authorization);
 
     if (internalToken) {
       headers['x-internal-service-token'] = internalToken;
       headers['x-service-name'] = this.serviceName;
+    }
+    if (authorization) {
+      headers.Authorization = authorization;
     }
 
     return {
@@ -40,6 +50,23 @@ export class CatalogClientService {
       ...extra,
       headers,
     };
+  }
+
+  private catalogAccessParams(options: CatalogClientRequestOptions): Record<string, string> {
+    const params: Record<string, string> = {};
+    if (options.catalogScope) {
+      params.catalogScope = options.catalogScope;
+    }
+    if (options.catalogSources) {
+      params.catalogSources = Array.isArray(options.catalogSources) ? options.catalogSources.join(',') : options.catalogSources;
+    }
+    return params;
+  }
+
+  private toAuthorizationHeader(value?: string): string | undefined {
+    const trimmed = value?.trim();
+    if (!trimmed) return undefined;
+    return /^Bearer\s+/i.test(trimmed) ? trimmed : `Bearer ${trimmed}`;
   }
 
   /**
@@ -60,10 +87,10 @@ export class CatalogClientService {
   /**
    * Get product by ID
    */
-  async getProductById(productId: string): Promise<any> {
+  async getProductById(productId: string, options: CatalogClientRequestOptions = {}): Promise<any> {
     try {
       const response = await firstValueFrom(
-        this.httpService.get(`${this.baseUrl}/api/products/${productId}`, this.requestOptions())
+        this.httpService.get(`${this.baseUrl}/api/products/${productId}`, this.requestOptions({ params: this.catalogAccessParams(options) }, options))
       );
       return response.data.data;
     } catch (error: any) {
@@ -120,6 +147,8 @@ export class CatalogClientService {
     categoryId?: string;
     page?: number;
     limit?: number;
+    catalogScope?: CatalogClientRequestOptions['catalogScope'];
+    catalogSources?: CatalogClientRequestOptions['catalogSources'];
   }): Promise<{ items: any[]; total: number; page: number; limit: number }> {
     try {
       const params = new URLSearchParams();
@@ -128,6 +157,8 @@ export class CatalogClientService {
       if (query.categoryId) params.append('categoryId', query.categoryId);
       if (query.page) params.append('page', String(query.page));
       if (query.limit) params.append('limit', String(query.limit));
+      if (query.catalogScope) params.append('catalogScope', query.catalogScope);
+      if (query.catalogSources) params.append('catalogSources', Array.isArray(query.catalogSources) ? query.catalogSources.join(',') : query.catalogSources);
 
       const response = await firstValueFrom(
         this.httpService.get(`${this.baseUrl}/api/products?${params.toString()}`, this.requestOptions())
@@ -213,10 +244,10 @@ export class CatalogClientService {
   /**
    * Get product pricing
    */
-  async getProductPricing(productId: string): Promise<any> {
+  async getProductPricing(productId: string, options: CatalogClientRequestOptions = {}): Promise<any> {
     try {
       const response = await firstValueFrom(
-        this.httpService.get(`${this.baseUrl}/api/pricing/product/${productId}/current`, this.requestOptions())
+        this.httpService.get(`${this.baseUrl}/api/pricing/product/${productId}/current`, this.requestOptions({}, options))
       );
       return response.data.data;
     } catch (error: any) {
@@ -282,10 +313,10 @@ export class CatalogClientService {
     }
   }
 
-  async getProductMarketplaceFields(productId: string, marketplace: string): Promise<any | null> {
+  async getProductMarketplaceFields(productId: string, marketplace: string, options: CatalogClientRequestOptions = {}): Promise<any | null> {
     try {
       const response = await firstValueFrom(
-        this.httpService.get(`${this.baseUrl}/api/products/${productId}/marketplace-fields/${marketplace}`, this.requestOptions())
+        this.httpService.get(`${this.baseUrl}/api/products/${productId}/marketplace-fields/${marketplace}`, this.requestOptions({}, options))
       );
       return response.data.data || response.data;
     } catch (error: any) {
@@ -298,10 +329,10 @@ export class CatalogClientService {
     }
   }
 
-  async getProductContentPreview(productId: string, marketplace: string): Promise<any | null> {
+  async getProductContentPreview(productId: string, marketplace: string, options: CatalogClientRequestOptions = {}): Promise<any | null> {
     try {
       const response = await firstValueFrom(
-        this.httpService.get(`${this.baseUrl}/api/products/${productId}/content-previews/${marketplace}`, this.requestOptions())
+        this.httpService.get(`${this.baseUrl}/api/products/${productId}/content-previews/${marketplace}`, this.requestOptions({}, options))
       );
       return response.data?.data || response.data || null;
     } catch (error: any) {

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import {
   allegroAccountApi,
+  CatalogProductSource,
   catalogProductsApi,
   catalogSellActionApi,
   PrepareCatalogSellActionPayload,
@@ -157,6 +158,21 @@ interface DraftForm {
 }
 
 const defaultPagination: Pagination = { page: 1, limit: 20, total: 0, totalPages: 1 };
+const catalogDashboardProductsUrl = 'https://catalog.alfares.cz/dashboard/products';
+const catalogDashboardNewProductUrl = 'https://catalog.alfares.cz/dashboard/products/new';
+const catalogDashboardSettingsUrl = 'https://catalog.alfares.cz/dashboard/settings';
+const catalogManagementLinks = [
+  { label: 'Manage products', href: catalogDashboardProductsUrl },
+  { label: 'Add product', href: catalogDashboardNewProductUrl },
+  { label: 'Source settings', href: catalogDashboardSettingsUrl },
+];
+const catalogSourceOptions: Array<{ value: CatalogProductSource; label: string; description: string }> = [
+  { value: 'own', label: 'Own / seller', description: 'Products owned by this account' },
+  { value: 'alfares', label: 'Alfares / company', description: 'Company catalog products available to sellers' },
+  { value: 'community', label: 'Community resale', description: 'Other sellers products shared for resale' },
+];
+const defaultCatalogSources = catalogSourceOptions.map((option) => option.value);
+const catalogLinkClass = 'inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500';
 
 const normalizePagination = (pagination?: CatalogProductsResponse['pagination']): Pagination => ({
   page: pagination?.page ?? defaultPagination.page,
@@ -211,6 +227,14 @@ const productSourceLabel = (product: CatalogProduct | null) => {
   if (ownerUserId === null) return 'Alfares catalog';
   if (resaleEnabled === true) return 'Community resale';
   return 'Seller catalog';
+};
+
+const productResaleLabel = (product: CatalogProduct | null) => {
+  if (!product) return '';
+  const resaleEnabled = product.resaleEnabled ?? product.catalogProduct?.resaleEnabled;
+  if (resaleEnabled === true) return 'Enabled for community resale';
+  if (resaleEnabled === false) return 'Not shared for resale';
+  return '[UNKNOWN: Catalog resale setting]';
 };
 
 const productPrice = (product: CatalogProduct | null) => {
@@ -368,6 +392,9 @@ const ProductsPage: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [accountSelectionLoaded, setAccountSelectionLoaded] = useState(false);
   const [hasPublishReadyAccount, setHasPublishReadyAccount] = useState(false);
+  const [selectedCatalogSources, setSelectedCatalogSources] = useState<CatalogProductSource[]>(defaultCatalogSources);
+  const [catalogSourceFilterSupported, setCatalogSourceFilterSupported] = useState<boolean | null>(null);
+  const selectedCatalogSourcesParam = useMemo(() => selectedCatalogSources.join(','), [selectedCatalogSources]);
 
   const selectedProduct = useMemo(
     () => products.find((product) => product.id === selectedId) || products[0] || null,
@@ -438,27 +465,80 @@ const ProductsPage: React.FC = () => {
     setError(null);
     setSuccess(null);
     try {
-      const res = await catalogProductsApi.getProducts({
+      const query = {
         page,
         limit: pagination.limit,
         search: search || undefined,
         includeRaw: true,
         catalogScope: 'effective',
-      });
-      const data = normalizeCatalogProductsResponse(res.data);
-      const nextProducts = data.items;
-      setProducts(nextProducts);
-      setPagination(data.pagination);
-      setSelectedId((current) => current && nextProducts.some((product) => product.id === current)
-        ? current
-        : nextProducts[0]?.id || null);
-      await Promise.all(nextProducts.slice(0, 8).map((product) => loadStatus(product.id)));
+        catalogSources: selectedCatalogSourcesParam || undefined,
+      } as const;
+      const applyProductResponse = async (body: unknown) => {
+        const data = normalizeCatalogProductsResponse(body);
+        const nextProducts = data.items;
+        setProducts(nextProducts);
+        setPagination(data.pagination);
+        setSelectedId((current) => current && nextProducts.some((product) => product.id === current)
+          ? current
+          : nextProducts[0]?.id || null);
+        await Promise.all(nextProducts.slice(0, 8).map((product) => loadStatus(product.id)));
+      };
+
+      const res = await catalogProductsApi.getProducts(query);
+      await applyProductResponse(res.data);
+      if (selectedCatalogSourcesParam) {
+        setCatalogSourceFilterSupported(true);
+      }
     } catch (err) {
+      const status = (err as AxiosError).response?.status;
+      const canRetryWithoutSourceFilter = Boolean(selectedCatalogSourcesParam) && (status === 400 || status === 422);
+      if (canRetryWithoutSourceFilter) {
+        try {
+          const res = await catalogProductsApi.getProducts({
+            page,
+            limit: pagination.limit,
+            search: search || undefined,
+            includeRaw: true,
+            catalogScope: 'effective',
+          });
+          const data = normalizeCatalogProductsResponse(res.data);
+          const nextProducts = data.items;
+          setProducts(nextProducts);
+          setPagination(data.pagination);
+          setSelectedId((current) => current && nextProducts.some((product) => product.id === current)
+            ? current
+            : nextProducts[0]?.id || null);
+          await Promise.all(nextProducts.slice(0, 8).map((product) => loadStatus(product.id)));
+          setCatalogSourceFilterSupported(false);
+          setError('Catalog source filters are not available through this Allegro API yet, so the effective Catalog list is shown. Manage source and resale settings in Catalog Dashboard.');
+          return;
+        } catch (fallbackErr) {
+          setError(getErrorMessage(fallbackErr, 'Failed to load catalog products'));
+          return;
+        }
+      }
       setError(getErrorMessage(err, 'Failed to load catalog products'));
     } finally {
       setLoading(false);
     }
-  }, [loadStatus, pagination.limit, search]);
+  }, [loadStatus, pagination.limit, search, selectedCatalogSourcesParam]);
+
+  const toggleCatalogSource = (source: CatalogProductSource) => {
+    setSelectedCatalogSources((current) => {
+      if (current.includes(source)) {
+        return current.length === 1 ? current : current.filter((value) => value !== source);
+      }
+      return [...current, source];
+    });
+  };
+
+  const reloadWithSource = (source: CatalogProductSource) => {
+    setSelectedCatalogSources([source]);
+  };
+
+  const resetCatalogSources = () => {
+    setSelectedCatalogSources(defaultCatalogSources);
+  };
 
   useEffect(() => {
     loadAccountReadiness();
@@ -599,9 +679,16 @@ const ProductsPage: React.FC = () => {
             Select a product card, prepare a local Allegro draft, review editable fields, then confirm explicitly. No autonomous publish happens from this screen.
           </p>
         </div>
-        <Button variant="secondary" onClick={() => loadProducts(pagination.page)} disabled={loading}>
-          {loading ? 'Refreshing...' : 'Refresh catalog'}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {catalogManagementLinks.map((link) => (
+            <a key={link.href} href={link.href} target="_blank" rel="noreferrer" className={catalogLinkClass}>
+              {link.label}
+            </a>
+          ))}
+          <Button variant="secondary" onClick={() => loadProducts(pagination.page)} disabled={loading}>
+            {loading ? 'Refreshing...' : 'Refresh catalog'}
+          </Button>
+        </div>
       </div>
 
       {accountSelectionLoaded && !hasPublishReadyAccount && (
@@ -650,6 +737,49 @@ const ProductsPage: React.FC = () => {
             <Button variant="secondary" onClick={() => loadProducts(1)} disabled={loading}>
               Apply
             </Button>
+          </div>
+
+          <div className="mt-4 rounded-md border border-gray-200 bg-gray-50 p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-700">Catalog source filters</h3>
+                <p className="mt-1 text-sm text-gray-600">
+                  {catalogSourceFilterSupported === false
+                    ? 'This API is showing the effective Catalog list because catalogSources was not accepted.'
+                    : 'Selected sources load through Catalog effective access.'}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className={catalogLinkClass} onClick={resetCatalogSources}>
+                  All sources
+                </button>
+                {catalogSourceOptions.map((option) => (
+                  <button key={option.value} type="button" className={catalogLinkClass} onClick={() => reloadWithSource(option.value)}>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mt-3 grid gap-2 md:grid-cols-3">
+              {catalogSourceOptions.map((option) => (
+                <label key={option.value} className="flex gap-3 rounded-md border border-gray-200 bg-white p-3 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={selectedCatalogSources.includes(option.value)}
+                    onChange={() => toggleCatalogSource(option.value)}
+                    disabled={selectedCatalogSources.length === 1 && selectedCatalogSources.includes(option.value)}
+                  />
+                  <span>
+                    <span className="block font-medium text-gray-900">{option.label}</span>
+                    <span className="block text-xs text-gray-500">{option.description}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              Resale publication is controlled in Catalog Dashboard for owner products. [MISSING: local Allegro resale mutation path]
+            </div>
           </div>
 
           <div className="mt-5 space-y-6">
@@ -725,12 +855,21 @@ const ProductsPage: React.FC = () => {
                   <div><span className="font-medium">Brand:</span> {selectedProduct.brand || selectedProduct.catalogProduct?.brand || '-'}</div>
                   <div><span className="font-medium">EAN:</span> {selectedProduct.ean || selectedProduct.catalogProduct?.ean || '-'}</div>
                   <div><span className="font-medium">Source:</span> {productSourceLabel(selectedProduct) || '-'}</div>
+                  <div><span className="font-medium">Resale:</span> {productResaleLabel(selectedProduct) || '-'}</div>
                   <div><span className="font-medium">Catalog category:</span> {productCategory(selectedProduct) || '[MISSING: catalog category]'}</div>
                   <div><span className="font-medium">Updated:</span> {formatDate(selectedProduct.updatedAt)}</div>
                 </div>
-                <Button variant="secondary" size="small" onClick={refreshSelectedStatus} disabled={statusLoading}>
-                  {statusLoading ? 'Checking...' : 'Refresh publish status'}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="secondary" size="small" onClick={refreshSelectedStatus} disabled={statusLoading}>
+                    {statusLoading ? 'Checking...' : 'Refresh publish status'}
+                  </Button>
+                  <a href={catalogDashboardProductsUrl} target="_blank" rel="noreferrer" className={catalogLinkClass}>
+                    Manage in Catalog
+                  </a>
+                  <a href={catalogDashboardSettingsUrl} target="_blank" rel="noreferrer" className={catalogLinkClass}>
+                    Resale settings
+                  </a>
+                </div>
                 {selectedStatusError && (
                   <div className="rounded border border-red-200 bg-red-50 p-2 text-red-700">
                     Draft controls are disabled because the product-scoped Allegro sell-action endpoint is not reachable: {selectedStatusError}

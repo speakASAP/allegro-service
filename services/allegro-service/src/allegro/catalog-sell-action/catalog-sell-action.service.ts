@@ -1,5 +1,5 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
-import { CatalogClientService, LoggerService, PrismaService, WarehouseClientService } from '@allegro/shared';
+import { CatalogClientRequestOptions, CatalogClientService, LoggerService, PrismaService, WarehouseClientService } from '@allegro/shared';
 import { OffersService } from '../offers/offers.service';
 import { PublishLifecycleService } from '../publish-lifecycle/publish-lifecycle.service';
 import { BulkPrepareCatalogSellActionDto, PrepareCatalogSellActionDto } from './catalog-sell-action.dto';
@@ -39,8 +39,9 @@ export class CatalogSellActionService {
     this.logger.setContext('CatalogSellActionService');
   }
 
-  async prepare(dto: PrepareCatalogSellActionDto, requestedByUserId: string): Promise<any> {
-    const catalogProduct = await this.loadCatalogProduct(dto.catalogProductId);
+  async prepare(dto: PrepareCatalogSellActionDto, requestedByUserId: string, humanAuthorization?: string): Promise<any> {
+    const catalogAccess = this.catalogAccessOptions(humanAuthorization);
+    const catalogProduct = await this.loadCatalogProduct(dto.catalogProductId, catalogAccess);
     const accountChoices = await this.listAccountChoices(requestedByUserId);
     const selectedAccountId = dto.accountId || accountChoices[0]?.id || null;
 
@@ -92,12 +93,12 @@ export class CatalogSellActionService {
     };
   }
 
-  async bulkPrepare(dto: BulkPrepareCatalogSellActionDto, requestedByUserId: string): Promise<any> {
+  async bulkPrepare(dto: BulkPrepareCatalogSellActionDto, requestedByUserId: string, humanAuthorization?: string): Promise<any> {
     const results = [] as any[];
     const perAccountCount = new Map<string, number>();
 
     for (const item of dto.items) {
-      const prepared = await this.prepare(item, requestedByUserId);
+      const prepared = await this.prepare(item, requestedByUserId, humanAuthorization);
       const accountKey = prepared.attempt.accountId || 'no-account';
       const slotOffsetSeconds = perAccountCount.get(accountKey) || 0;
       perAccountCount.set(accountKey, slotOffsetSeconds + 1);
@@ -145,11 +146,11 @@ export class CatalogSellActionService {
     };
   }
 
-  async getProductStatus(catalogProductId: string, requestedByUserId: string): Promise<any> {
+  async getProductStatus(catalogProductId: string, requestedByUserId: string, humanAuthorization?: string): Promise<any> {
     const accountChoices = await this.listAccountChoices(requestedByUserId);
     const accountIds = accountChoices.map((account) => account.id).filter(Boolean);
     const prismaAny = this.prisma as any;
-    const catalogProduct = await this.loadCatalogProduct(catalogProductId).catch((error) => {
+    const catalogProduct = await this.loadCatalogProduct(catalogProductId, this.catalogAccessOptions(humanAuthorization)).catch((error) => {
       this.logger.warn('Failed to load catalog product while reading Allegro sell-action status', {
         catalogProductId,
         error: error.message,
@@ -186,8 +187,9 @@ export class CatalogSellActionService {
     };
   }
 
-  async updateProductDraft(catalogProductId: string, dto: PrepareCatalogSellActionDto, requestedByUserId: string): Promise<any> {
-    const current = await this.getProductStatus(catalogProductId, requestedByUserId);
+  async updateProductDraft(catalogProductId: string, dto: PrepareCatalogSellActionDto, requestedByUserId: string, humanAuthorization?: string): Promise<any> {
+    const catalogAccess = this.catalogAccessOptions(humanAuthorization);
+    const current = await this.getProductStatus(catalogProductId, requestedByUserId, humanAuthorization);
     const draftId = dto.offerId || current.draft?.id;
     if (!draftId) {
       throw new HttpException('Prepare an Allegro draft before editing the product presentation', HttpStatus.CONFLICT);
@@ -195,7 +197,7 @@ export class CatalogSellActionService {
 
     const updatePayload = this.toDraftUpdatePayload(dto);
     if (dto.quantity !== undefined) {
-      const catalogProduct = await this.loadCatalogProduct(catalogProductId);
+      const catalogProduct = await this.loadCatalogProduct(catalogProductId, catalogAccess);
       const requestedQuantity = this.toNonNegativeNumber(dto.quantity, 0);
       const safeQuantity = this.capQuantityToWarehouse(requestedQuantity, catalogProduct.warehouseAvailable);
       updatePayload.quantity = safeQuantity;
@@ -221,8 +223,8 @@ export class CatalogSellActionService {
     };
   }
 
-  async confirmProductPublish(catalogProductId: string, requestedByUserId: string, previewToken: string): Promise<any> {
-    const current = await this.getProductStatus(catalogProductId, requestedByUserId);
+  async confirmProductPublish(catalogProductId: string, requestedByUserId: string, previewToken: string, humanAuthorization?: string): Promise<any> {
+    const current = await this.getProductStatus(catalogProductId, requestedByUserId, humanAuthorization);
     if (!current.attempt?.id) {
       throw new HttpException('Prepare an Allegro publish attempt before confirmation', HttpStatus.CONFLICT);
     }
@@ -239,10 +241,17 @@ export class CatalogSellActionService {
     };
   }
 
-  private async loadCatalogProduct(catalogProductId: string): Promise<any> {
+  private catalogAccessOptions(humanAuthorization?: string): CatalogClientRequestOptions {
+    return {
+      authorization: humanAuthorization,
+      catalogScope: 'effective',
+    };
+  }
+
+  private async loadCatalogProduct(catalogProductId: string, catalogAccess: CatalogClientRequestOptions = { catalogScope: 'effective' }): Promise<any> {
     try {
-      const catalogProduct = await this.catalogClient.getProductById(catalogProductId);
-      return await this.enrichCatalogProductForAllegro(catalogProduct);
+      const catalogProduct = await this.catalogClient.getProductById(catalogProductId, catalogAccess);
+      return await this.enrichCatalogProductForAllegro(catalogProduct, catalogAccess);
     } catch (error: any) {
       throw new HttpException(
         `Failed to load catalog product ${catalogProductId}: ${error.message}`,
@@ -251,13 +260,13 @@ export class CatalogSellActionService {
     }
   }
 
-  private async enrichCatalogProductForAllegro(catalogProduct: any): Promise<any> {
+  private async enrichCatalogProductForAllegro(catalogProduct: any, catalogAccess: CatalogClientRequestOptions = {}): Promise<any> {
     let marketplaceFields: any = null;
     let currentPricing: any = null;
     let contentPreview: CatalogContentPreview | null = null;
 
     try {
-      marketplaceFields = await this.catalogClient.getProductMarketplaceFields(catalogProduct.id, 'allegro');
+      marketplaceFields = await this.catalogClient.getProductMarketplaceFields(catalogProduct.id, 'allegro', catalogAccess);
     } catch (error: any) {
       this.logger.warn('Failed to load Allegro marketplace fields for catalog sell-action', {
         catalogProductId: catalogProduct.id,
@@ -266,7 +275,7 @@ export class CatalogSellActionService {
     }
 
     try {
-      currentPricing = await this.catalogClient.getProductPricing(catalogProduct.id);
+      currentPricing = await this.catalogClient.getProductPricing(catalogProduct.id, catalogAccess);
     } catch (error: any) {
       this.logger.warn('Failed to load Catalog pricing for catalog sell-action', {
         catalogProductId: catalogProduct.id,
@@ -277,7 +286,7 @@ export class CatalogSellActionService {
     try {
       const getContentPreview = (this.catalogClient as any).getProductContentPreview;
       if (typeof getContentPreview === 'function') {
-        contentPreview = await getContentPreview.call(this.catalogClient, catalogProduct.id, 'allegro');
+        contentPreview = await getContentPreview.call(this.catalogClient, catalogProduct.id, 'allegro', catalogAccess);
       }
     } catch (error: any) {
       this.logger.warn('Failed to load Allegro canonical content preview for catalog sell-action', {

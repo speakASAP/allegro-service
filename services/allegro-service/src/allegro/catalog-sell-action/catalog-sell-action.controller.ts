@@ -3,6 +3,12 @@ import { JwtAuthGuard } from '@allegro/shared';
 import { BulkPrepareCatalogSellActionDto, ConfirmCatalogSellActionDto, PrepareCatalogSellActionDto } from './catalog-sell-action.dto';
 import { CatalogSellActionService } from './catalog-sell-action.service';
 
+const humanAuthorizationHeader = (req: any): string | undefined => {
+  const value = req.headers?.authorization || req.headers?.Authorization;
+  if (Array.isArray(value)) return value[0];
+  return typeof value === 'string' ? value : undefined;
+};
+
 @Controller('allegro/catalog-sell')
 @UseGuards(JwtAuthGuard)
 export class CatalogSellActionController {
@@ -11,14 +17,14 @@ export class CatalogSellActionController {
   @Post('prepare')
   async prepare(@Body() dto: PrepareCatalogSellActionDto, @Request() req: any): Promise<{ success: boolean; data: any }> {
     const userId = String(req.user?.id || req.user?.sub || 'unknown');
-    const data = await this.catalogSellActionService.prepare(dto, userId);
+    const data = await this.catalogSellActionService.prepare(dto, userId, humanAuthorizationHeader(req));
     return { success: true, data };
   }
 
   @Post('bulk-prepare')
   async bulkPrepare(@Body() dto: BulkPrepareCatalogSellActionDto, @Request() req: any): Promise<{ success: boolean; data: any }> {
     const userId = String(req.user?.id || req.user?.sub || 'unknown');
-    const data = await this.catalogSellActionService.bulkPrepare(dto, userId);
+    const data = await this.catalogSellActionService.bulkPrepare(dto, userId, humanAuthorizationHeader(req));
     return { success: true, data };
   }
 
@@ -28,7 +34,7 @@ export class CatalogSellActionController {
     @Request() req: any,
   ): Promise<{ success: boolean; data: any }> {
     const userId = String(req.user?.id || req.user?.sub || 'unknown');
-    const data = await this.catalogSellActionService.getProductStatus(catalogProductId, userId);
+    const data = await this.catalogSellActionService.getProductStatus(catalogProductId, userId, humanAuthorizationHeader(req));
     return { success: true, data };
   }
 
@@ -39,7 +45,7 @@ export class CatalogSellActionController {
     @Request() req: any,
   ): Promise<{ success: boolean; data: any }> {
     const userId = String(req.user?.id || req.user?.sub || 'unknown');
-    const data = await this.catalogSellActionService.updateProductDraft(catalogProductId, dto, userId);
+    const data = await this.catalogSellActionService.updateProductDraft(catalogProductId, dto, userId, humanAuthorizationHeader(req));
     return { success: true, data };
   }
 
@@ -50,7 +56,7 @@ export class CatalogSellActionController {
     @Request() req: any,
   ): Promise<{ success: boolean; data: any }> {
     const userId = String(req.user?.id || req.user?.sub || 'unknown');
-    const data = await this.catalogSellActionService.confirmProductPublish(catalogProductId, userId, dto.previewToken);
+    const data = await this.catalogSellActionService.confirmProductPublish(catalogProductId, userId, dto.previewToken, humanAuthorizationHeader(req));
     return { success: true, data };
   }
 

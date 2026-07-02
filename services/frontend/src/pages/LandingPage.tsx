@@ -9,18 +9,18 @@ import { Button } from '../components/Button';
 const workflowSteps = [
   {
     label: '1',
-    title: 'Založte si účet',
-    copy: 'Použijte účet Alfares a vstupte do hlídaného pracovního prostoru pro prodej na Allegro.',
+    title: 'Připojte účet a přístup na Allegro',
+    copy: 'Zákazník spravuje svůj Alfares účet, připojí marketplace přístup a drží kontrolu nad tím, pod jakým účtem se nabídky připravují.',
   },
   {
     label: '2',
-    title: 'Vyberte produkty z katalogu',
-    copy: 'Začněte u produktů, které už jsou v katalogu. Před jakoukoli akcí na tržišti vidíte obrázky, skladové informace, ceny i poznámky prodejce.',
+    title: 'Vyberte zdroj produktů',
+    copy: 'Prodávejte Alfares nebo firemní dodavatelské zboží se slevou, vlastní produkty, nebo dostupné položky od dalších uživatelů a ze sdíleného katalogu.',
   },
   {
     label: '3',
-    title: 'Připravte návrh nabídky',
-    copy: 'Vytvořte zkontrolovaný návrh nabídky pro Allegro místo odesílání neúplných produktových dat přímo na tržiště.',
+    title: 'Nechte Alfares připravit nabídky',
+    copy: 'Automatizace sestaví listingy, doplní marketplace a účetní kontext, zkontroluje cenu, sklad, obrázky, popisy a povinná pole pro Allegro.',
   },
   {
     label: '4',
@@ -29,21 +29,36 @@ const workflowSteps = [
   },
   {
     label: '5',
-    title: 'Publikaci potvrďte ručně',
-    copy: 'Publikace je vědomé rozhodnutí uživatele. Služba drží cestu z katalogu na Allegro pod kontrolou a zastaví se tam, kde je potřeba lidské rozhodnutí.',
+    title: 'Prodávejte a řešte objednávky',
+    copy: 'Alfares pomáhá s publikací, platbami a objednávkami tam, kde to napojení dovoluje; zákazník spravuje sortiment, prodej a expedici.',
   },
   {
     label: '6',
-    title: 'Sledujte stav a objednávky',
-    copy: 'V jednom provozním panelu sledujte stav na tržišti, blokované nebo čekající položky, signály objednávek a návazné kroky.',
+    title: 'Sledujte stav a navazujte prodej',
+    copy: 'V jednom provozním panelu sledujte aktivní nabídky, blokované položky, signály objednávek, dostupnost a další kroky pro opakovaný prodej.',
+  },
+];
+
+const salesSources = [
+  {
+    title: 'Dodavatelské produkty Alfares',
+    copy: 'Prodávejte zboží od Alfares nebo firemních dodavatelů za zvýhodněných podmínek a použijte Allegro jako prodejní kanál.',
+  },
+  {
+    title: 'Vlastní produkty zákazníka',
+    copy: 'Vložte nebo vyberte vlastní sortiment a publikujte ho přes hlídaný pracovní postup bez ztráty kontroly nad obsahem.',
+  },
+  {
+    title: 'Sdílený katalog a produkty uživatelů',
+    copy: 'Resellujte dostupné položky od dalších uživatelů nebo ze sdíleného katalogu, pokud jsou pro váš účet a tržiště zpřístupněné.',
   },
 ];
 
 const guardrails = [
   'Připravenost Allegro účtu a OAuth je viditelná před akcemi na tržišti.',
-  'Kontrola pravidel, povinných dat a připravenosti nabídky probíhá před potvrzením.',
-  'Výběr z katalogu, příprava návrhu, potvrzení publikace a monitoring zůstávají oddělené.',
-  'Po spuštění nabídek se sleduje stav publikace i objednávky.',
+  'Kontrola pravidel, povinných dat, cen, skladů a připravenosti nabídky probíhá před potvrzením.',
+  'Výběr sortimentu, příprava návrhu, publikace, platby, objednávky a expedice mají jasné odpovědnosti.',
+  'Alfares automatizuje listingy, marketplace/account populaci a provozní signály; zákazník spravuje produkty, přístup, prodej a odeslání.',
 ];
 
 const LandingPage: React.FC = () => {
@@ -76,10 +91,10 @@ const LandingPage: React.FC = () => {
             <div>
               <p className="mb-4 text-sm font-semibold uppercase tracking-widest text-orange-300">Služba pro prodej na Allegro</p>
               <h1 className="max-w-4xl text-4xl font-bold leading-tight tracking-normal sm:text-5xl lg:text-6xl">
-                Připravujte katalogové produkty pro Allegro s kontrolou před každou publikací.
+                Prodávejte na Allegro vlastní produkty, dodavatelské zboží i sdílený katalog přes Alfares.
               </h1>
               <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
-                Alfares Allegro pomáhá prodejcům přejít od výběru produktu z katalogu k přípravě návrhu nabídky, kontrole připravenosti, ručnímu potvrzení publikace a sledování stavu nebo objednávek bez automatického publikování bez dohledu.
+                Alfares Allegro pomáhá zákazníkům prodávat zlevněné produkty Alfares a firemních dodavatelů, publikovat vlastní sortiment a resellovat dostupné položky od dalších uživatelů nebo ze sdíleného katalogu. Alfares automatizuje listingy, naplnění marketplace účtu, platby a objednávky tam, kde je napojení dostupné; zákazník spravuje produkty, připojuje marketplace přístup, prodává a expeduje.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Link to="/register">
@@ -140,12 +155,31 @@ const LandingPage: React.FC = () => {
           </div>
         </section>
 
+        <section className="bg-white py-16" id="sales-sources">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="max-w-3xl">
+              <h2 className="text-3xl font-bold tracking-normal text-slate-950">Tři zdroje sortimentu pro jeden prodejní kanál</h2>
+              <p className="mt-4 text-lg leading-8 text-slate-600">
+                Zákazník si vybírá, co chce prodávat. Alfares připraví marketplace data, udrží provozní kontroly a naváže objednávky na další práci.
+              </p>
+            </div>
+            <div className="mt-10 grid gap-4 md:grid-cols-3">
+              {salesSources.map((source) => (
+                <article key={source.title} className="rounded-lg border border-slate-200 bg-slate-50 p-6">
+                  <h3 className="text-xl font-semibold text-slate-950">{source.title}</h3>
+                  <p className="mt-3 leading-7 text-slate-600">{source.copy}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
         <section className="bg-slate-50 py-16" id="workflow">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="max-w-3xl">
-              <h2 className="text-3xl font-bold tracking-normal text-slate-950">Hlídaný postup z katalogu na Allegro</h2>
+              <h2 className="text-3xl font-bold tracking-normal text-slate-950">Hlídaný postup od zdroje produktu k prodeji na Allegro</h2>
               <p className="mt-4 text-lg leading-8 text-slate-600">
-                Služba je postavená na jasných rozhodnutích prodejce a kontrolách připravenosti, ne na publikování na pozadí bez revize.
+                Služba je postavená na jasném rozdělení práce: Alfares automatizuje přípravu a provozní tok, zákazník rozhoduje o sortimentu, přístupech, prodeji a expedici.
               </p>
             </div>
             <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -216,7 +250,7 @@ const LandingPage: React.FC = () => {
       <footer className="bg-white py-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
           <span className="font-semibold text-slate-700">Alfares Allegro</span>
-          <span>Hlídaný postup pro prodejce na Allegro s produkty z katalogu.</span>
+          <span>Prodej na Allegro z vlastních produktů, dodavatelských slev a sdíleného katalogu.</span>
         </div>
       </footer>
     </div>
