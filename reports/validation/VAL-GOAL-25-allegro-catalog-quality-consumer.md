@@ -2,7 +2,7 @@
 
 ```yaml
 id: VAL-GOAL-25-ALLEGRO-CATALOG-QUALITY-CONSUMER
-status: source-validated-no-deploy
+status: source-validated-deploy-rollout-blocked
 created: 2026-07-02
 last_updated: 2026-07-02
 repository: /home/ssf/Documents/Github/allegro
@@ -34,7 +34,7 @@ Code:
 - `services/frontend/src/pages/ProductsPage.tsx`
 - focused specs under the same Allegro modules
 
-Validation: focused specs, shared build, Allegro service build, frontend build, and diff check passed.
+Validation: focused specs, shared build, Allegro service build, frontend build, diff check passed; approved deploy built/pushed images and applied manifests, then timed out during Kubernetes rollout while new pods remained ContainerCreating.
 
 ## Implementation Summary
 
@@ -93,9 +93,23 @@ Merge order: single batch.
 
 ## Blockers And Unknowns
 
-- `[UNKNOWN: runtime deploy result]` no deploy was requested or run.
+- `[BLOCKED: Kubernetes rollout incomplete]` approved deploy attempt built and pushed image tag `2e365ac`, applied manifests, and updated deployment templates, but `./scripts/deploy.sh` exited 1 after rollout timeout. New Allegro pods for service, API gateway, settings, imports, and frontend remained `ContainerCreating` while old `087eec8` pods stayed ready. Events only showed local-registry image pulls, not application crashes.
 - `[UNKNOWN: live Catalog runtime response shape]` source validation used the current Catalog source contract and Allegro synthetic tests; no live authenticated smoke was run.
+
+## Deploy Attempt Evidence
+
+```bash
+./scripts/deploy.sh
+# Built service, API gateway, settings, imports, and frontend images with tag 2e365ac.
+# Pushed all 2e365ac and latest tags to localhost:5000.
+# Applied Kubernetes manifests and set deployment images.
+# Exited 1 after rollout timeout: old replicas pending termination, new 2e365ac pods ContainerCreating.
+
+kubectl get pod -n statex-apps -l "app in (allegro-service,allegro-api-gateway,allegro-settings,allegro-imports,allegro-frontend)"
+# Old 087eec8 pods remained Running/ready.
+# New 2e365ac pods remained Pending/ContainerCreating.
+```
 
 ## Handoff
 
-Worktree is intentionally dirty with source changes only. Build outputs are ignored by git. No commit, push, or deploy was run.
+Goal 25 source changes are committed as `2e365ac feat: consume catalog quality blockers` and present on `origin/main`. Approved deploy was attempted but did not complete rollout. No rollback or destructive action was run.
