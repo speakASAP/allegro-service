@@ -117,6 +117,20 @@ Catalog Goal 25 added marketplace-field manual/stale propagation metadata. Alleg
 - `cd services/allegro-service && LOGGING_SERVICE_URL=http://logging-microservice:3367 npm run build`: PASS.
 - `cd services/frontend && npm run build`: PASS with existing Vite CJS/Browserslist/Baseline warnings only.
 
+
+### Runtime Deploy Evidence
+
+- `./scripts/deploy.sh`: built and applied Allegro images tagged `087eec8`; the first rollout wait was interrupted by a k3s datastore/runtime backlog.
+- k3s recovery evidence: after owner restart, `kubectl get deployment allegro-service allegro-api-gateway allegro-frontend allegro-settings allegro-imports -n statex-apps -o wide` showed all five deployments `1/1` on `localhost:5000/allegro-*:087eec8`.
+- `kubectl rollout status deployment/{allegro-service,allegro-api-gateway,allegro-frontend,allegro-settings,allegro-imports} -n statex-apps --timeout=120s`: PASS for all five deployments.
+- `curl -i -sS -m 15 https://allegro.alfares.cz/health`: HTTP 200, `{"status":"ok","service":"allegro-service"}`.
+- `curl -i -sS -m 15 https://allegro.alfares.cz/`: HTTP 200, SPA shell served.
+- Frontend bundle smoke: deployed JS contains `Manual override`, `Source changed`, and `Review required` markers.
+
+### Runtime Blocker Resolved
+
+During deploy, the single-node k3s control plane reported `database is locked`, lease update timeouts, and EndpointSlice update timeouts; Allegro pods remained in `ContainerCreating` with empty endpoints. After the owner restarted k3s, the rollout recovered without additional code changes.
+
 ### Boundary Decision
 
 This continuation is read/review metadata only. It does not disable confirm, change preview-token requirements, enqueue publish work, call external Allegro APIs, mutate Catalog, mutate Warehouse, mutate Orders, run migrations, print tokens, or deploy.

@@ -26,6 +26,7 @@ Owner created TASK-009 runtime/UI implementation goal on 2026-06-27.
 - 2026-06-30 TASK-011 catalog canonical content preview connector validated: Catalog content previews feed local Allegro draft descriptions and ProductsPage evidence while publish confirmation remains preview-token-gated. Strict audit, pre-coding gate, targeted spec, backend build, frontend build, and diff check passed without deploy.
 
 - 2026-07-02 TASK-011 Goal 25 manual review metadata adopted: catalog-sell-action now passes Catalog manual/stale/review metadata through preview responses and ProductsPage renders Manual override, Source changed, and Review required badges without changing publish confirmation behavior.
+- 2026-07-02 TASK-011 Goal 25 manual review metadata deployed: Allegro services rolled out image 087eec8 after k3s recovery; /health and root SPA smoke returned HTTP 200 and frontend bundle contains Manual override, Source changed, and Review required markers.
 
 ## Project Completion Marker
 
