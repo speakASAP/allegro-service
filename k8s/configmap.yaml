@@ -22,7 +22,7 @@ data:
   DB_SYNC: "false"
   DB_AUTO_CREATE: "true"
   LOGGING_SERVICE_URL: "http://logging-microservice:3367"
-  RABBITMQ_URL: "amqp://guest:guest@statex_rabbitmq:5672"
+  RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672"
   CATALOG_EVENTS_EXCHANGE: "catalog.events"
   CATALOG_EVENTS_QUEUE: "catalog.allegro-service"
   CATALOG_EVENTS_ROUTING_KEYS: "catalog.product.archived.v1,catalog.product.deleted.v1,catalog.product.sellability_changed.v1"
