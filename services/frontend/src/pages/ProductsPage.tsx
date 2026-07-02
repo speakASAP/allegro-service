@@ -133,6 +133,23 @@ interface CatalogContentPreview {
   } | null;
   overridesApplied?: boolean;
   warnings?: string[];
+  manualOverride?: boolean;
+  stale?: boolean;
+  requiresManualReview?: boolean;
+  propagation?: {
+    status?: string | null;
+    staleManualFields?: string[];
+  };
+  profile?: {
+    manualOverrides?: Record<string, unknown>;
+    sourceState?: Record<string, unknown>;
+  } | null;
+  fields?: Array<{
+    key?: string | null;
+    manualOverride?: boolean;
+    stale?: boolean;
+    requiresManualReview?: boolean;
+  }>;
 }
 
 interface CatalogSellStatus {
@@ -318,6 +335,26 @@ const contentPreviewDescription = (preview?: CatalogContentPreview | null) => {
   return '';
 };
 
+const contentPreviewReview = (preview?: CatalogContentPreview | null) => {
+  const staleManualFields = Array.isArray(preview?.propagation?.staleManualFields)
+    ? preview?.propagation?.staleManualFields.filter(Boolean)
+    : [];
+  const manualOverrideCount = Object.keys(preview?.profile?.manualOverrides || {}).length
+    + (Array.isArray(preview?.fields) ? preview.fields.filter((field) => field.manualOverride).length : 0);
+  const staleCount = staleManualFields.length
+    + (Array.isArray(preview?.fields) ? preview.fields.filter((field) => field.stale || field.requiresManualReview).length : 0);
+  return {
+    staleManualFields,
+    manualOverrideCount,
+    staleCount,
+    requiresManualReview: preview?.requiresManualReview === true
+      || preview?.propagation?.status === 'manual_review_required'
+      || staleCount > 0,
+    hasManualOverride: preview?.manualOverride === true || manualOverrideCount > 0,
+    stale: preview?.stale === true || staleCount > 0,
+  };
+};
+
 const imageUrl = (image: ProductImage | undefined) => {
   if (!image) return '';
   return typeof image === 'string' ? image : image.url || image.src || image.path || '';
@@ -458,6 +495,7 @@ const ProductsPage: React.FC = () => {
   const selectedResaleUpdating = Boolean(selectedProduct && resaleUpdatingId === selectedProduct.id);
   const selectedContentPreview = selectedStatus?.catalogContentPreview || null;
   const selectedContentPreviewDescription = contentPreviewDescription(selectedContentPreview);
+  const selectedContentPreviewReview = contentPreviewReview(selectedContentPreview);
   const accountChoices = selectedStatus?.accountChoices || [];
   const sellActionUnavailable = Boolean(selectedStatusError);
   const hasPreparedDraft = Boolean(selectedStatus?.draft?.id);
@@ -1049,6 +1087,22 @@ const ProductsPage: React.FC = () => {
                       Use preview
                     </Button>
                   </div>
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {selectedContentPreviewReview.hasManualOverride && (
+                      <span className="rounded-full bg-blue-50 px-2 py-1 font-medium text-blue-700">Manual override</span>
+                    )}
+                    {selectedContentPreviewReview.stale && (
+                      <span className="rounded-full bg-amber-50 px-2 py-1 font-medium text-amber-700">Source changed</span>
+                    )}
+                    {selectedContentPreviewReview.requiresManualReview && (
+                      <span className="rounded-full bg-red-50 px-2 py-1 font-medium text-red-700">Review required</span>
+                    )}
+                  </div>
+                  {selectedContentPreviewReview.requiresManualReview && (
+                    <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                      Catalog source changed after manual Allegro edits. Review these fields before publishing: {selectedContentPreviewReview.staleManualFields.length ? selectedContentPreviewReview.staleManualFields.join(', ') : 'manual marketplace fields'}.
+                    </div>
+                  )}
                   {selectedContentPreview.content?.title && (
                     <div className="font-medium text-gray-900">{selectedContentPreview.content.title}</div>
                   )}

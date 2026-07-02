@@ -96,3 +96,27 @@ TASK-011 traces to FEAT-011 and GOAL-IMPACT-TASK-011, preserves the Allegro
 publish ownership boundary, and records implementation evidence through the
 execution plan, coding prompt, code changes, targeted spec, builds, IPS gates,
 and this validation report.
+
+## 2026-07-02 Goal 25 Manual Review Metadata Continuation
+
+Catalog Goal 25 added marketplace-field manual/stale propagation metadata. Allegro now consumes that metadata in the existing catalog-sell-action preview surface without changing publish ownership.
+
+### Additional Criteria Checked
+
+| Criterion | Result | Evidence |
+|---|---|---|
+| Manual/stale metadata passes through preview response | Pass | `catalogContentPreview` includes `manualOverride`, `stale`, `requiresManualReview`, `propagation.staleManualFields`, `profile.manualOverrides`, `profile.sourceState`, and normalized field review flags. |
+| Local draft evidence records review metadata | Pass | Targeted `catalog-sell-action.spec.ts` asserts rawData `catalogSnapshot.contentPreview.requiresManualReview` and `propagation.staleManualFields`. |
+| ProductsPage surfaces review state | Pass | Catalog connector preview renders Manual override, Source changed, and Review required badges plus stale field names. |
+| Publish/queue behavior unchanged | Pass | No confirm, queue, publish lifecycle, executor, Allegro API, Orders, Warehouse, or payment behavior was changed. |
+
+### Additional Validation Evidence
+
+- `git diff --check`: PASS.
+- `LOGGING_SERVICE_URL=http://logging-microservice:3367 npx ts-node services/allegro-service/src/allegro/catalog-sell-action/catalog-sell-action.spec.ts`: PASS.
+- `cd services/allegro-service && LOGGING_SERVICE_URL=http://logging-microservice:3367 npm run build`: PASS.
+- `cd services/frontend && npm run build`: PASS with existing Vite CJS/Browserslist/Baseline warnings only.
+
+### Boundary Decision
+
+This continuation is read/review metadata only. It does not disable confirm, change preview-token requirements, enqueue publish work, call external Allegro APIs, mutate Catalog, mutate Warehouse, mutate Orders, run migrations, print tokens, or deploy.

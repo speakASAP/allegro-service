@@ -148,7 +148,17 @@ import { strict as assert } from 'assert';
             overridesApplied: true,
             warnings: ['Synthetic warning'],
           };
-          const { service, createdOffers } = createHarness({ contentPreview });
+          const marketplaceFields = {
+            profile: {
+              manualOverrides: { description: { updatedAt: '2026-07-01T00:00:00.000Z' } },
+              sourceState: { productUpdatedAt: '2026-07-02T00:00:00.000Z' },
+            },
+            propagation: { status: 'manual_review_required', staleManualFields: ['description'] },
+            fields: [
+              { key: 'description', manualOverride: true, stale: true, requiresManualReview: true },
+            ],
+          };
+          const { service, createdOffers } = createHarness({ contentPreview, marketplaceFields });
           const result = await service.prepare(
             { catalogProductId: '33333333-3333-3333-3333-333333333333' },
             'user-1',
@@ -159,6 +169,11 @@ import { strict as assert } from 'assert';
           assert.equal(createdOffers[0].rawData.catalogSnapshot.contentPreview.descriptionApplied, true);
           assert.equal(result.catalogContentPreview.source.sourceHash, 'sha256:synthetic');
           assert.equal(result.catalogContentPreview.warnings[0], 'Synthetic warning');
+          assert.equal(result.catalogContentPreview.requiresManualReview, true);
+          assert.equal(result.catalogContentPreview.propagation.status, 'manual_review_required');
+          assert.equal(result.catalogContentPreview.propagation.staleManualFields[0], 'description');
+          assert.equal(createdOffers[0].rawData.catalogSnapshot.contentPreview.requiresManualReview, true);
+          assert.equal(createdOffers[0].rawData.catalogSnapshot.contentPreview.propagation.staleManualFields[0], 'description');
         }
 
         async function testPrepareKeepsExplicitDescriptionOverCatalogContentPreview() {

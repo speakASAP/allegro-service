@@ -24,6 +24,23 @@ interface CatalogContentPreview {
   };
   overridesApplied?: boolean;
   warnings?: string[];
+  propagation?: {
+    status?: string | null;
+    staleManualFields?: string[];
+  };
+  profile?: {
+    manualOverrides?: Record<string, unknown>;
+    sourceState?: Record<string, unknown>;
+  } | null;
+  fields?: Array<{
+    key?: string;
+    manualOverride?: boolean;
+    stale?: boolean;
+    requiresManualReview?: boolean;
+  }>;
+  manualOverride?: boolean;
+  stale?: boolean;
+  requiresManualReview?: boolean;
 }
 
 @Injectable()
@@ -332,9 +349,9 @@ export class CatalogSellActionService {
       },
       contentPreviews: {
         ...(catalogProduct?.contentPreviews || {}),
-        allegro: contentPreview,
+        allegro: this.withMarketplaceReview(contentPreview, marketplaceFields),
       },
-      allegroContentPreview: contentPreview,
+      allegroContentPreview: this.withMarketplaceReview(contentPreview, marketplaceFields),
     };
   }
 
@@ -556,6 +573,61 @@ export class CatalogSellActionService {
     return value && value.trim() ? value : null;
   }
 
+  private withMarketplaceReview(preview: CatalogContentPreview | null, marketplaceFields: any): CatalogContentPreview | null {
+    if (!preview) return null;
+    const review = this.toMarketplaceReview(marketplaceFields);
+    return {
+      ...preview,
+      propagation: review.propagation,
+      profile: review.profile,
+      fields: review.fields,
+      manualOverride: review.manualOverride,
+      stale: review.stale,
+      requiresManualReview: review.requiresManualReview,
+    };
+  }
+
+  private toMarketplaceReview(marketplaceFields: any) {
+    const fields = Array.isArray(marketplaceFields?.fields) ? marketplaceFields.fields : [];
+    const profileManualOverrides = marketplaceFields?.profile?.manualOverrides && typeof marketplaceFields.profile.manualOverrides === 'object'
+      ? marketplaceFields.profile.manualOverrides
+      : {};
+    const sourceState = marketplaceFields?.profile?.sourceState && typeof marketplaceFields.profile.sourceState === 'object'
+      ? marketplaceFields.profile.sourceState
+      : {};
+    const staleManualFields = Array.isArray(marketplaceFields?.propagation?.staleManualFields)
+      ? marketplaceFields.propagation.staleManualFields.map((field: unknown) => String(field)).filter(Boolean)
+      : [];
+    const normalizedFields = fields
+      .map((field: any) => ({
+        key: typeof field?.key === 'string' ? field.key : null,
+        manualOverride: field?.manualOverride === true,
+        stale: field?.stale === true,
+        requiresManualReview: field?.requiresManualReview === true,
+      }))
+      .filter((field: any) => field.key);
+    const manualOverride = Object.keys(profileManualOverrides).length > 0 || normalizedFields.some((field: any) => field.manualOverride);
+    const stale = staleManualFields.length > 0 || normalizedFields.some((field: any) => field.stale || field.requiresManualReview);
+    const propagationStatus = typeof marketplaceFields?.propagation?.status === 'string'
+      ? marketplaceFields.propagation.status
+      : null;
+
+    return {
+      propagation: {
+        status: propagationStatus,
+        staleManualFields,
+      },
+      profile: {
+        manualOverrides: profileManualOverrides,
+        sourceState,
+      },
+      fields: normalizedFields,
+      manualOverride,
+      stale,
+      requiresManualReview: propagationStatus === 'manual_review_required' || stale,
+    };
+  }
+
   private toCatalogContentPreview(preview: CatalogContentPreview | null): any {
     if (!preview) return null;
     const content = preview.content || {};
@@ -579,6 +651,18 @@ export class CatalogSellActionService {
       },
       overridesApplied: Boolean(preview.overridesApplied),
       warnings: Array.isArray(preview.warnings) ? preview.warnings : [],
+      manualOverride: preview.manualOverride === true,
+      stale: preview.stale === true,
+      requiresManualReview: preview.requiresManualReview === true,
+      propagation: {
+        status: preview.propagation?.status || null,
+        staleManualFields: Array.isArray(preview.propagation?.staleManualFields) ? preview.propagation.staleManualFields : [],
+      },
+      profile: {
+        manualOverrides: preview.profile?.manualOverrides || {},
+        sourceState: preview.profile?.sourceState || {},
+      },
+      fields: Array.isArray(preview.fields) ? preview.fields : [],
     };
   }
 
@@ -605,6 +689,13 @@ export class CatalogSellActionService {
       },
       overridesApplied: Boolean(preview.overridesApplied),
       warningCount: Array.isArray(preview.warnings) ? preview.warnings.length : 0,
+      manualOverride: preview.manualOverride === true,
+      stale: preview.stale === true,
+      requiresManualReview: preview.requiresManualReview === true,
+      propagation: {
+        status: preview.propagation?.status || null,
+        staleManualFields: Array.isArray(preview.propagation?.staleManualFields) ? preview.propagation.staleManualFields : [],
+      },
     };
   }
 
