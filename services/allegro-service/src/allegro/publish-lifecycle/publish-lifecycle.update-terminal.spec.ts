@@ -39,6 +39,7 @@ function createServiceHarness() {
     sourceEndpoint: 'GET /api/products/:id/readiness',
     reviewContractEndpoint: 'GET /api/products/review/quality',
   };
+  let catalogQualityThrows = false;
 
   const prisma = {
     allegroOffer: {
@@ -101,7 +102,10 @@ function createServiceHarness() {
 
   const catalogClient = {
     getProductById: async (catalogProductId: string) => ({ id: catalogProductId, name: 'Synthetic product' }),
-    getProductQualityPreflight: async (catalogProductId: string) => ({ ...catalogQualityPreflight, productId: catalogProductId }),
+    getProductQualityPreflight: async (catalogProductId: string) => {
+      if (catalogQualityThrows) throw Object.assign(new Error('Synthetic quality outage'), { status: 503 });
+      return { ...catalogQualityPreflight, productId: catalogProductId };
+    },
   };
 
   const updateCalls: any[] = [];
@@ -142,6 +146,9 @@ function createServiceHarness() {
     },
     setCatalogQualityPreflight: (value: any) => {
       catalogQualityPreflight = value;
+    },
+    setCatalogQualityThrows: (value: boolean) => {
+      catalogQualityThrows = value;
     },
   };
 }
@@ -260,6 +267,34 @@ async function testUpdateAttemptExecutesToSucceededTerminalResult() {
   });
 }
 
+async function testExecuteBlocksWhenCatalogQualityUnavailableBeforeTerminalMutation() {
+  const harness = createServiceHarness();
+  const prepared = await harness.service.prepare(
+    {
+      action: 'UPDATE',
+      offerId: '11111111-1111-1111-1111-111111111111',
+      idempotencyKey: 'execute-update-catalog-quality-unavailable',
+      commandPayload: {
+        title: 'Updated title',
+        syncToAllegro: true,
+      },
+    },
+    'user-1',
+  );
+  const queued = await harness.service.confirm(prepared.id, 'user-1', prepared.previewToken);
+  harness.setCatalogQualityThrows(true);
+
+  const attempt = await harness.service.execute(
+    queued.id,
+    'user-1',
+    'req-quality-unavailable',
+  );
+
+  assert.equal(attempt.status, 'BLOCKED');
+  assert.equal(harness.terminalCalls.length, 0);
+  assert.equal(attempt.blockedReasons.some((entry: any) => String(entry.reason).includes('catalog_quality_preflight_unavailable')), true);
+}
+
 async function testUpdateAttemptExecutesToFailedTerminalResult() {
   const harness = createServiceHarness();
   harness.setTerminalFailure({
@@ -300,6 +335,7 @@ export async function runPublishLifecycleUpdateTerminalSpec(): Promise<void> {
   await testConfirmRequiresPreviewToken();
   await testConfirmBlocksWhenCatalogQualityRegresses();
   await testUpdateAttemptExecutesToSucceededTerminalResult();
+  await testExecuteBlocksWhenCatalogQualityUnavailableBeforeTerminalMutation();
   await testUpdateAttemptExecutesToFailedTerminalResult();
 }
 

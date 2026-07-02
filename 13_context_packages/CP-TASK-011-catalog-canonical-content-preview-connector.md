@@ -43,7 +43,7 @@
 
 ## Constraints
 
-- Work only in `/home/ssf/Documents/Github/allegro-service` on `alfares`.
+- Work only in `/home/ssf/Documents/Github/allegro` on `alfares`.
 - Do not deploy.
 - Do not change Allegro publish ownership.
 - Do not run live publish, update, stock, import apply, or migration apply

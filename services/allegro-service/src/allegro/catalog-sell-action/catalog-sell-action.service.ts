@@ -329,7 +329,7 @@ export class CatalogSellActionService {
   }
 
   private catalogQualityBlocks(preflight: any): boolean {
-    return !preflight || preflight.canPublish === false || (Array.isArray(preflight.blockingIssues) && preflight.blockingIssues.length > 0);
+    return !preflight || preflight.canPublish !== true || (Array.isArray(preflight.blockingIssues) && preflight.blockingIssues.length > 0);
   }
 
   private unavailableCatalogQualityPreflight(catalogProductId: string, error: any): any {

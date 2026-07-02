@@ -192,7 +192,7 @@ must not deploy, apply migrations, or run live publish commands.
 
 ## Agent Handoff Prompt
 
-Continue TASK-011 in `/home/ssf/Documents/Github/allegro-service` on `alfares`.
+Continue TASK-011 in `/home/ssf/Documents/Github/allegro` on `alfares`.
 Preserve the allowed file boundaries, keep Allegro publish ownership unchanged,
 do not deploy, and finish by running the gate commands and updating
 `12_validation/VAL-TASK-011-catalog-canonical-content-preview-connector.md`.

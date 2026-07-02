@@ -137,8 +137,8 @@ export class MarketplacePolicyEngineService {
       const preflight = await getProductQualityPreflight.call(this.catalogClient, input.catalogProductId);
       const blockingIssues = Array.isArray(preflight.blockingIssues) ? preflight.blockingIssues : [];
       const evidence = this.catalogQualityEvidence(preflight);
-      if (blockingIssues.length > 0 || preflight.canPublish === false) {
-        const codes = blockingIssues.map((issue) => issue.code).filter(Boolean).join(',') || 'unknown_catalog_quality_blocker';
+      if (blockingIssues.length > 0 || preflight.canPublish !== true) {
+        const codes = blockingIssues.map((issue) => issue.code).filter(Boolean).join(',') || 'catalog_quality_preflight_not_publishable';
         return this.block(
           'catalog-product-quality',
           'catalog-microservice',

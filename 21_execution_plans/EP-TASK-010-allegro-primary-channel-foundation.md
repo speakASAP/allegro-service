@@ -243,7 +243,7 @@ Plan -> Coding Prompt -> Code -> Validation.
 
 Required setup:
 
-1. Work only in `/home/ssf/Documents/Github/allegro-service` on `alfares`.
+1. Work only in `/home/ssf/Documents/Github/allegro` on `alfares`.
 2. Read the TASK-010 context package, execution plan, mapping document,
    primary-channel master plan, invariants, sensitive-data policy, and
    validation debt ledger before editing.

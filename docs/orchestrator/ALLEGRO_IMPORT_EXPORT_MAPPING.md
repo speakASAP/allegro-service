@@ -10,7 +10,7 @@ Implementation plan: `docs/orchestrator/ALLEGRO_PRIMARY_CHANNEL_IMPLEMENTATION_P
 
 - Vision: make Allegro account data recoverable, importable, exportable, and explainable without losing the relation between checkout forms, line items, offers, products, stock, billing, and shipments.
 - Goal Impact: enable a controlled importer/exporter path for statexcz while keeping Warehouse as stock owner and orders-microservice as central order owner.
-- System: `allegro-service` under `/home/ssf/Documents/Github/allegro-service`, backed by Allegro REST API, Prisma/Postgres, Catalog, Warehouse, and orders-microservice clients.
+- System: `allegro-service` under `/home/ssf/Documents/Github/allegro`, backed by Allegro REST API, Prisma/Postgres, Catalog, Warehouse, and orders-microservice clients.
 - Feature: normalized Allegro data extraction and round-trip mapping.
 - Task: document the final data mapping and remaining domain gaps after the controlled local order projection apply.
 - Execution Plan: map official Allegro endpoints to local Prisma models, identify canonical fields and raw JSON retention, list unsafe paths, and keep second-pass domains read-only until schema/client contracts exist.

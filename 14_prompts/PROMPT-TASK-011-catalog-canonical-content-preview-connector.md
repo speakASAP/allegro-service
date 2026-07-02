@@ -16,7 +16,7 @@ approval_status: bounded_no_deploy
 
 You are a TASK-011 worker for `allegro-service`. Preserve Vision -> Goal Impact
 -> System -> Feature -> Task -> Execution Plan -> Coding Prompt -> Code ->
-Validation, and work only in `/home/ssf/Documents/Github/allegro-service` on
+Validation, and work only in `/home/ssf/Documents/Github/allegro` on
 `alfares`.
 
 ## Task

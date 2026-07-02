@@ -4,6 +4,7 @@
 
 export class CreateOfferDto {
   productId?: string;
+  catalogProductId?: string;
   allegroProductId?: string; // Link to existing AllegroProduct
   allegroOfferId?: string; // For local-only offers
   title: string;

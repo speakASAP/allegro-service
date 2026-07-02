@@ -120,6 +120,26 @@ async function testCatalogQualityBlockersBlockPolicy() {
   assert.deepEqual(qualityGate?.evidence?.blockingIssueCodes, ['missing_image']);
 }
 
+async function testUnknownCatalogQualityPublishabilityBlocksPolicy() {
+  const { service, offer } = createPolicyHarness({
+    catalogQualityPreflight: {
+      policyId: 'catalog.product_quality.v1',
+      productId: '33333333-3333-3333-3333-333333333333',
+      blockingIssues: [],
+      blockingMissingFields: [],
+      optionalOpportunities: [],
+      nextAction: 'retry_catalog_quality_preflight',
+      sourceEndpoint: 'GET /api/products/:id/readiness',
+      reviewContractEndpoint: 'GET /api/products/review/quality',
+    },
+  });
+  const result = await service.evaluate({ action: 'PUBLISH', offer, accountId: offer.accountId, catalogProductId: offer.catalogProductId, requestedByUserId: 'user-1' });
+  const qualityGate = result.results.find((entry) => entry.gate === 'catalog-product-quality');
+
+  assert.equal(qualityGate?.status, 'BLOCK');
+  assert.equal(qualityGate?.reason?.includes('catalog_quality_preflight_not_publishable'), true);
+}
+
 async function testCatalogOutageBlocksWithoutSecrets() {
   const { service, offer } = createPolicyHarness({ catalogThrows: true });
   const result = await service.evaluate({ action: 'UPDATE', offer, accountId: offer.accountId, catalogProductId: offer.catalogProductId, requestedByUserId: 'user-1' });
@@ -134,6 +154,7 @@ export async function runPolicyEngineSpec(): Promise<void> {
   await testPassingPolicyIsDeterministicAndReusable();
   await testBlockedPolicyIncludesOwnersAndRemediation();
   await testCatalogQualityBlockersBlockPolicy();
+  await testUnknownCatalogQualityPublishabilityBlocksPolicy();
   await testCatalogOutageBlocksWithoutSecrets();
 }
 

@@ -27,6 +27,8 @@ type AllegroUpdateSyncTerminalResult = {
   };
 };
 
+const CATALOG_PRODUCT_QUALITY_POLICY_ID = 'catalog.product_quality.v1';
+
 @Injectable()
 export class OffersService {
   private readonly encryptionKey: string;
@@ -301,6 +303,50 @@ export class OffersService {
     return offer;
   }
 
+  private async assertCatalogQualityAllowsLocalDraft(catalogProductId: string): Promise<void> {
+    let preflight: any;
+    try {
+      const getProductQualityPreflight = (this.catalogClient as any).getProductQualityPreflight;
+      if (typeof getProductQualityPreflight !== 'function') {
+        throw new Error('[MISSING: CatalogClientService.getProductQualityPreflight]');
+      }
+      preflight = await getProductQualityPreflight.call(this.catalogClient, catalogProductId);
+    } catch (error: any) {
+      const response = typeof error?.getResponse === 'function' ? error.getResponse() : null;
+      const responseMessage = response && typeof response === 'object' && 'message' in response
+        ? String((response as any).message)
+        : error?.message || 'Catalog quality preflight unavailable';
+      throw new HttpException(
+        {
+          code: 'CATALOG_QUALITY_PREFLIGHT_UNAVAILABLE',
+          message: 'Catalog product quality preflight is unavailable; Allegro must fail closed before local draft creation.',
+          catalogProductId,
+          policyId: CATALOG_PRODUCT_QUALITY_POLICY_ID,
+          detail: responseMessage,
+        },
+        error.status || error.response?.status || HttpStatus.BAD_GATEWAY,
+      );
+    }
+
+    const blockingIssues = Array.isArray(preflight?.blockingIssues) ? preflight.blockingIssues : [];
+    if (preflight?.canPublish === true && blockingIssues.length === 0) {
+      return;
+    }
+
+    throw new HttpException(
+      {
+        code: 'CATALOG_QUALITY_BLOCKED',
+        message: 'Catalog product quality blockers must be resolved before Allegro local draft creation.',
+        policyId: preflight?.policyId || CATALOG_PRODUCT_QUALITY_POLICY_ID,
+        catalogProductId: preflight?.productId || catalogProductId,
+        blockers: blockingIssues,
+        nextAction: preflight?.nextAction || 'resolve_catalog_quality_blockers',
+        catalogQualityPreflight: preflight || null,
+      },
+      HttpStatus.CONFLICT,
+    );
+  }
+
   /**
    * Create offer
    */
@@ -325,6 +371,9 @@ export class OffersService {
 
     // If syncToAllegro is false, create local-only offer
     if (dto.syncToAllegro === false) {
+      if (dto.catalogProductId) {
+        await this.assertCatalogQualityAllowsLocalDraft(String(dto.catalogProductId));
+      }
       const quantity = Number.isFinite(Number(dto.quantity)) ? Number(dto.quantity) : 0;
       const stockQuantity = Number.isFinite(Number(dto.stockQuantity)) ? Number(dto.stockQuantity) : quantity;
       const offer = await this.prisma.allegroOffer.create({

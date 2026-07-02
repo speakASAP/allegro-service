@@ -121,7 +121,7 @@ Catalog Goal 25 added marketplace-field manual/stale propagation metadata. Alleg
 ### Runtime Deploy Evidence
 
 - `./scripts/deploy.sh`: built and applied Allegro images tagged `087eec8`; the first rollout wait was interrupted by a k3s datastore/runtime backlog.
-- k3s recovery evidence: after owner restart, `kubectl get deployment allegro-service allegro-api-gateway allegro-frontend allegro-settings allegro-imports -n statex-apps -o wide` showed all five deployments `1/1` on `localhost:5000/allegro-*:087eec8`.
+- k3s recovery evidence: after owner restart, `kubectl get deployment allegro-service allegro-api-gateway allegro-frontend allegro-settings allegro-imports -n statex-apps -o wide` showed all five deployments ready with one replica available on `localhost:5000/allegro-*:087eec8`.
 - `kubectl rollout status deployment/{allegro-service,allegro-api-gateway,allegro-frontend,allegro-settings,allegro-imports} -n statex-apps --timeout=120s`: PASS for all five deployments.
 - `curl -i -sS -m 15 https://allegro.alfares.cz/health`: HTTP 200, `{"status":"ok","service":"allegro-service"}`.
 - `curl -i -sS -m 15 https://allegro.alfares.cz/`: HTTP 200, SPA shell served.

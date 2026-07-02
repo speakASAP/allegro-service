@@ -456,7 +456,7 @@ export class PublishLifecycleService {
   }
 
   private catalogQualityBlocks(preflight: any): boolean {
-    return !preflight || preflight.canPublish === false || (Array.isArray(preflight.blockingIssues) && preflight.blockingIssues.length > 0);
+    return !preflight || preflight.canPublish !== true || (Array.isArray(preflight.blockingIssues) && preflight.blockingIssues.length > 0);
   }
 
   private async markBlockedForCatalogQuality(attempt: any, preflight: any): Promise<any> {

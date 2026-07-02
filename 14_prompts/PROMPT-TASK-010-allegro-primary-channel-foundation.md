@@ -39,7 +39,7 @@ additive projection groundwork. Do not run or enable live mutation flows.
 
 ## Constraints
 
-- Work only in `/home/ssf/Documents/Github/allegro-service` on `alfares`.
+- Work only in `/home/ssf/Documents/Github/allegro` on `alfares`.
 - Do not use Chrome/browser-control.
 - Do not deploy.
 - Do not run live import and export apply, Warehouse stock mutation, BizBox apply,

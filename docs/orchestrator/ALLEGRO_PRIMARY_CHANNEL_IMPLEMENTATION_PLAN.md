@@ -3,7 +3,7 @@
 Status: implementation master plan
 Date: 2026-06-29
 Owner: Allegro integration owner
-Repository: `/home/ssf/Documents/Github/allegro-service`
+Repository: `/home/ssf/Documents/Github/allegro`
 Mode: planning and documentation only
 
 This plan turns the current Allegro research and scripts into a governed primary
@@ -2208,7 +2208,7 @@ Use this prompt shape for future Codex subagents or separate threads:
 ```text
 Goal: <one specific lane objective>
 
-Repository: ssh alfares, /home/ssf/Documents/Github/allegro-service
+Repository: ssh alfares, /home/ssf/Documents/Github/allegro
 
 Mode:
 - Follow AGENTS.md and IPS.

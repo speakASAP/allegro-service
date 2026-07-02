@@ -18,7 +18,7 @@ goal_impact: ../22_goal_impact/GOAL-IMPACT-TASK-009.md
 
 - Source task: ../11_tasks/TASK-009-public-client-landing-dashboard.md
 - Lifecycle state: live validated; TASK-009 implementation and deployment are complete, and this plan is retained as the auditable implementation record.
-- Reference service: `/home/ssf/Documents/Github/bazos-service`
+- Reference service: `/home/ssf/Documents/Github/bazos`
 
 ## Upstream Traceability
 
@@ -71,9 +71,9 @@ Public route smokes and frontend builds are deterministic. Publish-like UI actio
 
 ## Files to Inspect
 
-- `/home/ssf/Documents/Github/bazos-service/implementation-goals/GOAL-06-landing-admin-client-ui.md`
-- `/home/ssf/Documents/Github/bazos-service/implementation-goals/GOAL-08-hosted-auth-ui.md`
-- `/home/ssf/Documents/Github/bazos-service/implementation-goals/GOAL-12-client-catalog-publishing-flow.md`
+- `/home/ssf/Documents/Github/bazos/implementation-goals/GOAL-06-landing-admin-client-ui.md`
+- `/home/ssf/Documents/Github/bazos/implementation-goals/GOAL-08-hosted-auth-ui.md`
+- `/home/ssf/Documents/Github/bazos/implementation-goals/GOAL-12-client-catalog-publishing-flow.md`
 - `services/frontend/src`
 - `services/allegro-service/src/allegro/catalog-sell-action`
 - `k8s/ingress.yaml`, `k8s/deployment.yaml`, `Dockerfile`, `services/frontend/Dockerfile`

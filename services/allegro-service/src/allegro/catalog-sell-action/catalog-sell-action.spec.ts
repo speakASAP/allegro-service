@@ -168,6 +168,16 @@ import { strict as assert } from 'assert';
           assert.equal(createdOffers.length, 0);
         }
 
+        async function testPrepareFailsClosedWhenCatalogQualityUnavailableBeforeDraft() {
+          const { service, createdOffers } = createHarness({ catalogQualityThrows: true });
+
+          await assert.rejects(
+            () => service.prepare({ catalogProductId: '33333333-3333-3333-3333-333333333333' }, 'user-1'),
+            (error: any) => error.getStatus?.() === 503 && error.getResponse?.().code === 'CATALOG_QUALITY_PREFLIGHT_UNAVAILABLE',
+          );
+          assert.equal(createdOffers.length, 0);
+        }
+
         async function testPrepareUsesCatalogContentPreviewDescriptionWhenMissing() {
           const contentPreview = {
             marketplace: 'allegro',
@@ -450,9 +460,41 @@ import { strict as assert } from 'assert';
           assert.equal(result.nextAction, 'monitor_publish_queue');
         }
 
+        async function testConfirmProductPublishFailsClosedWhenCatalogQualityUnavailable() {
+          const existingDraft = {
+            id: 'existing-offer',
+            accountId: '22222222-2222-2222-2222-222222222222',
+            catalogProductId: '33333333-3333-3333-3333-333333333333',
+            title: 'Existing draft',
+            categoryId: 'cat-123',
+            price: 109,
+            currency: 'PLN',
+            quantity: 5,
+            publicationStatus: 'INACTIVE',
+            status: 'DRAFT',
+            updatedAt: '2026-06-19T00:00:00Z',
+          };
+          const { service } = createHarness({
+            existingDraft,
+            catalogQualityThrows: true,
+            attempts: [{
+              id: 'attempt-1',
+              status: 'PREPARED',
+              catalogProductId: existingDraft.catalogProductId,
+              requestedByUserId: 'user-1',
+            }],
+          });
+
+          await assert.rejects(
+            () => service.confirmProductPublish(existingDraft.catalogProductId, 'user-1', 'synthetic-preview-token'),
+            (error: any) => error.getStatus?.() === 409 && error.getResponse?.().code === 'CATALOG_QUALITY_BLOCKED',
+          );
+        }
+
         export async function runCatalogSellActionSpec(): Promise<void> {
           await testPrepareCreatesNewDraftAndReturnsConfirmAction();
           await testPrepareRejectsCatalogQualityBlockersBeforeDraft();
+          await testPrepareFailsClosedWhenCatalogQualityUnavailableBeforeDraft();
           await testPrepareUsesCatalogContentPreviewDescriptionWhenMissing();
           await testPrepareKeepsExplicitDescriptionOverCatalogContentPreview();
           await testPrepareCapsRequestedQuantityToWarehouseAvailability();
@@ -464,6 +506,7 @@ import { strict as assert } from 'assert';
           await testProductStatusSurfacesCatalogQualityBlockers();
           await testProductDraftEditStaysLocal();
           await testConfirmProductPublishUsesLatestAttempt();
+          await testConfirmProductPublishFailsClosedWhenCatalogQualityUnavailable();
         }
 
         if (require.main === module) {
