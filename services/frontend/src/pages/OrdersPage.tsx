@@ -7,6 +7,25 @@ import { AxiosError } from 'axios';
 import api from '../services/api';
 import { Card } from '../components/Card';
 
+interface CentralOrderReadModel {
+  state: 'available' | 'unknown' | 'stale';
+  id?: string | null;
+  displayStatus?: string | null;
+  lifecycleStage?: string | null;
+  status?: string | null;
+  paymentStatus?: string | null;
+  fulfillmentStatus?: string | null;
+  warehouseHandoffStatus?: string | null;
+  reason?: string | null;
+  forwardingAttempt?: {
+    id?: string;
+    status?: string | null;
+    attemptedAt?: string | null;
+    completedAt?: string | null;
+  } | null;
+  source?: string | null;
+}
+
 interface Order {
   id: string;
   allegroOrderId: string;
@@ -21,6 +40,7 @@ interface Order {
   paymentStatus?: string;
   fulfillmentStatus?: string;
   orderDate: string;
+  centralOrderReadModel?: CentralOrderReadModel;
 }
 
 interface Pagination {
@@ -104,6 +124,18 @@ const OrdersPage: React.FC = () => {
     }
   };
 
+  const getCentralStatusColor = (state?: CentralOrderReadModel['state']) => {
+    switch (state) {
+      case 'available':
+        return 'text-green-700 bg-green-100';
+      case 'stale':
+        return 'text-amber-700 bg-amber-100';
+      case 'unknown':
+      default:
+        return 'text-gray-700 bg-gray-100';
+    }
+  };
+
   const formatMoney = (amount: number | string, currency?: string) => {
     const resolvedCurrency = currency || 'CZK';
     try {
@@ -114,6 +146,18 @@ const OrdersPage: React.FC = () => {
     } catch {
       return `${amount} ${resolvedCurrency}`;
     }
+  };
+
+  const formatShortId = (value?: string | null) => {
+    if (!value) {
+      return '-';
+    }
+    return value.length > 12 ? `${value.slice(0, 8)}...${value.slice(-4)}` : value;
+  };
+
+  const centralLifecycleLabel = (model?: CentralOrderReadModel) => {
+    const label = model?.displayStatus || model?.lifecycleStage || model?.status;
+    return label || 'Unavailable';
   };
 
   const goToPage = (nextPage: number) => {
@@ -175,41 +219,64 @@ const OrdersPage: React.FC = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lines</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Price</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payment</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fulfillment</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Central Order</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Central Lifecycle</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Allegro Snapshot</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {orders.map((order) => (
-                  <tr key={order.id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{order.allegroOrderId}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{order.buyerEmail || '-'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{order.marketplaceId || '-'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{order.lineItemsCount ?? '-'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{order.quantity}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatMoney(order.totalPrice, order.currency)}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(order.status)}`}>
-                        {order.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(order.paymentStatus || '')}`}>
-                        {order.paymentStatus || '-'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(order.fulfillmentStatus || '')}`}>
-                        {order.fulfillmentStatus || '-'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(order.orderDate).toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
+                {orders.map((order) => {
+                  const centralReadModel = order.centralOrderReadModel;
+                  return (
+                    <tr key={order.id}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{order.allegroOrderId}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{order.buyerEmail || '-'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{order.marketplaceId || '-'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{order.lineItemsCount ?? '-'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{order.quantity}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatMoney(order.totalPrice, order.currency)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900" title={centralReadModel?.id || undefined}>
+                        {formatShortId(centralReadModel?.id)}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        <div className="flex max-w-xs flex-col gap-1">
+                          <span
+                            className={`inline-flex w-fit px-2 py-1 text-xs font-semibold rounded-full ${getCentralStatusColor(centralReadModel?.state)}`}
+                            title={centralReadModel?.reason || undefined}
+                          >
+                            {centralLifecycleLabel(centralReadModel)}
+                          </span>
+                          {centralReadModel?.warehouseHandoffStatus && (
+                            <span className="text-xs text-gray-600">Warehouse: {centralReadModel.warehouseHandoffStatus}</span>
+                          )}
+                          {centralReadModel?.paymentStatus && (
+                            <span className="text-xs text-gray-600">Payment: {centralReadModel.paymentStatus}</span>
+                          )}
+                          {centralReadModel?.reason && (
+                            <span className="whitespace-normal text-xs text-gray-500">{centralReadModel.reason}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        <div className="flex flex-col gap-1">
+                          <span className={`inline-flex w-fit px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(order.status)}`}>
+                            Order: {order.status}
+                          </span>
+                          <span className={`inline-flex w-fit px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(order.paymentStatus || '')}`}>
+                            Payment: {order.paymentStatus || '-'}
+                          </span>
+                          <span className={`inline-flex w-fit px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(order.fulfillmentStatus || '')}`}>
+                            Fulfillment: {order.fulfillmentStatus || '-'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(order.orderDate).toLocaleString()}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

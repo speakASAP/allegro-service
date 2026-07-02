@@ -5,6 +5,14 @@ import { LoggerService } from '../logger/logger.service';
 
 const CREATE_ORDER_CONTRACT_VERSION = 'orders.create.v1';
 const DEFAULT_CHANNEL_ACCOUNT_ID = 'default';
+export const ORDERS_LIFECYCLE_READ_UNAVAILABLE = '[MISSING: Orders lifecycle read contract/client method]';
+
+export interface CentralOrderLifecycleReadResult {
+  available: boolean;
+  order: any | null;
+  reason?: string;
+  statusCode?: number | null;
+}
 
 interface CreateCentralOrderRequest {
   externalOrderId: string;
@@ -110,6 +118,37 @@ export class OrderClientService {
       const stack = error instanceof Error ? error.stack : undefined;
       this.logger.error('Failed to create order in orders-microservice: ' + message, stack, 'OrderClient');
       throw new HttpException('Failed to create order: ' + message, status || HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  async getOrderLifecycle(orderId: string): Promise<CentralOrderLifecycleReadResult> {
+    const normalizedOrderId = orderId?.trim();
+    if (!normalizedOrderId) {
+      return {
+        available: false,
+        order: null,
+        reason: '[MISSING: central Orders id mapping]',
+      };
+    }
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(
+          this.baseUrl + '/api/orders/' + encodeURIComponent(normalizedOrderId),
+          this.requestOptions() || {},
+        ),
+      );
+      const order = response.data?.data || response.data || null;
+      return {
+        available: Boolean(order),
+        order,
+        reason: order ? undefined : ORDERS_LIFECYCLE_READ_UNAVAILABLE,
+      };
+    } catch (error: any) {
+      const status = error?.response?.status || null;
+      const message = status ? `status_${status}` : error instanceof Error ? error.message : 'Unknown error';
+      this.logger.warn(`Orders lifecycle read unavailable for central order ${normalizedOrderId}: ${message}`, 'OrderClient');
+      return { available: false, order: null, reason: ORDERS_LIFECYCLE_READ_UNAVAILABLE, statusCode: status };
     }
   }
 

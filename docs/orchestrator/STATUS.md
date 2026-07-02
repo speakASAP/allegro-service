@@ -1,6 +1,36 @@
 # Allegro Service Orchestrator Status
 
-Updated: 2026-07-01
+Updated: 2026-07-02
+
+## 2026-07-02 - A1 Central Orders Status Read Model
+
+Result: implemented and locally validated for the Allegro order read model. The read path now joins each local `AllegroOrder` with the latest `AllegroOrderForwardingAttempt`, extracts the central Orders id from `responseSummary.id`, and exposes a `centralOrderReadModel` on order list/detail responses.
+
+IPS chain: Vision -> central Orders lifecycle is visible in Allegro order views; Goal Impact -> marketplace-local status is no longer the primary operator lifecycle indicator; System -> `allegro-service` orders read API and shared Orders client; Feature -> fail-soft central status read model; Task -> join latest forwarding attempt, extract central id, read lifecycle when available, and flag missing/stale state; Execution Plan -> add bounded list/detail relation select and batched central reads without changing forwarding writes; Coding Prompt -> avoid related-products and product publish/status flows, preserve dirty work, do not deploy or push; Code -> `shared/clients/order-client.service.ts`, `shared/clients/order-client.service.spec.ts`, `services/allegro-service/src/allegro/orders/orders.service.ts`, `services/allegro-service/src/allegro/orders/orders.service.spec.ts`, and `services/frontend/src/pages/OrdersPage.tsx`; Validation -> `git diff --check`, shared client spec, orders service spec, shared build, allegro-service build, and frontend build passed on 2026-07-02.
+
+Implemented:
+
+- `OrderClientService.getOrderLifecycle(orderId)` reads `GET /api/orders/:id` with existing machine-auth headers when configured and returns a fail-soft result instead of breaking the Allegro list.
+- `OrdersService.getOrders()` and `getOrder()` attach `centralOrderReadModel` and strip internal `forwardingAttempts` relation details from the public response.
+- `centralOrderReadModel.state` is:
+  - `available` when a forwarded attempt has `responseSummary.id` and Orders read returns a lifecycle payload;
+  - `unknown` when the latest attempt is missing, not forwarded, or lacks central id;
+  - `stale` when central id exists but the Orders lifecycle read is unavailable.
+- Frontend Orders dashboard now renders central order id and central lifecycle before Allegro-local status, with Allegro status shown as a snapshot column.
+
+Blockers/unknowns:
+
+- `[MISSING: Orders lifecycle read contract/client method]` remains the explicit stale fallback until runtime Orders read contract validation confirms `GET /api/orders/:id` returns lifecycle fields in the deployed Orders service.
+- `[UNKNOWN: deployed Orders lifecycle field naming]`; the read model accepts `lifecycleStage`, `lifecycleStatus`, `stage`, `state`, or `status`, plus known payment/fulfillment/warehouse handoff fields.
+
+Validation evidence:
+
+- `git diff --check`
+- `npx ts-node shared/clients/order-client.service.spec.ts`
+- `npx ts-node services/allegro-service/src/allegro/orders/orders.service.spec.ts`
+- `cd shared && npm run build`
+- `cd services/allegro-service && npm run build`
+- `cd services/frontend && npm run build`
 
 ## 2026-07-01 - Goal 7.2B Orders Canonical Create Readiness
 

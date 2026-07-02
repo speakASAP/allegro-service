@@ -1,6 +1,6 @@
 import { strict as assert } from 'assert';
 import { of } from 'rxjs';
-import { OrderClientService } from './order-client.service';
+import { ORDERS_LIFECYCLE_READ_UNAVAILABLE, OrderClientService } from './order-client.service';
 
 type EnvKeys =
   | 'ALLEGRO_INTERNAL_SERVICE_TOKEN'
@@ -69,7 +69,8 @@ async function withCleanOrderEnv<T>(env: Partial<Record<EnvKeys, string>>, run: 
   }
 }
 
-function createFixture() {
+function createFixture(options: { getResponse?: any; getError?: any } = {}) {
+  const getCalls: any[] = [];
   const postCalls: any[] = [];
   const warnings: any[] = [];
   const logs: any[] = [];
@@ -80,7 +81,16 @@ function createFixture() {
       return of({ data: { data: { id: 'central-order-1' } } });
     },
     put: (...args: any[]) => of({ data: { data: { ok: true, args } } }),
-    get: (...args: any[]) => of({ data: { data: [] } }),
+    get: (...args: any[]) => {
+      getCalls.push(args);
+      if (options.getError) {
+        throw options.getError;
+      }
+      if (options.getResponse) {
+        return of(options.getResponse);
+      }
+      return of({ data: { data: [] } });
+    },
   };
   const logger = {
     log: (...args: any[]) => logs.push(args),
@@ -88,7 +98,7 @@ function createFixture() {
     error: (...args: any[]) => errors.push(args),
   };
   const service = new OrderClientService(httpService as any, logger as any);
-  return { service, postCalls, warnings, logs, errors };
+  return { service, getCalls, postCalls, warnings, logs, errors };
 }
 
 async function testCreateOrderSendsMachineAuthHeaders() {
@@ -118,9 +128,44 @@ async function testCreateOrderFailsClosedWithoutMachineCredential() {
   });
 }
 
+async function testGetOrderLifecycleReadsCentralOrderById() {
+  await withCleanOrderEnv({
+    ALLEGRO_INTERNAL_SERVICE_TOKEN: 'synthetic-orders-token',
+  }, async () => {
+    const fixture = createFixture({
+      getResponse: { data: { data: { id: 'central-order-1', status: 'processing' } } },
+    });
+
+    const result = await fixture.service.getOrderLifecycle('central-order-1');
+
+    assert.equal(result.available, true);
+    assert.equal(result.order.id, 'central-order-1');
+    assert.equal(result.order.status, 'processing');
+    assert.equal(fixture.getCalls.length, 1);
+    assert.equal(fixture.getCalls[0][0], 'http://orders-microservice:3203/api/orders/central-order-1');
+    assert.equal(fixture.getCalls[0][1].headers['x-internal-service-token'], 'synthetic-orders-token');
+    assert.equal(fixture.getCalls[0][1].headers['x-service-name'], 'allegro-service');
+  });
+}
+
+async function testGetOrderLifecycleReturnsUnavailableWhenReadFails() {
+  await withCleanOrderEnv({}, async () => {
+    const fixture = createFixture({ getError: { response: { status: 404 }, message: 'not found' } });
+
+    const result = await fixture.service.getOrderLifecycle('central-order-1');
+
+    assert.equal(result.available, false);
+    assert.equal(result.order, null);
+    assert.equal(result.reason, ORDERS_LIFECYCLE_READ_UNAVAILABLE);
+    assert.equal(result.statusCode, 404);
+  });
+}
+
 export async function runOrderClientServiceSpec(): Promise<void> {
   await testCreateOrderSendsMachineAuthHeaders();
   await testCreateOrderFailsClosedWithoutMachineCredential();
+  await testGetOrderLifecycleReadsCentralOrderById();
+  await testGetOrderLifecycleReturnsUnavailableWhenReadFails();
 }
 
 if (require.main === module) {

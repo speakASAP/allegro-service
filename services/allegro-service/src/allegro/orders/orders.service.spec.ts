@@ -10,12 +10,21 @@ type OfferFixture = {
   title?: string | null;
 };
 
+const ORDERS_LIFECYCLE_READ_UNAVAILABLE = '[MISSING: Orders lifecycle read contract/client method]';
+
 function createServiceFixture(
   orders: any[],
   offers: OfferFixture[],
-  options: { failForwardingAttemptWrites?: boolean; warehouseId?: string | null; stockPrimaryWarehouseId?: string | null } = {},
+  options: {
+    failForwardingAttemptWrites?: boolean;
+    warehouseId?: string | null;
+    stockPrimaryWarehouseId?: string | null;
+    localOrders?: any[];
+    centralLifecycleReads?: Record<string, any>;
+  } = {},
 ) {
   const orderClientCalls: any[] = [];
+  const centralLifecycleReadCalls: string[] = [];
   const warnings: any[] = [];
   const errors: any[] = [];
   const logs: any[] = [];
@@ -31,6 +40,18 @@ function createServiceFixture(
       },
     },
     allegroOrder: {
+      findMany: async (args: any) => {
+        captured.orderFindMany = args;
+        return options.localOrders || [];
+      },
+      count: async (args: any) => {
+        captured.orderCount = args;
+        return (options.localOrders || []).length;
+      },
+      findUnique: async (args: any) => {
+        captured.orderFindUnique = args;
+        return (options.localOrders || []).find((order) => order.id === args.where.id) || null;
+      },
       upsert: async (args: any) => {
         captured.orderUpsert = args;
         return { id: 'local-' + args.where.allegroOrderId };
@@ -113,6 +134,21 @@ function createServiceFixture(
       orderClientCalls.push(payload);
       return { id: 'central-order-1' };
     },
+    getOrderLifecycle: async (orderId: string) => {
+      centralLifecycleReadCalls.push(orderId);
+      const read = options.centralLifecycleReads?.[orderId];
+      if (!read) {
+        return {
+          available: false,
+          order: null,
+          reason: ORDERS_LIFECYCLE_READ_UNAVAILABLE,
+        };
+      }
+      if (Object.prototype.hasOwnProperty.call(read, 'available')) {
+        return read;
+      }
+      return { available: true, order: read };
+    },
   };
 
   const service = new OrdersService(
@@ -123,7 +159,7 @@ function createServiceFixture(
     orderClient as any,
   );
 
-  return { service, orderClientCalls, warnings, errors, logs, captured, forwardingAttempts };
+  return { service, orderClientCalls, centralLifecycleReadCalls, warnings, errors, logs, captured, forwardingAttempts };
 }
 
 const ACCOUNT_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -145,6 +181,41 @@ function buildAllegroOrder(lineItems: any[]) {
     revision: '1',
     buyer: { email: 'buyer@example.invalid', login: 'buyer-login' },
     createdAt: '2026-06-26T10:00:00.000Z',
+  };
+}
+
+function buildLocalOrder(overrides: any = {}) {
+  return {
+    id: 'local-order-1',
+    allegroOrderId: 'allegro-order-1',
+    buyerEmail: 'buyer@example.invalid',
+    buyerLogin: 'buyer-login',
+    quantity: 1,
+    price: 10,
+    totalPrice: 10,
+    currency: 'PLN',
+    status: 'READY_FOR_PROCESSING',
+    paymentStatus: 'PAID',
+    fulfillmentStatus: 'NEW',
+    deliveryMethod: 'Delivery',
+    marketplaceId: 'allegro-cz',
+    lineItemsCount: 1,
+    orderDate: new Date('2026-06-26T10:00:00.000Z'),
+    createdAt: new Date('2026-06-26T10:00:01.000Z'),
+    updatedAt: new Date('2026-06-26T10:00:02.000Z'),
+    forwardingAttempts: [],
+    ...overrides,
+  };
+}
+
+function buildForwardedAttempt(overrides: any = {}) {
+  return {
+    id: 'attempt-1',
+    status: 'FORWARDED',
+    responseSummary: { id: 'central-order-1', status: 'created' },
+    attemptedAt: new Date('2026-06-26T10:05:00.000Z'),
+    completedAt: new Date('2026-06-26T10:05:01.000Z'),
+    ...overrides,
   };
 }
 
@@ -339,6 +410,69 @@ async function testForwardedOrderStillSucceedsWhenAuditWriteFails() {
   assert.equal(fixture.errors.some((entry) => entry[0] === 'Failed to forward order to orders-microservice'), false);
 }
 
+async function testGetOrdersProjectsCentralLifecycleFromLatestForwardingAttempt() {
+  const fixture = createServiceFixture([], [], {
+    localOrders: [
+      buildLocalOrder({
+        forwardingAttempts: [buildForwardedAttempt()],
+      }),
+    ],
+    centralLifecycleReads: {
+      'central-order-1': {
+        id: 'central-order-1',
+        status: 'processing',
+        paymentStatus: 'paid',
+        fulfillmentStatus: 'reserved',
+        warehouseHandoff: { status: 'reserved' },
+        updatedAt: '2026-06-26T10:06:00.000Z',
+      },
+    },
+  });
+
+  const result = await fixture.service.getOrders({ page: 1, limit: 25 });
+  const readModel = result.items[0].centralOrderReadModel;
+
+  assert.equal(fixture.captured.orderFindMany.select.forwardingAttempts.take, 1);
+  assert.equal(fixture.captured.orderFindMany.select.forwardingAttempts.orderBy.attemptedAt, 'desc');
+  assert.deepEqual(fixture.centralLifecycleReadCalls, ['central-order-1']);
+  assert.equal('forwardingAttempts' in result.items[0], false);
+  assert.equal(readModel.state, 'available');
+  assert.equal(readModel.id, 'central-order-1');
+  assert.equal(readModel.displayStatus, 'processing');
+  assert.equal(readModel.paymentStatus, 'paid');
+  assert.equal(readModel.fulfillmentStatus, 'reserved');
+  assert.equal(readModel.warehouseHandoffStatus, 'reserved');
+}
+
+async function testGetOrdersFlagsMissingForwardingAttemptUnknown() {
+  const fixture = createServiceFixture([], [], {
+    localOrders: [buildLocalOrder()],
+  });
+
+  const result = await fixture.service.getOrders({ page: 1, limit: 25 });
+  const readModel = result.items[0].centralOrderReadModel;
+
+  assert.deepEqual(fixture.centralLifecycleReadCalls, []);
+  assert.equal(readModel.state, 'unknown');
+  assert.equal(readModel.reason, '[MISSING: central Orders forwarding attempt]');
+}
+
+async function testGetOrdersFlagsOrdersLifecycleReadFailureStale() {
+  const fixture = createServiceFixture([], [], {
+    localOrders: [buildLocalOrder({ forwardingAttempts: [buildForwardedAttempt()] })],
+    centralLifecycleReads: {
+      'central-order-1': { available: false, order: null, reason: ORDERS_LIFECYCLE_READ_UNAVAILABLE },
+    },
+  });
+
+  const result = await fixture.service.getOrders({ page: 1, limit: 25 });
+  const readModel = result.items[0].centralOrderReadModel;
+
+  assert.equal(readModel.state, 'stale');
+  assert.equal(readModel.id, 'central-order-1');
+  assert.equal(readModel.reason, ORDERS_LIFECYCLE_READ_UNAVAILABLE);
+}
+
 export async function runOrdersServiceSpec(): Promise<void> {
   await testDefaultSyncProjectsLocallyWithoutCentralForwarding();
   await testMultiLineOrderForwardsEachLineCatalogProductId();
@@ -347,6 +481,9 @@ export async function runOrdersServiceSpec(): Promise<void> {
   await testMissingWarehouseIdSkipsMalformedCentralForward();
   await testStockPrimaryWarehouseFallbackFeedsCentralForward();
   await testForwardedOrderStillSucceedsWhenAuditWriteFails();
+  await testGetOrdersProjectsCentralLifecycleFromLatestForwardingAttempt();
+  await testGetOrdersFlagsMissingForwardingAttemptUnknown();
+  await testGetOrdersFlagsOrdersLifecycleReadFailureStale();
 }
 
 if (require.main === module) {

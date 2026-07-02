@@ -474,6 +474,10 @@ export interface CatalogProductsQuery {
   catalogSources?: CatalogProductSource[] | string;
 }
 
+export interface UpdateCatalogProductResalePayload {
+  resaleEnabled: boolean;
+}
+
 export interface PrepareCatalogSellActionPayload {
   catalogProductId: string;
   offerId?: string;
@@ -486,6 +490,30 @@ export interface PrepareCatalogSellActionPayload {
   idempotencyKey?: string;
   forceNewDraft?: boolean;
 }
+
+const rejectCatalogErrorBody = <T extends { data: unknown }>(response: T): T => {
+  const body = response.data as {
+    success?: boolean;
+    status?: number;
+    statusCode?: number;
+    error?: { code?: string; message?: string; statusCode?: number };
+    message?: string;
+  } | undefined;
+  const status = body?.statusCode ?? body?.status ?? body?.error?.statusCode;
+
+  if (body?.success === false || (typeof status === 'number' && status >= 400)) {
+    const message = body?.error?.message || body?.message || `Catalog request failed${status ? ` with status ${status}` : ''}`;
+    const error = new Error(message) as Error & {
+      catalogStatus?: number;
+      response?: { status?: number; data?: unknown };
+    };
+    error.catalogStatus = status;
+    error.response = { status, data: body };
+    throw error;
+  }
+
+  return response;
+};
 
 export const catalogProductsApi = {
   getProducts: (query: CatalogProductsQuery = {}) => {
@@ -501,6 +529,12 @@ export const catalogProductsApi = {
 
   getProduct: (id: string) => {
     return api.get(`/products/${id}`, { params: { catalogScope: 'effective' } });
+  },
+
+  updateProductResale: async (id: string, resaleEnabled: boolean) => {
+    const payload: UpdateCatalogProductResalePayload = { resaleEnabled };
+    const response = await api.put(`/products/${id}`, payload);
+    return rejectCatalogErrorBody(response);
   },
 };
 

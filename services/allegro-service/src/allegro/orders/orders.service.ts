@@ -5,7 +5,7 @@
 import { createHash } from 'crypto';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService, LoggerService, OrderClientService } from '@allegro/shared';
+import { CentralOrderLifecycleReadResult, ORDERS_LIFECYCLE_READ_UNAVAILABLE, PrismaService, LoggerService, OrderClientService } from '@allegro/shared';
 import { AllegroApiService } from '../allegro-api.service';
 import { AllegroForwardingOffer, ForwardedOrderPayload, buildOrderForwardingPayload, getAllegroLineOfferIds } from './order-forwarding.mapper';
 
@@ -13,6 +13,8 @@ export const ALLEGRO_ORDER_FORWARDING_CONFIRMATION = 'ALLEGRO_ORDER_FORWARDING_T
 
 const ORDER_CREATE_CONTRACT_VERSION = 'orders.create.v1';
 const DEFAULT_CHANNEL_ACCOUNT_ID = 'default';
+const MISSING_CENTRAL_ORDER_ID_MAPPING = '[MISSING: central Orders id mapping]';
+const MISSING_CENTRAL_FORWARDING_ATTEMPT = '[MISSING: central Orders forwarding attempt]';
 
 type ForwardingAttemptStatus = 'DISABLED' | 'BLOCKED' | 'FORWARDED' | 'FAILED';
 
@@ -90,6 +92,69 @@ function summarizeForwardingError(error: any): any {
     message: error?.message || 'Unknown error',
     status: error?.status || error?.response?.status || null,
     name: error?.name || null,
+  };
+}
+
+function normalizeReadModelString(value: any): string | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  const normalized = String(value).trim();
+  return normalized || null;
+}
+
+function normalizeReadModelDate(value: any): string | null {
+  if (!value) {
+    return null;
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  return String(value);
+}
+
+function readModelRecord(value: any): any {
+  return value && typeof value === 'object' ? value : {};
+}
+
+function extractCentralOrderId(responseSummary: any): string | null {
+  const summary = readModelRecord(responseSummary);
+  return normalizeReadModelString(summary.id || summary.orderId);
+}
+
+function extractCentralLifecycle(order: any): any {
+  const payload = readModelRecord(order);
+  const fulfillment = readModelRecord(payload.fulfillment);
+  const warehouseHandoff = readModelRecord(payload.warehouseHandoff || payload.warehouseHandoffSummary || payload.reservation);
+  const lifecycleStage = normalizeReadModelString(
+    payload.lifecycleStage ||
+    payload.lifecycleStatus ||
+    payload.stage ||
+    payload.state ||
+    payload.status,
+  );
+
+  return {
+    lifecycleStage,
+    status: normalizeReadModelString(payload.status),
+    paymentStatus: normalizeReadModelString(payload.paymentStatus),
+    fulfillmentStatus: normalizeReadModelString(payload.fulfillmentStatus || fulfillment.status),
+    warehouseHandoffStatus: normalizeReadModelString(warehouseHandoff.status || payload.warehouseHandoffStatus),
+    updatedAt: normalizeReadModelDate(payload.updatedAt),
+  };
+}
+
+function summarizeLatestForwardingAttempt(attempt: any): any {
+  if (!attempt) {
+    return null;
+  }
+  return {
+    id: attempt.id,
+    status: attempt.status,
+    attemptedAt: normalizeReadModelDate(attempt.attemptedAt),
+    completedAt: normalizeReadModelDate(attempt.completedAt),
+    blockedReasons: attempt.blockedReasons || [],
+    errorSummary: attempt.errorSummary || null,
   };
 }
 
@@ -185,6 +250,148 @@ export class OrdersService {
     private readonly orderClient: OrderClientService,
   ) {}
 
+  private orderForwardingAttemptReadModelSelect(): any {
+    return {
+      id: true,
+      status: true,
+      responseSummary: true,
+      errorSummary: true,
+      blockedReasons: true,
+      attemptedAt: true,
+      completedAt: true,
+      channel: true,
+      channelAccountId: true,
+      externalOrderId: true,
+    };
+  }
+
+  private async attachCentralOrderReadModels(orders: any[]): Promise<any[]> {
+    const centralOrderIds = Array.from(new Set(
+      orders
+        .map((order) => {
+          const latestAttempt = order.forwardingAttempts?.[0];
+          return latestAttempt?.status === 'FORWARDED' ? extractCentralOrderId(latestAttempt.responseSummary) : null;
+        })
+        .filter((orderId): orderId is string => Boolean(orderId)),
+    ));
+    const centralReads = new Map<string, CentralOrderLifecycleReadResult>();
+
+    await Promise.all(centralOrderIds.map(async (centralOrderId) => {
+      try {
+        centralReads.set(centralOrderId, await this.orderClient.getOrderLifecycle(centralOrderId));
+      } catch (error: any) {
+        this.logger.warn('Orders lifecycle read failed while building Allegro order read model', {
+          centralOrderId,
+          error: error?.message || 'Unknown error',
+        });
+        centralReads.set(centralOrderId, {
+          available: false,
+          order: null,
+          reason: ORDERS_LIFECYCLE_READ_UNAVAILABLE,
+        });
+      }
+    }));
+
+    return orders.map((order) => this.attachCentralOrderReadModel(order, centralReads));
+  }
+
+  private attachCentralOrderReadModel(order: any, centralReads: Map<string, CentralOrderLifecycleReadResult>): any {
+    const forwardingAttempts = Array.isArray(order.forwardingAttempts) ? order.forwardingAttempts : [];
+    const latestAttempt = forwardingAttempts[0] || null;
+    const centralOrderId = extractCentralOrderId(latestAttempt?.responseSummary);
+    const centralRead = centralOrderId ? centralReads.get(centralOrderId) : undefined;
+    const { forwardingAttempts: _forwardingAttempts, ...orderWithoutInternalRelations } = order;
+
+    return {
+      ...orderWithoutInternalRelations,
+      centralOrderReadModel: this.buildCentralOrderReadModel(latestAttempt, centralOrderId, centralRead),
+    };
+  }
+
+  private buildCentralOrderReadModel(
+    latestAttempt: any,
+    centralOrderId: string | null,
+    centralRead?: CentralOrderLifecycleReadResult,
+  ): any {
+    if (!latestAttempt) {
+      return {
+        state: 'unknown',
+        id: null,
+        displayStatus: 'Unknown',
+        lifecycleStage: null,
+        status: null,
+        paymentStatus: null,
+        fulfillmentStatus: null,
+        warehouseHandoffStatus: null,
+        reason: MISSING_CENTRAL_FORWARDING_ATTEMPT,
+        forwardingAttempt: null,
+        source: 'allegro-forwarding-attempt',
+      };
+    }
+
+    const forwardingAttempt = summarizeLatestForwardingAttempt(latestAttempt);
+    if (latestAttempt.status !== 'FORWARDED') {
+      return {
+        state: 'unknown',
+        id: centralOrderId,
+        displayStatus: 'Unavailable',
+        lifecycleStage: null,
+        status: null,
+        paymentStatus: null,
+        fulfillmentStatus: null,
+        warehouseHandoffStatus: null,
+        reason: `central forwarding attempt is ${latestAttempt.status || 'UNKNOWN'}`,
+        forwardingAttempt,
+        source: 'allegro-forwarding-attempt',
+      };
+    }
+
+    if (!centralOrderId) {
+      return {
+        state: 'unknown',
+        id: null,
+        displayStatus: 'Unavailable',
+        lifecycleStage: null,
+        status: null,
+        paymentStatus: null,
+        fulfillmentStatus: null,
+        warehouseHandoffStatus: null,
+        reason: MISSING_CENTRAL_ORDER_ID_MAPPING,
+        forwardingAttempt,
+        source: 'allegro-forwarding-attempt',
+      };
+    }
+
+    if (!centralRead?.available || !centralRead.order) {
+      const responseSummary = readModelRecord(latestAttempt.responseSummary);
+      const responseStatus = normalizeReadModelString(responseSummary.status);
+      return {
+        state: 'stale',
+        id: centralOrderId,
+        displayStatus: responseStatus || 'Unavailable',
+        lifecycleStage: null,
+        status: responseStatus,
+        paymentStatus: null,
+        fulfillmentStatus: null,
+        warehouseHandoffStatus: null,
+        reason: centralRead?.reason || ORDERS_LIFECYCLE_READ_UNAVAILABLE,
+        forwardingAttempt,
+        source: 'orders-microservice',
+      };
+    }
+
+    const centralLifecycle = extractCentralLifecycle(centralRead.order);
+    return {
+      state: 'available',
+      id: normalizeReadModelString(centralRead.order.id) || centralOrderId,
+      displayStatus: centralLifecycle.lifecycleStage || centralLifecycle.status || 'Available',
+      ...centralLifecycle,
+      reason: null,
+      forwardingAttempt,
+      source: 'orders-microservice',
+    };
+  }
+
   /**
    * Get orders from database
    */
@@ -237,7 +444,12 @@ export class OrdersService {
           orderDate: true,
           createdAt: true,
           updatedAt: true,
-          // Relations removed for faster list loading - can be loaded on-demand when viewing details
+          forwardingAttempts: {
+            orderBy: { attemptedAt: 'desc' },
+            take: 1,
+            select: this.orderForwardingAttemptReadModelSelect(),
+          },
+          // Heavy relations removed for faster list loading - can be loaded on-demand when viewing details.
           // offer: {
           //   include: {
           //     product: true,
@@ -249,18 +461,19 @@ export class OrdersService {
       }),
       this.prisma.allegroOrder.count({ where }),
     ]);
+    const enrichedItems = await this.attachCentralOrderReadModels(items);
     const dbQueryDuration = Date.now() - dbQueryStartTime;
     const totalDuration = Date.now() - startTime;
 
     this.logger.log(`[${new Date().toISOString()}] [TIMING] OrdersService.getOrders: Database query completed (${dbQueryDuration}ms)`, {
       total,
-      returned: items.length,
+      returned: enrichedItems.length,
       page,
       limit,
     });
     this.logger.log(`[${new Date().toISOString()}] [TIMING] OrdersService.getOrders COMPLETE (${totalDuration}ms total)`, {
       total,
-      returned: items.length,
+      returned: enrichedItems.length,
       page,
       limit,
       dbQueryDurationMs: dbQueryDuration,
@@ -268,7 +481,7 @@ export class OrdersService {
     });
 
     return {
-      items,
+      items: enrichedItems,
       pagination: {
         page,
         limit,
@@ -289,6 +502,11 @@ export class OrdersService {
         lineItems: {
           orderBy: { createdAt: 'asc' },
         },
+        forwardingAttempts: {
+          orderBy: { attemptedAt: 'desc' },
+          take: 1,
+          select: this.orderForwardingAttemptReadModelSelect(),
+        },
       },
     });
 
@@ -296,7 +514,8 @@ export class OrdersService {
       throw new Error(`Order with ID ${id} not found`);
     }
 
-    return order;
+    const [enrichedOrder] = await this.attachCentralOrderReadModels([order]);
+    return enrichedOrder;
   }
 
   private async recordOrderForwardingAttempt(params: {

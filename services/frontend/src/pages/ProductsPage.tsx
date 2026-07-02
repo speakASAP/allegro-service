@@ -11,6 +11,7 @@ import {
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
+import { useAuth } from '../contexts/useAuth';
 
 type ProductImage = string | { url?: string; src?: string; path?: string };
 
@@ -61,6 +62,7 @@ interface CatalogProduct {
     resaleEnabled?: boolean | null;
     images?: ProductImage[];
     media?: ProductImage[];
+    updatedAt?: string | null;
   } | null;
 }
 
@@ -208,6 +210,11 @@ const getErrorMessage = (err: unknown, fallback: string) => {
   return axiosErr.serviceErrorMessage || responseMessage || axiosErr.message || fallback;
 };
 
+const getErrorStatus = (err: unknown) => {
+  const axiosErr = err as AxiosError & { catalogStatus?: number };
+  return axiosErr.response?.status || axiosErr.catalogStatus;
+};
+
 const productTitle = (product: CatalogProduct | null) => (
   product?.name
   || product?.title
@@ -229,13 +236,53 @@ const productSourceLabel = (product: CatalogProduct | null) => {
   return 'Seller catalog';
 };
 
-const productResaleLabel = (product: CatalogProduct | null) => {
-  if (!product) return '';
+const productResaleEnabled = (product: CatalogProduct | null): boolean | null => {
+  if (!product) return null;
   const resaleEnabled = product.resaleEnabled ?? product.catalogProduct?.resaleEnabled;
+  return typeof resaleEnabled === 'boolean' ? resaleEnabled : null;
+};
+
+const productResaleLabel = (product: CatalogProduct | null) => {
+  const resaleEnabled = productResaleEnabled(product);
   if (resaleEnabled === true) return 'Enabled for community resale';
   if (resaleEnabled === false) return 'Not shared for resale';
   return '[UNKNOWN: Catalog resale setting]';
 };
+
+const productOwnerUserId = (product: CatalogProduct | null): string | null | undefined => {
+  if (!product) return undefined;
+  const ownerUserId = product.ownerUserId ?? product.catalogProduct?.ownerUserId;
+  if (ownerUserId === null) return null;
+  if (ownerUserId === undefined) return undefined;
+  const normalized = String(ownerUserId).trim();
+  return normalized ? normalized : undefined;
+};
+
+const productResaleMutationBlockReason = (product: CatalogProduct | null, currentUserId?: string | null): string | null => {
+  const ownerUserId = productOwnerUserId(product);
+  if (ownerUserId === null) return 'Alfares Catalog products are managed centrally in Catalog Dashboard.';
+  if (ownerUserId && currentUserId && ownerUserId !== String(currentUserId)) {
+    return 'This Catalog product belongs to another seller. Catalog owner guard keeps resale changes read-only here.';
+  }
+  return null;
+};
+
+const mergeProductResaleState = (product: CatalogProduct, updated: CatalogProduct | null, resaleEnabled: boolean): CatalogProduct => ({
+  ...product,
+  ownerUserId: updated?.ownerUserId ?? updated?.catalogProduct?.ownerUserId ?? product.ownerUserId,
+  resaleEnabled,
+  updatedAt: updated?.updatedAt ?? updated?.catalogProduct?.updatedAt ?? product.updatedAt,
+  catalogProduct: product.catalogProduct
+    ? {
+      ...product.catalogProduct,
+      ...(updated?.catalogProduct || {}),
+      resaleEnabled,
+      ownerUserId: updated?.catalogProduct?.ownerUserId ?? updated?.ownerUserId ?? product.catalogProduct.ownerUserId,
+    }
+    : updated?.catalogProduct
+      ? { ...updated.catalogProduct, resaleEnabled }
+      : product.catalogProduct,
+});
 
 const productPrice = (product: CatalogProduct | null) => {
   const price = product?.catalogProduct?.price;
@@ -375,6 +422,7 @@ const buildInitialForm = (product: CatalogProduct | null, status?: CatalogSellSt
 };
 
 const ProductsPage: React.FC = () => {
+  const { user } = useAuth();
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [pagination, setPagination] = useState<Pagination>(defaultPagination);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -388,6 +436,8 @@ const ProductsPage: React.FC = () => {
   const [preparing, setPreparing] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [resaleUpdatingId, setResaleUpdatingId] = useState<string | null>(null);
+  const [resaleErrors, setResaleErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [accountSelectionLoaded, setAccountSelectionLoaded] = useState(false);
@@ -402,6 +452,10 @@ const ProductsPage: React.FC = () => {
   );
   const selectedStatus = selectedProduct ? statusByProduct[selectedProduct.id] : null;
   const selectedStatusError = selectedProduct ? statusErrors[selectedProduct.id] : null;
+  const selectedResaleEnabled = productResaleEnabled(selectedProduct);
+  const selectedResaleError = selectedProduct ? resaleErrors[selectedProduct.id] : null;
+  const selectedResaleMutationBlockedReason = productResaleMutationBlockReason(selectedProduct, user?.id);
+  const selectedResaleUpdating = Boolean(selectedProduct && resaleUpdatingId === selectedProduct.id);
   const selectedContentPreview = selectedStatus?.catalogContentPreview || null;
   const selectedContentPreviewDescription = contentPreviewDescription(selectedContentPreview);
   const accountChoices = selectedStatus?.accountChoices || [];
@@ -652,6 +706,49 @@ const ProductsPage: React.FC = () => {
     }
   };
 
+  const handleToggleResale = async () => {
+    if (!selectedProduct) return;
+    const blockedReason = productResaleMutationBlockReason(selectedProduct, user?.id);
+    if (blockedReason) {
+      setResaleErrors((prev) => ({ ...prev, [selectedProduct.id]: blockedReason }));
+      setError(blockedReason);
+      return;
+    }
+
+    const nextResaleEnabled = !(selectedResaleEnabled === true);
+    setResaleUpdatingId(selectedProduct.id);
+    setError(null);
+    setSuccess(null);
+    setResaleErrors((prev) => {
+      const next = { ...prev };
+      delete next[selectedProduct.id];
+      return next;
+    });
+
+    try {
+      const res = await catalogProductsApi.updateProductResale(selectedProduct.id, nextResaleEnabled);
+      const updatedProduct = unwrapData<CatalogProduct>(res.data);
+      const confirmedResaleEnabled = productResaleEnabled(updatedProduct) ?? nextResaleEnabled;
+      setProducts((current) => current.map((product) => (
+        product.id === selectedProduct.id
+          ? mergeProductResaleState(product, updatedProduct, confirmedResaleEnabled)
+          : product
+      )));
+      setSuccess(confirmedResaleEnabled
+        ? 'Catalog product is enabled for community resale.'
+        : 'Catalog product is no longer shared for community resale.');
+    } catch (err) {
+      const status = getErrorStatus(err);
+      const message = status === 403
+        ? 'Catalog rejected this change with 403 owner guard. Only the Catalog product owner can change resale sharing from Allegro.'
+        : getErrorMessage(err, 'Failed to update Catalog resale setting');
+      setResaleErrors((prev) => ({ ...prev, [selectedProduct.id]: message }));
+      setError(message);
+    } finally {
+      setResaleUpdatingId(null);
+    }
+  };
+
   const applyCatalogPreviewDescription = () => {
     if (!selectedContentPreviewDescription) return;
     setDraftForm((current) => ({ ...current, description: selectedContentPreviewDescription }));
@@ -778,7 +875,7 @@ const ProductsPage: React.FC = () => {
               ))}
             </div>
             <div className="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-              Resale publication is controlled in Catalog Dashboard for owner products. [MISSING: local Allegro resale mutation path]
+              Resale publication can be changed here for user-owned products; Catalog Dashboard remains the central management surface.
             </div>
           </div>
 
@@ -858,6 +955,37 @@ const ProductsPage: React.FC = () => {
                   <div><span className="font-medium">Resale:</span> {productResaleLabel(selectedProduct) || '-'}</div>
                   <div><span className="font-medium">Catalog category:</span> {productCategory(selectedProduct) || '[MISSING: catalog category]'}</div>
                   <div><span className="font-medium">Updated:</span> {formatDate(selectedProduct.updatedAt)}</div>
+                </div>
+                <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-medium text-gray-900">Community resale</div>
+                      <div className="mt-1 text-xs text-gray-600">
+                        {selectedResaleMutationBlockedReason || 'Owner-only Catalog update using your current session.'}
+                      </div>
+                    </div>
+                    <label className={`inline-flex items-center ${selectedResaleMutationBlockedReason ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                      <span className="sr-only">Enable community resale</span>
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={selectedResaleEnabled === true}
+                        onChange={handleToggleResale}
+                        disabled={selectedResaleUpdating || Boolean(selectedResaleMutationBlockedReason)}
+                      />
+                      <span className={`relative inline-flex h-6 w-11 rounded-full transition ${selectedResaleEnabled === true ? 'bg-blue-600' : 'bg-gray-300'}`}>
+                        <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition ${selectedResaleEnabled === true ? 'translate-x-5' : 'translate-x-0'}`} />
+                      </span>
+                    </label>
+                  </div>
+                  <div className="mt-2 text-xs text-gray-600">
+                    {selectedResaleUpdating ? 'Saving resale setting...' : productResaleLabel(selectedProduct)}
+                  </div>
+                  {selectedResaleError && (
+                    <div className="mt-2 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+                      {selectedResaleError}
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="secondary" size="small" onClick={refreshSelectedStatus} disabled={statusLoading}>
